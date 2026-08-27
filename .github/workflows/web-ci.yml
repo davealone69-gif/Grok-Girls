@@ -1,0 +1,19 @@
+name: Grok Girls Web CI
+
+on:
+  push:
+    branches: [main, consolidate/aura-truth-studio]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: npm run build

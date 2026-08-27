@@ -1,11 +1,44 @@
-<div align="center">
+# Grok Girls Studio
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Grok Girls is the consolidated avatar studio built from the strongest pieces found across:
 
-  <h1>Built with AI Studio</h2>
+- `Aura-Studio-Avatar` - avatar/game core, rooms, memory, relationships, story, animation and local-first architecture.
+- `AuraAvatarStudio` - avatar-studio UI direction and design tooling.
+- `Truth-time` - local persistence, creator flows, ViewModel patterns, diagnostics and swarm-oriented tooling.
+- Existing `Grok-Girls` - media export and service integrations.
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## Current architecture
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+```text
+Studio UI
+  -> Avatar State / Room / Story / Relationship engines
+  -> Memory + Conversation
+  -> Generation service boundary
+  -> Gallery / Video export
+  -> Diagnostics + self-repair
+```
 
-</div>
+## Product areas
+
+- Avatar Library
+- Avatar Designer
+- Rooms and scene setup
+- Character state, emotion and relationship simulation
+- Memory and conversation context
+- Image/video generation adapters
+- Gallery and export
+- Local-first storage
+- Diagnostics and self-repair hooks
+- Provider/API settings
+
+The consolidation deliberately keeps provider keys out of source control and treats remote generation as an adapter rather than a hard dependency.
+
+## Development
+
+```bash
+npm install
+npm run dev
+npm run build
+```
+
+This branch is the consolidation workspace. Source repositories remain untouched until the resulting build is reviewed and accepted.

@@ -26,17 +26,51 @@ export interface ChatMessage {
 }
 
 const env = () => (import.meta.env || {}) as Record<string, string | undefined>;
-const keyFor = (p: string) => env()[`VITE_${p.toUpperCase()}_API_KEY`] ?? '';
-const endpointFor = (p: string, m: Mode) =>
-  env()[`VITE_${p.toUpperCase()}_${m.toUpperCase()}_ENDPOINT`] ??
-  env()[`VITE_${p.toUpperCase()}_ENDPOINT`] ??
-  '';
 
-function createLocalPlaceholderSvg(prompt: string, mode: Mode, width = 768, height = 768): string {
+export function getSavedApiKey(p: string): string {
+  try {
+    const val = localStorage.getItem(`grok-girls-key-${p.toLowerCase()}`);
+    if (val && val.trim()) return val.trim();
+  } catch {}
+  return env()[`VITE_${p.toUpperCase()}_API_KEY`] ?? '';
+}
+
+export function saveApiKey(p: string, key: string) {
+  try {
+    localStorage.setItem(`grok-girls-key-${p.toLowerCase()}`, key.trim());
+  } catch {}
+}
+
+export function getSavedEndpoint(p: string, m?: Mode): string {
+  try {
+    if (m) {
+      const modeKey = localStorage.getItem(`grok-girls-endpoint-${p.toLowerCase()}-${m}`);
+      if (modeKey && modeKey.trim()) return modeKey.trim();
+    }
+    const genericKey = localStorage.getItem(`grok-girls-endpoint-${p.toLowerCase()}`);
+    if (genericKey && genericKey.trim()) return genericKey.trim();
+  } catch {}
+  if (m) {
+    const fromEnv = env()[`VITE_${p.toUpperCase()}_${m.toUpperCase()}_ENDPOINT`];
+    if (fromEnv) return fromEnv;
+  }
+  return env()[`VITE_${p.toUpperCase()}_ENDPOINT`] ?? '';
+}
+
+export function saveEndpoint(p: string, url: string, m?: Mode) {
+  try {
+    if (m) {
+      localStorage.setItem(`grok-girls-endpoint-${p.toLowerCase()}-${m}`, url.trim());
+    } else {
+      localStorage.setItem(`grok-girls-endpoint-${p.toLowerCase()}`, url.trim());
+    }
+  } catch {}
+}
+
+export function createLocalPlaceholderSvg(prompt: string, mode: Mode, width = 768, height = 768): string {
   const isVideo = mode === 'video';
   const pLower = prompt.toLowerCase();
   
-  // Choose theme colors based on scene cues
   let col1 = '#3b1c6d';
   let col2 = '#e94560';
   let accent = '#ff6b8a';
@@ -59,7 +93,6 @@ function createLocalPlaceholderSvg(prompt: string, mode: Mode, width = 768, heig
     accent = '#f472b6';
   }
 
-  // Extract character name if present
   const nameMatch = prompt.match(/^([A-Za-z0-9 ]+?)(?:,| adult|\()/i);
   const name = nameMatch ? nameMatch[1].trim() : 'Grok Persona';
 
@@ -93,28 +126,19 @@ function createLocalPlaceholderSvg(prompt: string, mode: Mode, width = 768, heig
   <rect width="${width}" height="${height}" fill="url(#bgGrad)"/>
   <circle cx="${width * 0.5}" cy="${height * 0.42}" r="${width * 0.38}" fill="url(#halo)"/>
 
-  <!-- Artistic Ambient Aura -->
   <circle cx="${width * 0.75}" cy="${height * 0.3}" r="140" fill="${col2}" opacity="0.22" filter="url(#blurFilter)"/>
   <circle cx="${width * 0.25}" cy="${height * 0.6}" r="160" fill="${accent}" opacity="0.18" filter="url(#blurFilter)"/>
 
-  <!-- Character Silhouette / Portrait Geometry -->
   <g transform="translate(${width * 0.5}, ${height * 0.45})">
-    <!-- Shoulder contour -->
     <path d="M -180,180 C -150,90 -90,70 -40,55 L 40,55 C 90,70 150,90 180,180 Z" fill="#141424" stroke="${col2}" stroke-width="1.5" stroke-opacity="0.6"/>
-    <!-- Neck -->
     <rect x="-24" y="5" width="48" height="58" rx="10" fill="#1f1e33"/>
-    <!-- Head / Hair Aura -->
     <ellipse cx="0" cy="-45" rx="72" ry="85" fill="${col1}" opacity="0.7"/>
-    <!-- Face Contour -->
     <path d="M -50,-60 Q 0,-70 50,-60 Q 55,5 0,45 Q -55,5 -50,-60 Z" fill="#24233a" stroke="${accent}" stroke-width="1.5" stroke-opacity="0.8"/>
-    <!-- Hair Highlights -->
     <path d="M -60,-65 Q -30,-110 35,-95 Q 65,-60 62,15 Q 40,-30 20,-60 Q -10,-80 -60,-65 Z" fill="url(#glowGrad)"/>
-    <!-- Subtle Eyes Hint -->
     <ellipse cx="-20" cy="-22" rx="7" ry="3.5" fill="${accent}" opacity="0.85"/>
     <ellipse cx="20" cy="-22" rx="7" ry="3.5" fill="${accent}" opacity="0.85"/>
   </g>
 
-  <!-- Top Badge -->
   <g transform="translate(32, 44)">
     <rect width="180" height="32" rx="8" fill="#11111d" stroke="${col2}" stroke-width="1" opacity="0.9"/>
     <text x="14" y="21" fill="#ffffff" font-family="Inter, sans-serif" font-size="12" font-weight="700" letter-spacing="1.5">
@@ -122,7 +146,6 @@ function createLocalPlaceholderSvg(prompt: string, mode: Mode, width = 768, heig
     </text>
   </g>
 
-  <!-- Bottom Info Card -->
   <g transform="translate(32, ${height - 110})">
     <rect width="${width - 64}" height="78" rx="12" fill="#10101a" fill-opacity="0.88" stroke="#34344a" stroke-width="1"/>
     <text x="20" y="28" fill="#ffffff" font-family="Inter, sans-serif" font-size="16" font-weight="700">
@@ -164,13 +187,13 @@ async function parse(response: Response, p: ProviderName, m: Mode): Promise<Gene
 }
 
 async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationResult> {
-  const key = keyFor(p);
-  const endpoint = endpointFor(p, r.mode);
+  const key = getSavedApiKey(p);
+  const endpoint = getSavedEndpoint(p, r.mode);
   if (!key || !endpoint) {
     return {
       provider: p,
       status: 'error',
-      warning: `${p} ${r.mode} endpoint is not configured.`,
+      warning: `${p} ${r.mode} endpoint or API key is not configured. (Local procedural engine available)`,
       assetUrl: undefined,
       text: undefined
     };
@@ -214,7 +237,7 @@ class Local {
       provider: 'local',
       status: 'ready',
       assetUrl,
-      text: `Local ${r.mode} rendered successfully. Connect OpenRouter, Gemini, or a Custom endpoint for neural cloud generation.`
+      text: `Local procedural ${r.mode} generated. Switch provider to OpenRouter, Gemini or Custom for cloud neural inference.`
     };
   }
 }
@@ -222,7 +245,7 @@ class Local {
 class Cloud {
   constructor(public readonly name: Exclude<ProviderName, 'local'>) {}
   available() {
-    return Boolean(keyFor(this.name) && (endpointFor(this.name, 'image') || endpointFor(this.name, 'video')));
+    return Boolean(getSavedApiKey(this.name) && (getSavedEndpoint(this.name, 'image') || getSavedEndpoint(this.name, 'video')));
   }
   async generate(r: GenerationRequest): Promise<GenerationResult> {
     return post(this.name, r);
@@ -267,10 +290,11 @@ export async function generateWithFallback(
 export async function chatWithProvider(messages: ChatMessage[], preferred: ProviderName = 'openrouter') {
   const e = env();
   if (preferred === 'local') return { provider: 'local' as const, text: 'Local companion mode is active.' };
+  
   if (preferred === 'openrouter') {
-    const key = e.VITE_OPENROUTER_API_KEY ?? '';
-    if (!key) return { provider: 'openrouter' as const, text: 'OpenRouter is not configured.', warning: 'Set VITE_OPENROUTER_API_KEY.' };
-    const endpoint = e.VITE_OPENROUTER_CHAT_ENDPOINT ?? 'https://openrouter.ai/api/v1/chat/completions';
+    const key = getSavedApiKey('openrouter');
+    if (!key) return { provider: 'openrouter' as const, text: 'OpenRouter API key is not configured.', warning: 'Set VITE_OPENROUTER_API_KEY or configure in Settings.' };
+    const endpoint = getSavedEndpoint('openrouter') || e.VITE_OPENROUTER_CHAT_ENDPOINT || 'https://openrouter.ai/api/v1/chat/completions';
     const r = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -285,12 +309,14 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
     const d = await r.json();
     return { provider: 'openrouter' as const, text: d.choices?.[0]?.message?.content ?? 'No response.' };
   }
+  
   if (preferred === 'gemini') {
-    const key = e.VITE_GEMINI_API_KEY ?? '';
-    if (!key) return { provider: 'gemini' as const, text: 'Gemini is not configured.', warning: 'Set VITE_GEMINI_API_KEY.' };
+    const key = getSavedApiKey('gemini');
+    if (!key) return { provider: 'gemini' as const, text: 'Gemini API key is not configured.', warning: 'Set VITE_GEMINI_API_KEY or configure in Settings.' };
     const model = e.VITE_GEMINI_CHAT_MODEL ?? 'gemini-2.5-flash';
     const endpoint =
-      e.VITE_GEMINI_CHAT_ENDPOINT ??
+      getSavedEndpoint('gemini') ||
+      e.VITE_GEMINI_CHAT_ENDPOINT ||
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const contents = messages
       .filter(m => m.role !== 'system')
@@ -305,9 +331,10 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
     const d = await r.json();
     return { provider: 'gemini' as const, text: d.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? 'No response.' };
   }
-  const key = e.VITE_CUSTOM_AI_KEY ?? '';
-  const endpoint = e.VITE_CUSTOM_CHAT_ENDPOINT ?? '';
-  if (!key || !endpoint) return { provider: 'custom' as const, text: 'Custom provider is not configured.' };
+
+  const key = getSavedApiKey('custom');
+  const endpoint = getSavedEndpoint('custom') || e.VITE_CUSTOM_CHAT_ENDPOINT || '';
+  if (!key || !endpoint) return { provider: 'custom' as const, text: 'Custom provider API key or endpoint is not configured.' };
   const r = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },

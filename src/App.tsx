@@ -11,6 +11,7 @@ import { downloadMedia, exportGallery, importGallery } from './services/media';
 import AvatarCreator from './components/AvatarCreator';
 import type { AvatarDraft } from './services/avatarCreator';
 import VideoExportPage from './pages/VideoExportPage';
+import SettingsModal from './components/SettingsModal';
 import './styles.css';
 
 type Tab = 'studio' | 'avatar' | 'story' | 'gallery' | 'export';
@@ -18,7 +19,7 @@ const ADULT_KEY = 'grok-girls-adult-v1';
 
 export default function App() {
   const [girls, setGirls] = useState<Girl[]>(() => loadGirls(seedGirls));
-  const [selectedId, setSelectedId] = useState(girls[0].id);
+  const [selectedId, setSelectedId] = useState(girls[0]?.id || seedGirls[0].id);
   const [tab, setTab] = useState<Tab>('studio');
   const [mode, setMode] = useState<Mode>('image');
   const [prompt, setPrompt] = useState('');
@@ -38,6 +39,7 @@ export default function App() {
   const [chatInput, setChatInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [gallery, setGallery] = useState<GalleryItem[]>(() => loadGallery());
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -45,11 +47,14 @@ export default function App() {
     } catch {}
   }, [adult]);
 
-  const girl = useMemo(() => girls.find(g => g.id === selectedId) || girls[0], [girls, selectedId]);
+  const girl = useMemo(
+    () => girls.find(g => g.id === selectedId) || girls[0] || seedGirls[0],
+    [girls, selectedId]
+  );
   const room: Room = useMemo(() => rooms.find(r => r.id === roomId) ?? rooms[0], [roomId]);
-  const [avatarState, setAvatarState] = useState<AvatarState>(() => loadAvatarState(girls[0].id, girls[0]));
-  const [story, setStory] = useState<StoryState>(() => initialStory(girls[0].affinity / 25));
-  const [chat, setChat] = useState<ChatMessage[]>(() => loadChat(girls[0].id));
+  const [avatarState, setAvatarState] = useState<AvatarState>(() => loadAvatarState(girl.id, girl));
+  const [story, setStory] = useState<StoryState>(() => initialStory(girl.affinity / 25));
+  const [chat, setChat] = useState<ChatMessage[]>(() => loadChat(girl.id));
 
   const updateGirl = (patch: Partial<Girl>) => {
     const next = girls.map(g => (g.id === girl.id ? { ...g, ...patch } : g));
@@ -66,6 +71,50 @@ export default function App() {
     setStory(initialStory(g.affinity / 25));
     setAssetUrl('');
     setResult('');
+  };
+
+  const handleCreateNewPersona = () => {
+    const id = `persona-${Date.now()}`;
+    const newPersona: Girl = {
+      id,
+      name: 'Custom Persona',
+      age: 23,
+      ethnicity: 'mixed',
+      bodyType: 'athletic',
+      eyeColor: 'hazel',
+      eyeShape: 'almond',
+      faceShape: 'oval',
+      hairColor: 'dark brown',
+      hairStyle: 'long waves',
+      skinTone: 'warm',
+      outfit: 'casual streetwear',
+      pose: 'confident standing',
+      expression: 'cheerful',
+      extra: 'cinematic lighting, elegant atmosphere',
+      bio: 'New AI companion with tailored persona and visual identity.',
+      traits: ['creative', 'curious', 'friendly'],
+      room: 'Studio',
+      affinity: 35,
+      trust: 40,
+      emotion: 'happy',
+      memories: []
+    };
+    const next = [...girls, newPersona];
+    setGirls(next);
+    saveGirls(next);
+    setSelectedId(id);
+    setChat([]);
+    setAvatarState(loadAvatarState(id, newPersona));
+    setStory(initialStory(newPersona.affinity / 25));
+    setTab('avatar');
+  };
+
+  const handleResetPersonas = () => {
+    if (confirm('Reset characters to default seeded companions? Custom characters will be cleared.')) {
+      setGirls(seedGirls);
+      saveGirls(seedGirls);
+      selectGirl(seedGirls[0].id);
+    }
   };
 
   const interact = () => {
@@ -188,6 +237,20 @@ export default function App() {
           >
             {adult ? '● ADULT ON' : '○ ADULT OFF'}
           </button>
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            style={{
+              background: '#17171f',
+              border: '1px solid #343444',
+              color: '#c0b8d8',
+              padding: '8px 14px',
+              borderRadius: '999px',
+              fontSize: '11px',
+              fontWeight: 600
+            }}
+          >
+            ⚙ API SETTINGS
+          </button>
           <div className="status">● CORE FEATURES ACTIVE</div>
         </div>
       </header>
@@ -202,22 +265,42 @@ export default function App() {
 
       <section className="layout">
         <aside>
-          <h2>Characters</h2>
-          {girls.map(g => (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ margin: 0 }}>Characters</h2>
             <button
-              className={g.id === selectedId ? 'girl active' : 'girl'}
-              onClick={() => selectGirl(g.id)}
-              key={g.id}
+              onClick={handleResetPersonas}
+              title="Reset characters"
+              style={{ background: 'transparent', border: 'none', color: '#666', fontSize: 11 }}
             >
-              <span className="avatar">{g.name[0]}</span>
-              <span>
-                <b>{g.name}</b>
-                <small>
-                  {Math.round(g.affinity)}% bond · {g.emotion}
-                </small>
-              </span>
+              Reset
             </button>
-          ))}
+          </div>
+
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {girls.map(g => (
+              <button
+                className={g.id === selectedId ? 'girl active' : 'girl'}
+                onClick={() => selectGirl(g.id)}
+                key={g.id}
+              >
+                <span className="avatar">{g.name[0]}</span>
+                <span>
+                  <b>{g.name}</b>
+                  <small>
+                    {Math.round(g.affinity)}% bond · {g.emotion}
+                  </small>
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            className="btn-new-char"
+            onClick={handleCreateNewPersona}
+          >
+            + CREATE NEW PERSONA
+          </button>
 
           <div className="sideblock">
             <b>AI Provider</b>
@@ -227,6 +310,13 @@ export default function App() {
               <option value="gemini">Gemini (Google AI)</option>
               <option value="custom">Custom Endpoint</option>
             </select>
+            <button
+              className="btn-config"
+              type="button"
+              onClick={() => setIsSettingsOpen(true)}
+            >
+              ⚙ Configure API Keys
+            </button>
           </div>
 
           <div className="sideblock">
@@ -433,6 +523,11 @@ export default function App() {
         </label>
         <button onClick={() => exportGallery(gallery)}>EXPORT GALLERY JSON</button>
       </footer>
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </main>
   );
 }

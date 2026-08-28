@@ -1,19 +1,5 @@
-import React from 'react';
-import PlaceholderPage from '../components/PlaceholderPage';
-
-interface VideoExportPageProps {
-  navigation: any;
+import React,{useState} from 'react';
+export default function VideoExportPage(){
+ const [format,setFormat]=useState('mp4'); const [fps,setFps]=useState(30); const [quality,setQuality]=useState('1080p');
+ return <section className="studio"><span className="eyebrow">EXPORT & RENDER</span><h2>Video Export</h2><p>Prepare a generated scene for device save or sharing.</p><div className="grid2"><label>Quality<select value={quality} onChange={e=>setQuality(e.target.value)}><option>720p</option><option>1080p</option><option>1440p</option></select></label><label>FPS<select value={fps} onChange={e=>setFps(Number(e.target.value))}><option value={24}>24</option><option value={30}>30</option><option value={60}>60</option></select></label></div><label>Format<select value={format} onChange={e=>setFormat(e.target.value)}><option>mp4</option><option>webm</option></select></label><div className="result"><b>Render preset</b><p>{quality} • {fps} FPS • {format.toUpperCase()}</p><small>Final rendering is delegated to the configured generation provider.</small></div></section>
 }
-
-const VideoExportPage: React.FC<VideoExportPageProps> = ({ navigation }) => {
-  return (
-    <PlaceholderPage
-      pageTitle="Export & Render"
-      pageName="video_export"
-      description="HD video rendering and export settings (resolution, format, fps) with progress tracking and save/share functionality"
-      suggestedPrompt="Add video export page with HD quality settings, render progress bar, and options to save to device or share with other apps"
-    />
-  );
-};
-
-export default VideoExportPage;

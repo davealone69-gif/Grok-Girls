@@ -8,38 +8,85 @@ import { generateWithFallback, ProviderName } from './services/providers';
 import { ChatMessage, loadChat, reply, saveChat } from './services/chat';
 import { saveAvatar } from './services/avatarEditor';
 import { downloadMedia, exportGallery, importGallery } from './services/media';
-import AvatarCreator from './components/AvatarCreator';
-import type { AvatarDraft } from './services/avatarCreator';
-import VideoExportPage from './pages/VideoExportPage';
+import { AvatarDraft, avatarOptions, randomizeAvatar, buildDraftPrompt } from './services/avatarCreator';
+import ColorWheel from './components/ColorWheel';
 import SettingsModal from './components/SettingsModal';
+import VideoExportPage from './pages/VideoExportPage';
 import './styles.css';
 
-type Tab = 'studio' | 'avatar' | 'story' | 'gallery' | 'export';
+type ActiveView = 'builder' | 'chat' | 'story' | 'gallery' | 'export';
+type InspectorSection = 'appearance' | 'clothing' | 'hair' | 'makeup' | 'body';
+
 const ADULT_KEY = 'grok-girls-adult-v1';
 
 export default function App() {
   const [girls, setGirls] = useState<Girl[]>(() => loadGirls(seedGirls));
-  const [selectedId, setSelectedId] = useState(girls[0]?.id || seedGirls[0].id);
-  const [tab, setTab] = useState<Tab>('studio');
-  const [mode, setMode] = useState<Mode>('image');
-  const [prompt, setPrompt] = useState('');
-  const [enhanced, setEnhanced] = useState(true);
+  const [selectedId, setSelectedId] = useState<string>(seedGirls[0].id);
+  const [view, setView] = useState<ActiveView>('builder');
   const [adult, setAdult] = useState(() => {
     try {
       return localStorage.getItem(ADULT_KEY) === '1';
     } catch {
-      return false;
+      return true; // Default to mature aesthetic enabled
     }
   });
-  const [roomId, setRoomId] = useState(rooms[0].id);
-  const [interactionId, setInteractionId] = useState('');
-  const [provider, setProvider] = useState<ProviderName>('local');
-  const [result, setResult] = useState('');
-  const [assetUrl, setAssetUrl] = useState('');
-  const [chatInput, setChatInput] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [gallery, setGallery] = useState<GalleryItem[]>(() => loadGallery());
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Active girl & draft
+  const girl = useMemo(
+    () => girls.find(g => g.id === selectedId) || girls[0] || seedGirls[0],
+    [girls, selectedId]
+  );
+
+  const [draft, setDraft] = useState<AvatarDraft>(() => ({
+    id: girl.id,
+    name: girl.name,
+    age: girl.age,
+    gender: 'female',
+    ethnicity: girl.ethnicity,
+    bodyType: girl.bodyType,
+    eyeColor: girl.eyeColor,
+    eyeShape: girl.eyeShape,
+    faceShape: girl.faceShape,
+    hairColor: girl.hairColor,
+    hairStyle: girl.hairStyle,
+    skinTone: girl.skinTone,
+    outfit: girl.outfit,
+    pose: girl.pose,
+    expression: girl.expression,
+    extra: girl.extra,
+    headShapeIndex: 4,
+    colorAccent: girl.hairColor.includes('red') ? '#E62040' : '#904EDD',
+    lipstickShade: 'bold ruby red satin',
+    chokerStyle: 'ruby red velvet choker with gold medallion',
+    hosieryStyle: 'sheer black fishnet stockings'
+  }));
+
+  // Sync draft when selected girl changes
+  useEffect(() => {
+    setDraft({
+      id: girl.id,
+      name: girl.name,
+      age: girl.age,
+      gender: 'female',
+      ethnicity: girl.ethnicity,
+      bodyType: girl.bodyType,
+      eyeColor: girl.eyeColor,
+      eyeShape: girl.eyeShape,
+      faceShape: girl.faceShape,
+      hairColor: girl.hairColor,
+      hairStyle: girl.hairStyle,
+      skinTone: girl.skinTone,
+      outfit: girl.outfit,
+      pose: girl.pose,
+      expression: girl.expression,
+      extra: girl.extra,
+      headShapeIndex: 4,
+      colorAccent: girl.hairColor.includes('red') ? '#E62040' : '#904EDD',
+      lipstickShade: girl.id === 'ruby_noir' ? 'bold ruby red satin' : 'nude velvet matte',
+      chokerStyle: girl.id === 'ruby_noir' ? 'ruby red velvet choker with gold medallion' : 'none',
+      hosieryStyle: girl.id === 'ruby_noir' ? 'sheer black fishnet stockings' : 'bare legs'
+    });
+  }, [girl.id]);
 
   useEffect(() => {
     try {
@@ -47,14 +94,43 @@ export default function App() {
     } catch {}
   }, [adult]);
 
-  const girl = useMemo(
-    () => girls.find(g => g.id === selectedId) || girls[0] || seedGirls[0],
-    [girls, selectedId]
-  );
-  const room: Room = useMemo(() => rooms.find(r => r.id === roomId) ?? rooms[0], [roomId]);
+  // Inspector accordions
+  const [openSections, setOpenSections] = useState<Record<InspectorSection, boolean>>({
+    appearance: true,
+    clothing: true,
+    hair: false,
+    makeup: false,
+    body: false
+  });
+
+  const toggleSection = (s: InspectorSection) => {
+    setOpenSections(prev => ({ ...prev, [s]: !prev[s] }));
+  };
+
+  // Viewport camera & lighting controls
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [rotationAngle, setRotationAngle] = useState(0);
+  const [lightingMode, setLightingMode] = useState<'noir' | 'studio' | 'full' | 'bust' | 'wireframe'>('noir');
+
+  // Lower dock sub-tab
+  const [dockTab, setDockTab] = useState<'style' | 'color' | 'facial' | 'eyebrows'>('style');
+
+  // State & story engines
   const [avatarState, setAvatarState] = useState<AvatarState>(() => loadAvatarState(girl.id, girl));
   const [story, setStory] = useState<StoryState>(() => initialStory(girl.affinity / 25));
   const [chat, setChat] = useState<ChatMessage[]>(() => loadChat(girl.id));
+  const [chatInput, setChatInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState('');
+  const [gallery, setGallery] = useState<GalleryItem[]>(() => loadGallery());
+  const [provider, setProvider] = useState<ProviderName>('local');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
+  const [saveToast, setSaveToast] = useState(false);
+
+  // Active room
+  const [roomId, setRoomId] = useState(rooms[0].id);
+  const room: Room = useMemo(() => rooms.find(r => r.id === roomId) ?? rooms[0], [roomId]);
 
   const updateGirl = (patch: Partial<Girl>) => {
     const next = girls.map(g => (g.id === girl.id ? { ...g, ...patch } : g));
@@ -69,83 +145,98 @@ export default function App() {
     setChat(loadChat(id));
     setAvatarState(loadAvatarState(id, g));
     setStory(initialStory(g.affinity / 25));
-    setAssetUrl('');
     setResult('');
   };
 
-  const handleCreateNewPersona = () => {
-    const id = `persona-${Date.now()}`;
-    const newPersona: Girl = {
+  const handleCreateNewPreset = () => {
+    const id = `custom_${Date.now()}`;
+    const newGirl: Girl = {
       id,
-      name: 'Custom Persona',
-      age: 23,
-      ethnicity: 'mixed',
-      bodyType: 'athletic',
-      eyeColor: 'hazel',
+      name: 'Goth Glamour AI',
+      age: 24,
+      ethnicity: 'caucasian',
+      bodyType: 'hourglass',
+      eyeColor: 'dark brown',
       eyeShape: 'almond',
       faceShape: 'oval',
-      hairColor: 'dark brown',
-      hairStyle: 'long waves',
-      skinTone: 'warm',
-      outfit: 'casual streetwear',
-      pose: 'confident standing',
-      expression: 'cheerful',
-      extra: 'cinematic lighting, elegant atmosphere',
-      bio: 'New AI companion with tailored persona and visual identity.',
-      traits: ['creative', 'curious', 'friendly'],
-      room: 'Studio',
-      affinity: 35,
-      trust: 40,
-      emotion: 'happy',
+      hairColor: 'vibrant ruby red',
+      hairStyle: 'layered waves bob',
+      skinTone: 'fair porcelain',
+      outfit: 'red and black lace corset lingerie with matching satin panties, sheer black fishnet stockings, and ruby velvet choker',
+      pose: 'sensually reclining back in dark leather armchair, hand on chest',
+      expression: 'alluring parted lips and seductive gaze',
+      extra: 'smokey dark eye makeup, bold crimson lipstick, dark leather armchair backdrop, sensual rim lighting',
+      thumbnailUrl: '/assets/ruby-noir-thumb.jpg',
+      previewUrl: '/assets/ruby-noir.jpg',
+      bio: 'Sensual gothic glamour persona with fiery red waves, lace corsetry, and captivating charm.',
+      traits: ['alluring', 'gothic', 'seductive'],
+      room: 'Leather Armchair Lounge',
+      affinity: 80,
+      trust: 70,
+      emotion: 'excited',
       memories: []
     };
-    const next = [...girls, newPersona];
+    const next = [newGirl, ...girls];
     setGirls(next);
     saveGirls(next);
-    setSelectedId(id);
-    setChat([]);
-    setAvatarState(loadAvatarState(id, newPersona));
-    setStory(initialStory(newPersona.affinity / 25));
-    setTab('avatar');
+    selectGirl(id);
   };
 
-  const handleResetPersonas = () => {
-    if (confirm('Reset characters to default seeded companions? Custom characters will be cleared.')) {
-      setGirls(seedGirls);
-      saveGirls(seedGirls);
-      selectGirl(seedGirls[0].id);
-    }
+  const handleRandomize = () => {
+    const next = randomizeAvatar(draft);
+    setDraft(next);
+    updateGirl(next as Partial<Girl>);
   };
 
-  const interact = () => {
-    const next = interactionState(avatarState);
-    setAvatarState(next);
-    saveAvatarState(girl.id, next);
-    const level = Math.floor(Math.min(next.affection, next.trust) / 25);
-    setStory(s => advanceStory(s, level));
-    updateGirl({ affinity: next.affection, trust: next.trust, emotion: next.emotion });
+  const handleSaveAvatar = () => {
+    updateGirl({
+      name: draft.name,
+      age: draft.age,
+      ethnicity: draft.ethnicity,
+      bodyType: draft.bodyType,
+      eyeColor: draft.eyeColor,
+      eyeShape: draft.eyeShape,
+      faceShape: draft.faceShape,
+      hairColor: draft.hairColor,
+      hairStyle: draft.hairStyle,
+      skinTone: draft.skinTone,
+      outfit: draft.outfit,
+      pose: draft.pose,
+      expression: draft.expression,
+      extra: draft.extra
+    });
+    setSaveToast(true);
+    setTimeout(() => setSaveToast(false), 2000);
   };
 
-  const generate = async () => {
+  const copyAvatarId = () => {
+    navigator.clipboard?.writeText(girl.id);
+    setCopiedId(true);
+    setTimeout(() => setCopiedId(false), 1500);
+  };
+
+  // Generation action
+  const handleGenerate = async () => {
     setBusy(true);
-    setResult('Generating…');
-    const nextState = interactionState(avatarState);
-    const nextStory = advanceStory(story, Math.floor(Math.min(nextState.affection, nextState.trust) / 25));
-    const full = buildGenerationPrompt(girl, room, prompt, mode, enhanced, interactionId, nextState, nextStory, adult);
+    setResult('Synthesizing high-detail avatar render…');
+    const promptCompiled = buildDraftPrompt(draft, adult);
     try {
       const r = await generateWithFallback(
-        { prompt: full, mode, width: mode === 'image' ? 768 : 1280, height: mode === 'image' ? 768 : 720 },
+        { prompt: promptCompiled, mode: 'image', width: 1024, height: 1024 },
         provider
       );
-      setAssetUrl(r.assetUrl ?? '');
-      setResult(r.text ?? r.warning ?? `Provider: ${r.provider} · ${r.status}`);
       if (r.assetUrl) {
-        addGalleryItem({ avatarId: girl.id, mode, prompt: full, assetUrl: r.assetUrl, provider: r.provider });
+        updateGirl({ previewUrl: r.assetUrl });
+        addGalleryItem({
+          avatarId: girl.id,
+          mode: 'image',
+          prompt: promptCompiled,
+          assetUrl: r.assetUrl,
+          provider: r.provider
+        });
         setGallery(loadGallery());
       }
-      const next = addMemory(girls, girl.id, `${mode} generation in ${room.name}`, prompt || 'showcase scene', room.id);
-      setGirls(next);
-      saveGirls(next);
+      setResult(r.text ?? r.warning ?? `Generation ready via ${r.provider}`);
     } catch (e) {
       setResult(e instanceof Error ? e.message : 'Generation failed');
     } finally {
@@ -153,30 +244,7 @@ export default function App() {
     }
   };
 
-  const generateAvatar = async (draft: AvatarDraft) => {
-    setBusy(true);
-    setResult('Generating avatar…');
-    try {
-      const next = { ...girl, ...draft };
-      updateGirl(next);
-      const adultBit = adult
-        ? 'Adult content allowed. Mature portrait as requested. All characters 18+.'
-        : 'non-explicit, tasteful portrait.';
-      const avatarPrompt = `${draft.name}, adult fictional character (18+), ${draft.ethnicity}, ${draft.bodyType} build, ${draft.eyeColor} ${draft.eyeShape} eyes, ${draft.faceShape} face, ${draft.hairColor} ${draft.hairStyle} hair, ${draft.skinTone} skin, wearing ${draft.outfit}, ${draft.pose}, ${draft.expression}. ${draft.extra}. High quality character portrait, coherent identity. ${adultBit}`;
-      const r = await generateWithFallback({ prompt: avatarPrompt, mode: 'image', width: 768, height: 768 }, provider);
-      setAssetUrl(r.assetUrl ?? '');
-      setResult(r.text ?? r.warning ?? `Avatar provider: ${r.provider} · ${r.status}`);
-      if (r.assetUrl) {
-        addGalleryItem({ avatarId: draft.id, mode: 'image', prompt: avatarPrompt, assetUrl: r.assetUrl, provider: r.provider });
-        setGallery(loadGallery());
-      }
-    } catch (e) {
-      setResult(e instanceof Error ? e.message : 'Avatar generation failed');
-    } finally {
-      setBusy(false);
-    }
-  };
-
+  // Chat action
   const sendChat = async () => {
     if (!chatInput.trim() || busy) return;
     const text = chatInput.trim();
@@ -193,465 +261,1176 @@ export default function App() {
       setChat(out);
       saveChat(girl.id, out);
       addMemory(girls, girl.id, 'Conversation', text, room.id);
-      interact();
+      const nextAvatar = interactionState(avatarState);
+      setAvatarState(nextAvatar);
+      saveAvatarState(girl.id, nextAvatar);
     } catch (e) {
-      setResult(e instanceof Error ? e.message : 'Chat failed');
+      setResult(e instanceof Error ? e.message : 'Chat error');
     } finally {
       setBusy(false);
     }
   };
 
-  const advance = () => setStory(s => advanceStory(s, s.relationshipLevel + 1));
+  // 8 Hair Style Silhouette Presets
+  const hairStylePresets = [
+    { label: 'Layered Waves', icon: '💇‍♀️', style: 'layered waves bob' },
+    { label: 'Cyber Undercut', icon: '⚡', style: 'cyber undercut with side sweep' },
+    { label: 'Glamour Waves', icon: '✨', style: 'long glamorous waves' },
+    { label: 'Sleek Bob', icon: '🪞', style: 'sleek straight bob' },
+    { label: 'High Ponytail', icon: '🎀', style: 'high ponytail' },
+    { label: 'Messy Bun', icon: '🧶', style: 'messy bun with wisps' },
+    { label: 'Pixie Crop', icon: '✂️', style: 'asymmetric pixie crop' },
+    { label: 'Wet Waves', icon: '💧', style: 'wet-look waves' }
+  ];
 
-  const avatarDraft: AvatarDraft = {
-    id: girl.id,
-    name: girl.name,
-    age: girl.age,
-    ethnicity: girl.ethnicity,
-    bodyType: girl.bodyType,
-    eyeColor: girl.eyeColor,
-    eyeShape: girl.eyeShape,
-    faceShape: girl.faceShape,
-    hairColor: girl.hairColor,
-    hairStyle: girl.hairStyle,
-    skinTone: girl.skinTone,
-    outfit: girl.outfit,
-    pose: girl.pose,
-    expression: girl.expression,
-    extra: girl.extra
-  };
+  // Skin tones
+  const skinToneSwatches = [
+    { name: 'Porcelain', color: '#fbe8df', tone: 'fair porcelain' },
+    { name: 'Ivory', color: '#f5d6c6', tone: 'pale ivory' },
+    { name: 'Warm Light', color: '#eec4a8', tone: 'light warm' },
+    { name: 'Olive', color: '#d0a783', tone: 'olive' },
+    { name: 'Golden Tan', color: '#b98758', tone: 'golden tan' },
+    { name: 'Deep Bronze', color: '#885536', tone: 'deep bronze' },
+    { name: 'Rich Espresso', color: '#4a2c1f', tone: 'rich espresso' },
+    { name: 'Cyber Pale', color: '#d8e2eb', tone: 'cybernetic pale' }
+  ];
+
+  const currentPreviewUrl =
+    girl.previewUrl ||
+    (girl.id === 'ruby_noir'
+      ? '/assets/ruby-noir.jpg'
+      : girl.id === 'matrix_07'
+      ? '/assets/matrix-07-center.jpg'
+      : '/assets/ruby-noir.jpg');
 
   return (
-    <main>
-      <header>
-        <div>
-          <span className="eyebrow">GROK GIRLS</span>
-          <h1>Character Studio</h1>
-          <p>Characters • Avatar • AI Chat • Story • Scenes • Image • Video • Gallery • Render</p>
+    <div className="app-container">
+      {/* 1. LEFT VERTICAL NAVIGATION RAIL */}
+      <aside className="nav-rail">
+        <div className="brand-logo" title="Grok Girls Studio">
+          M
         </div>
-        <div className="status-row">
+
+        <div className="rail-menu">
           <button
-            className={adult ? 'adult-on' : 'adult-off'}
-            onClick={() => setAdult(v => !v)}
-            title="Adult overlay for all features"
+            className={`rail-btn ${view === 'builder' ? 'active' : ''}`}
+            onClick={() => setView('builder')}
+            title="Appearance Studio"
           >
-            {adult ? '● ADULT ON' : '○ ADULT OFF'}
+            <span className="rail-icon">💀</span>
+            <span>Appearance</span>
           </button>
+
           <button
-            onClick={() => setIsSettingsOpen(true)}
-            style={{
-              background: '#17171f',
-              border: '1px solid #343444',
-              color: '#c0b8d8',
-              padding: '8px 14px',
-              borderRadius: '999px',
-              fontSize: '11px',
-              fontWeight: 600
+            className={`rail-btn ${openSections.body && view === 'builder' ? 'active' : ''}`}
+            onClick={() => {
+              setView('builder');
+              setOpenSections(p => ({ ...p, body: true }));
             }}
+            title="Body & Build"
           >
-            ⚙ API SETTINGS
+            <span className="rail-icon">👤</span>
+            <span>Body</span>
           </button>
-          <div className="status">● CORE FEATURES ACTIVE</div>
-        </div>
-      </header>
-
-      <nav className="tabs">
-        {(['studio', 'avatar', 'story', 'gallery', 'export'] as Tab[]).map(t => (
-          <button key={t} className={tab === t ? 'selected' : ''} onClick={() => setTab(t)}>
-            {t.toUpperCase()}
-          </button>
-        ))}
-      </nav>
-
-      <section className="layout">
-        <aside>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0 }}>Characters</h2>
-            <button
-              onClick={handleResetPersonas}
-              title="Reset characters"
-              style={{ background: 'transparent', border: 'none', color: '#666', fontSize: 11 }}
-            >
-              Reset
-            </button>
-          </div>
-
-          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {girls.map(g => (
-              <button
-                className={g.id === selectedId ? 'girl active' : 'girl'}
-                onClick={() => selectGirl(g.id)}
-                key={g.id}
-              >
-                <span className="avatar">{g.name[0]}</span>
-                <span>
-                  <b>{g.name}</b>
-                  <small>
-                    {Math.round(g.affinity)}% bond · {g.emotion}
-                  </small>
-                </span>
-              </button>
-            ))}
-          </div>
 
           <button
-            type="button"
-            className="btn-new-char"
-            onClick={handleCreateNewPersona}
+            className={`rail-btn ${openSections.clothing && view === 'builder' ? 'active' : ''}`}
+            onClick={() => {
+              setView('builder');
+              setOpenSections(p => ({ ...p, clothing: true }));
+            }}
+            title="Lingerie & Corsetry"
           >
-            + CREATE NEW PERSONA
+            <span className="rail-icon">👚</span>
+            <span>Clothing</span>
           </button>
 
-          <div className="sideblock">
-            <b>AI Provider</b>
-            <select value={provider} onChange={e => setProvider(e.target.value as ProviderName)}>
-              <option value="local">Local (Procedural / Offline)</option>
-              <option value="openrouter">OpenRouter (Cloud)</option>
-              <option value="gemini">Gemini (Google AI)</option>
-              <option value="custom">Custom Endpoint</option>
-            </select>
+          <button
+            className="rail-btn"
+            onClick={() => {
+              setView('builder');
+              setDockTab('style');
+            }}
+            title="Hair Styling"
+          >
+            <span className="rail-icon">💇‍♀️</span>
+            <span>Hair</span>
+          </button>
+
+          <button
+            className={`rail-btn ${openSections.makeup && view === 'builder' ? 'active' : ''}`}
+            onClick={() => {
+              setView('builder');
+              setOpenSections(p => ({ ...p, makeup: true }));
+            }}
+            title="Face & Makeup"
+          >
+            <span className="rail-icon">🎭</span>
+            <span>Face</span>
+          </button>
+
+          <button
+            className="rail-btn"
+            onClick={() => {
+              setView('builder');
+              setOpenSections(p => ({ ...p, makeup: true }));
+            }}
+            title="Eyes & Eyeliner"
+          >
+            <span className="rail-icon">👁️</span>
+            <span>Eyes</span>
+          </button>
+
+          <button
+            className="rail-btn"
+            onClick={() => {
+              setView('builder');
+              setOpenSections(p => ({ ...p, clothing: true }));
+            }}
+            title="Chokers & Accessories"
+          >
+            <span className="rail-icon">💍</span>
+            <span>Accessories</span>
+          </button>
+
+          <button
+            className="rail-btn"
+            onClick={() => {
+              setView('builder');
+              setOpenSections(p => ({ ...p, appearance: true }));
+            }}
+            title="Augments"
+          >
+            <span className="rail-icon">⚡</span>
+            <span>Augments</span>
+          </button>
+
+          <button
+            className="rail-btn"
+            onClick={() => {
+              setView('builder');
+              setOpenSections(p => ({ ...p, clothing: true }));
+            }}
+            title="Tattoos & Lace"
+          >
+            <span className="rail-icon">🖤</span>
+            <span>Tattoos</span>
+          </button>
+
+          <button
+            className={`rail-btn ${view === 'export' ? 'active' : ''}`}
+            onClick={() => setView('export')}
+            title="Video & Animation Studio"
+          >
+            <span className="rail-icon">🎬</span>
+            <span>Animations</span>
+          </button>
+        </div>
+
+        <div className="rail-footer">
+          <button className="rail-btn" onClick={handleRandomize} title="Randomize Persona Traits">
+            <span className="rail-icon">🎲</span>
+          </button>
+
+          <button className="rail-btn" onClick={() => setIsSettingsOpen(true)} title="AI Provider Settings">
+            <span className="rail-icon">⚙️</span>
+          </button>
+
+          <button
+            className={`rail-btn crown-btn ${adult ? 'adult-active' : ''}`}
+            onClick={() => setAdult(v => !v)}
+            title={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}
+          >
+            <span className="rail-icon">👑</span>
+            <span style={{ fontSize: 8 }}>{adult ? '18+ ON' : '18+'}</span>
+          </button>
+
+          <button className="rail-btn" onClick={() => setView('chat')} title="Interactive Dialogue">
+            <span className="rail-icon">💬</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* 2. PRESETS DRAWER (Column 2) */}
+      <section className="presets-drawer">
+        <div className="presets-header">
+          <h3>Presets</h3>
+          <button style={{ color: '#777' }} title="Filter presets">
+            ⚙
+          </button>
+        </div>
+
+        <div className="presets-list">
+          {girls.map(g => (
             <button
-              className="btn-config"
-              type="button"
-              onClick={() => setIsSettingsOpen(true)}
+              key={g.id}
+              className={`preset-card ${g.id === selectedId ? 'active' : ''}`}
+              onClick={() => selectGirl(g.id)}
             >
-              ⚙ Configure API Keys
+              <img
+                src={
+                  g.thumbnailUrl ||
+                  (g.id === 'ruby_noir'
+                    ? '/assets/ruby-noir-thumb.jpg'
+                    : g.id === 'matrix_07'
+                    ? '/assets/preset-1.jpg'
+                    : '/assets/ruby-noir-thumb.jpg')
+                }
+                alt={g.name}
+                className="preset-thumb"
+              />
+              <div className="preset-info">
+                <div className="preset-name">{g.name}</div>
+                <div className="preset-sub">
+                  {g.id === 'ruby_noir'
+                    ? 'Crimson Hair · Lace Corset'
+                    : g.id === 'matrix_07'
+                    ? 'Cyber Undercut · Techwear'
+                    : g.outfit.slice(0, 24) + '…'}
+                </div>
+              </div>
             </button>
-          </div>
+          ))}
+        </div>
 
-          <div className="sideblock">
-            <b>Adult Overlay</b>
-            <p style={{ margin: '8px 0 0', fontSize: 12, color: adult ? '#ffa0d8' : '#888' }}>
-              {adult
-                ? 'Mature/explicit scenes allowed across studio, avatar, chat & story (18+).'
-                : 'Safe / non-explicit mode.'}
-            </p>
-            <button
-              className={adult ? 'adult-on' : 'adult-off'}
-              style={{ marginTop: 10, width: '100%' }}
-              onClick={() => setAdult(v => !v)}
-            >
-              {adult ? 'ADULT ON' : 'ADULT OFF'}
-            </button>
-          </div>
-        </aside>
-
-        <section className="studio">
-          {tab === 'studio' && (
-            <>
-              <div className="hero">
-                <div className="orb">{girl.name[0]}</div>
-                <div>
-                  <span className="eyebrow">ACTIVE PERSONA</span>
-                  <h2>{girl.name}</h2>
-                  <p>{girl.bio}</p>
-                  <div className="chips">
-                    {girl.traits.map(t => (
-                      <span key={t}>{t}</span>
-                    ))}
-                    {adult && <span className="adult-chip">ADULT</span>}
-                  </div>
-                  <div className="stats">
-                    <span>Bond {Math.round(avatarState.affection)}%</span>
-                    <span>Trust {Math.round(avatarState.trust)}%</span>
-                    <span>Mood {girl.emotion}</span>
-                    <span>Chapter {story.chapter}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="controls">
-                <div className="grid2">
-                  <label>
-                    Room / Environment
-                    <select value={roomId} onChange={e => setRoomId(e.target.value)}>
-                      {rooms.map(r => (
-                        <option key={r.id} value={r.id}>
-                          {r.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Camera / Interaction Pose
-                    <select value={interactionId} onChange={e => setInteractionId(e.target.value)}>
-                      <option value="">Default Scene Pose</option>
-                      {room.interactions.map(i => (
-                        <option key={i.id} value={i.id}>
-                          {i.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <label>
-                  Scene Prompt & Direction
-                  <textarea
-                    value={prompt}
-                    onChange={e => setPrompt(e.target.value)}
-                    placeholder="Describe the scene, wardrobe, mood, camera framing, lighting, or story details…"
-                  />
-                </label>
-
-                <div className="row">
-                  <button className={mode === 'image' ? 'selected' : ''} onClick={() => setMode('image')}>
-                    IMAGE
-                  </button>
-                  <button className={mode === 'video' ? 'selected' : ''} onClick={() => setMode('video')}>
-                    VIDEO
-                  </button>
-                  <button className={enhanced ? 'selected' : ''} onClick={() => setEnhanced(v => !v)}>
-                    ENHANCE
-                  </button>
-                  <button className={adult ? 'adult-on selected' : ''} onClick={() => setAdult(v => !v)}>
-                    ADULT
-                  </button>
-                  <button onClick={interact}>INTERACT</button>
-                  <button className="generate" disabled={busy} onClick={generate}>
-                    {busy ? 'GENERATING…' : 'GENERATE'}
-                  </button>
-                </div>
-              </div>
-
-              {assetUrl && (
-                <div className="media">
-                  <img src={assetUrl} alt="Generated character or scene" />
-                  <button
-                    onClick={() =>
-                      downloadMedia(
-                        assetUrl,
-                        `${girl.id}-${mode}-${Date.now()}.${mode === 'image' ? 'png' : 'mp4'}`
-                      )
-                    }
-                  >
-                    EXPORT MEDIA
-                  </button>
-                </div>
-              )}
-
-              <article className="result">
-                <span className="eyebrow">STORY PROGRESSION</span>
-                <p>{storyPrompt(story)}</p>
-                <small>{statePrompt(avatarState)}</small>
-              </article>
-
-              {result && (
-                <article className="result">
-                  <span className="eyebrow">GENERATION STATUS</span>
-                  <p>{result}</p>
-                </article>
-              )}
-
-              <div className="memory">
-                <h3>Companion Dialogue</h3>
-                <div className="chatlog">
-                  {chat.length === 0 && (
-                    <div style={{ color: '#888', padding: '8px' }}>
-                      Start a conversation with {girl.name}…
-                    </div>
-                  )}
-                  {chat.slice(-12).map(m => (
-                    <div className={m.role} key={m.id}>
-                      <b>{m.role === 'user' ? 'You' : girl.name}</b>
-                      <span>{m.text}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="chatrow">
-                  <input
-                    value={chatInput}
-                    onChange={e => setChatInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && sendChat()}
-                    placeholder={`Talk to ${girl.name}…`}
-                  />
-                  <button disabled={busy} onClick={sendChat}>
-                    SEND
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-
-          {tab === 'avatar' && (
-            <AvatarCreator
-              initial={avatarDraft}
-              mode="image"
-              roomId={roomId}
-              adult={adult}
-              onSave={d => updateGirl(d as Partial<Girl>)}
-              onGenerate={generateAvatar}
-            />
-          )}
-
-          {tab === 'story' && <StoryPanel story={story} onAdvance={advance} adult={adult} />}
-
-          {tab === 'gallery' && (
-            <GalleryPanel items={gallery} refresh={() => setGallery(loadGallery())} />
-          )}
-
-          {tab === 'export' && (
-            <VideoExportPage
-              girl={girl}
-              room={room}
-              latestAssetUrl={assetUrl}
-              adult={adult}
-            />
-          )}
-        </section>
+        <button className="btn-new-preset" onClick={handleCreateNewPreset}>
+          + NEW PRESET
+        </button>
       </section>
 
-      <footer>
-        <label>
-          Import Gallery JSON
-          <input
-            type="file"
-            accept="application/json"
-            onChange={async e => {
-              const f = e.target.files?.[0];
-              if (f) {
-                try {
-                  const imported = await importGallery(f);
-                  setGallery(imported);
-                  setResult(`Imported ${imported.length} gallery items successfully.`);
-                } catch (err) {
-                  setResult(err instanceof Error ? err.message : 'Import failed');
-                }
-              }
-            }}
-          />
-        </label>
-        <button onClick={() => exportGallery(gallery)}>EXPORT GALLERY JSON</button>
-      </footer>
+      {/* 3. CENTER VIEWPORT & LOWER DOCK */}
+      <section className="center-workspace">
+        {/* Viewport Header Bar */}
+        <header className="viewport-header">
+          <div className="avatar-design-title">
+            <span>CREATE YOUR IDENTITY</span>
+            <h2>Avatar Design</h2>
+          </div>
 
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
-    </main>
-  );
-}
+          <div className="mode-pills">
+            <button
+              className={`mode-pill ${view === 'builder' ? 'active' : ''}`}
+              onClick={() => setView('builder')}
+            >
+              BUILDER
+            </button>
+            <button
+              className={`mode-pill ${view === 'chat' ? 'active' : ''}`}
+              onClick={() => setView('chat')}
+            >
+              COMPANION CHAT
+            </button>
+            <button
+              className={`mode-pill ${view === 'story' ? 'active' : ''}`}
+              onClick={() => setView('story')}
+            >
+              STORY
+            </button>
+            <button
+              className={`mode-pill ${view === 'export' ? 'active' : ''}`}
+              onClick={() => setView('export')}
+            >
+              VIDEO
+            </button>
+            <button
+              className={`mode-pill ${view === 'gallery' ? 'active' : ''}`}
+              onClick={() => setView('gallery')}
+            >
+              GALLERY
+            </button>
+          </div>
 
-function StoryPanel({
-  story,
-  onAdvance,
-  adult
-}: {
-  story: StoryState;
-  onAdvance: () => void;
-  adult?: boolean;
-}) {
-  return (
-    <div>
-      <article className="hero">
-        <div>
-          <span className="eyebrow">STORY CAMPAIGN{adult ? ' · ADULT' : ''}</span>
-          <h2>
-            Chapter {story.chapter}: {story.title}
-          </h2>
-          <p>{story.objective}</p>
-          <p>{story.actionPrompt}</p>
-          <div className="stats">
-            <span>Relationship level {story.relationshipLevel}</span>
-            <span>{story.completedObjectives.length} objectives complete</span>
-            {adult && <span className="adult-chip">ADULT OVERLAY</span>}
+          <div className="viewport-tools-top">
+            <button
+              className="icon-tool-btn"
+              onClick={() => setZoomLevel(1)}
+              title="Reset View"
+            >
+              ↺
+            </button>
+            <button
+              className="icon-tool-btn"
+              onClick={() => setZoomLevel(z => Math.min(1.8, z + 0.15))}
+              title="Zoom In"
+            >
+              +
+            </button>
+            <button
+              className="icon-tool-btn"
+              onClick={() => setZoomLevel(z => Math.max(0.7, z - 0.15))}
+              title="Zoom Out"
+            >
+              −
+            </button>
+            <button
+              className="icon-tool-btn"
+              onClick={() => setIsSettingsOpen(true)}
+              title="Provider Settings"
+            >
+              ⋮
+            </button>
+          </div>
+        </header>
+
+        {/* Viewport Canvas Stage */}
+        <div className="viewport-stage">
+          <div className="character-render-wrap">
+            <img
+              src={currentPreviewUrl}
+              alt={girl.name}
+              className="character-image"
+              style={{
+                transform: `scale(${zoomLevel}) rotate(${rotationAngle}deg)`,
+                filter:
+                  lightingMode === 'noir'
+                    ? 'contrast(1.15) brightness(1.02) drop-shadow(0 0 35px rgba(230, 32, 64, 0.35))'
+                    : lightingMode === 'wireframe'
+                    ? 'invert(1) hue-rotate(180deg)'
+                    : 'drop-shadow(0 20px 40px rgba(0,0,0,0.85))'
+              }}
+            />
+
+            <div className="character-tag">
+              {girl.id === 'ruby_noir'
+                ? 'RUBY_NOIR_01'
+                : girl.id === 'matrix_07'
+                ? 'MATRIX_07'
+                : girl.name.toUpperCase().replace(/\s+/g, '_')}
+            </div>
+          </div>
+
+          {/* Viewport Top Right HUD */}
+          <div className="viewport-hud">
+            <button
+              className="hud-btn"
+              onClick={() => setRotationAngle(r => (r + 45) % 360)}
+              title="Rotate Viewport Angle"
+            >
+              <span>R</span> ROTATE
+            </button>
+            <button
+              className="hud-btn"
+              onClick={() => setZoomLevel(z => (z > 1.2 ? 1 : 1.4))}
+              title="Toggle Zoom"
+            >
+              <span>🔍</span> ZOOM
+            </button>
+            <button
+              className="hud-btn"
+              onClick={() => {
+                setZoomLevel(1);
+                setRotationAngle(0);
+              }}
+              title="Center Pan"
+            >
+              <span>✥</span> PAN
+            </button>
+            <button className="hud-btn" onClick={handleRandomize} title="Randomize Attributes">
+              <span>🎲</span> RANDOM
+            </button>
+          </div>
+
+          {/* Viewport Bottom Lighting / Camera Bar */}
+          <div className="viewport-lighting-bar">
+            <button
+              className={`lighting-btn ${lightingMode === 'studio' ? 'active' : ''}`}
+              onClick={() => setLightingMode('studio')}
+              title="Studio Softbox Keylight"
+            >
+              ☀️
+            </button>
+            <button
+              className={`lighting-btn ${lightingMode === 'noir' ? 'active' : ''}`}
+              onClick={() => setLightingMode('noir')}
+              title="Gothic Noir Armchair Shadows (Picture 1 Mood)"
+            >
+              💀
+            </button>
+            <button
+              className={`lighting-btn ${lightingMode === 'full' ? 'active' : ''}`}
+              onClick={() => {
+                setLightingMode('full');
+                setZoomLevel(0.85);
+              }}
+              title="Full-Length Framing"
+            >
+              🧍
+            </button>
+            <button
+              className={`lighting-btn ${lightingMode === 'bust' ? 'active' : ''}`}
+              onClick={() => {
+                setLightingMode('bust');
+                setZoomLevel(1.35);
+              }}
+              title="Bust & Face Portrait"
+            >
+              👤
+            </button>
+            <button
+              className={`lighting-btn ${lightingMode === 'wireframe' ? 'active' : ''}`}
+              onClick={() => setLightingMode(m => (m === 'wireframe' ? 'noir' : 'wireframe'))}
+              title="3D Depth Wireframe"
+            >
+              🧊
+            </button>
           </div>
         </div>
-      </article>
 
-      <div className="result" style={{ marginTop: 18 }}>
-        <h3>Campaign Chapters</h3>
-        {storyChapters.map(c => (
-          <div className={c.chapter === story.chapter ? 'chapter active' : 'chapter'} key={c.chapter}>
-            <b>
-              {c.chapter}. {c.title}
-            </b>
-            <span>
-              {c.objective} · requires level {c.minRelationship}
-            </span>
-          </div>
-        ))}
-      </div>
+        {/* Lower Tool Dock (Hair, Color Wheel, Add-ons, Angle Previews) */}
+        <div className="lower-dock">
+          {/* Left: Hair & Color Wheel */}
+          <div className="dock-hair-section">
+            <div className="dock-tabs">
+              <button
+                className={`dock-tab ${dockTab === 'style' ? 'active' : ''}`}
+                onClick={() => setDockTab('style')}
+              >
+                HAIR STYLE
+              </button>
+              <button
+                className={`dock-tab ${dockTab === 'color' ? 'active' : ''}`}
+                onClick={() => setDockTab('color')}
+              >
+                HAIR COLOR
+              </button>
+              <button
+                className={`dock-tab ${dockTab === 'facial' ? 'active' : ''}`}
+                onClick={() => setDockTab('facial')}
+              >
+                CHOKERS & LIPS
+              </button>
+              <button
+                className={`dock-tab ${dockTab === 'eyebrows' ? 'active' : ''}`}
+                onClick={() => setDockTab('eyebrows')}
+              >
+                EYEBROWS
+              </button>
+            </div>
 
-      <div className="row" style={{ marginTop: 18 }}>
-        <button className="generate" onClick={onAdvance}>
-          ADVANCE STORY STAGE
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function GalleryPanel({ items, refresh }: { items: GalleryItem[]; refresh: () => void }) {
-  const [filterFav, setFilterFav] = useState(false);
-  const displayed = filterFav ? items.filter(x => x.favorite) : items;
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <h3 style={{ margin: 0 }}>Generations Archive ({items.length})</h3>
-        <button
-          className={filterFav ? 'selected' : ''}
-          onClick={() => setFilterFav(v => !v)}
-          style={{
-            padding: '6px 12px',
-            borderRadius: 8,
-            border: '1px solid #34343e',
-            background: filterFav ? '#28243d' : '#17171f',
-            color: filterFav ? '#fff' : '#aaa'
-          }}
-        >
-          {filterFav ? '★ Showing Favorites' : '☆ Filter Favorites'}
-        </button>
-      </div>
-
-      <div className="gallery">
-        {displayed.length === 0 ? (
-          <p style={{ color: '#888' }}>
-            {filterFav ? 'No favorite generations yet.' : 'No generations yet. Click "Generate" in Studio or Avatar tab!'}
-          </p>
-        ) : (
-          displayed.map(x => (
-            <article className="galleryItem" key={x.id}>
-              {x.assetUrl ? (
-                x.mode === 'video' ? (
-                  <video src={x.assetUrl} controls />
-                ) : (
-                  <img src={x.assetUrl} alt="Generated asset" />
-                )
-              ) : (
-                <div className="assetPlaceholder">
-                  {x.mode.toUpperCase()}
-                  <small>{x.provider}</small>
-                </div>
-              )}
-              <p title={x.prompt}>{x.prompt || 'Generated character asset'}</p>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-                <small style={{ color: '#777' }}>{new Date(x.createdAt).toLocaleTimeString()}</small>
-                <div>
+            <div className="dock-hair-content">
+              {/* 8 Hair Style Cards */}
+              <div className="hair-styles-grid">
+                {hairStylePresets.map(h => (
                   <button
-                    onClick={() => {
-                      toggleFavorite(x.id);
-                      refresh();
-                    }}
-                    title="Toggle favorite"
+                    key={h.style}
+                    className={`hair-style-card ${draft.hairStyle === h.style ? 'active' : ''}`}
+                    onClick={() => setDraft(d => ({ ...d, hairStyle: h.style }))}
+                    title={h.label}
                   >
-                    {x.favorite ? '★' : '☆'}
+                    <span>{h.icon}</span>
                   </button>
-                  {x.assetUrl && (
-                    <button
-                      onClick={() => downloadMedia(x.assetUrl!, `${x.id}.${x.mode === 'image' ? 'png' : 'mp4'}`)}
-                      title="Download file"
-                    >
-                      EXPORT
+                ))}
+              </div>
+
+              {/* Functional Color Wheel */}
+              <ColorWheel
+                color={draft.colorAccent || (draft.hairColor.includes('red') ? '#E62040' : '#904EDD')}
+                onChange={hex => {
+                  setDraft(d => ({
+                    ...d,
+                    colorAccent: hex,
+                    hairColor: hex === '#E62040' ? 'vibrant ruby red' : hex === '#904EDD' ? 'electric purple' : 'custom dyed'
+                  }));
+                }}
+                accentColors={['#E62040', '#904EDD', '#00F2FE', '#1F2430', '#F5F5FA']}
+              />
+            </div>
+          </div>
+
+          {/* Middle: Details & Add-Ons */}
+          <div className="dock-addons-section">
+            <div className="dock-section-title">DETAILS & ADD-ONS</div>
+            <div className="addons-grid">
+              <div
+                className="addon-card active"
+                onClick={() => {
+                  setDraft(d => ({
+                    ...d,
+                    chokerStyle:
+                      d.chokerStyle === 'ruby red velvet choker with gold medallion'
+                        ? 'black lace ribbon choker'
+                        : 'ruby red velvet choker with gold medallion'
+                  }));
+                }}
+              >
+                <div className="addon-icon">💎</div>
+                <div className="addon-title">CHOKER</div>
+                <div className="addon-count">08 / 24</div>
+              </div>
+
+              <div
+                className="addon-card active"
+                onClick={() => {
+                  setDraft(d => ({
+                    ...d,
+                    outfit:
+                      d.outfit.includes('corset')
+                        ? 'black satin bustier with floral lace trim'
+                        : 'red and black lace corset lingerie with matching satin panties, sheer fishnet stockings, and ruby velvet choker'
+                  }));
+                }}
+              >
+                <div className="addon-icon">🩱</div>
+                <div className="addon-title">CORSET</div>
+                <div className="addon-count">16 / 35</div>
+              </div>
+
+              <div
+                className="addon-card active"
+                onClick={() => {
+                  setDraft(d => ({
+                    ...d,
+                    hosieryStyle:
+                      d.hosieryStyle === 'sheer black fishnet stockings'
+                        ? 'black lace-top thigh-high stockings'
+                        : 'sheer black fishnet stockings'
+                  }));
+                }}
+              >
+                <div className="addon-icon">🕸️</div>
+                <div className="addon-title">FISHNETS</div>
+                <div className="addon-count">06 / 18</div>
+              </div>
+
+              <div className="addon-card">
+                <div className="addon-icon">👂</div>
+                <div className="addon-title">PIERCINGS</div>
+                <div className="addon-count">12 / 32</div>
+              </div>
+
+              <div className="addon-card">
+                <div className="addon-icon">💄</div>
+                <div className="addon-title">MAKEUP</div>
+                <div className="addon-count">14 / 28</div>
+              </div>
+
+              <div className="addon-card">
+                <div className="addon-icon">⚡</div>
+                <div className="addon-title">CYBER</div>
+                <div className="addon-count">15 / 40</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Multi-Angle Preview */}
+          <div className="dock-preview-section">
+            <div className="preview-camera-icons">
+              <span className="active" title="Front">🧍</span>
+              <span title="Torso">👤</span>
+              <span title="Close-up">🔍</span>
+              <span title="Back">🪞</span>
+            </div>
+
+            <div className="preview-circles-row">
+              <div
+                className="preview-circle active"
+                onClick={() => setZoomLevel(1.3)}
+                title="Front Portrait"
+              >
+                <img
+                  src={
+                    girl.id === 'ruby_noir'
+                      ? '/assets/ruby-noir-thumb.jpg'
+                      : '/assets/preset-1.jpg'
+                  }
+                  alt="Front Angle"
+                />
+              </div>
+
+              <div
+                className="preview-circle"
+                onClick={() => setZoomLevel(1)}
+                title="3/4 Reclining Armchair Angle (Picture 1)"
+              >
+                <img
+                  src={
+                    girl.id === 'ruby_noir'
+                      ? '/assets/ruby-noir.jpg'
+                      : '/assets/matrix-07-center.jpg'
+                  }
+                  alt="3/4 Angle"
+                />
+              </div>
+
+              <div
+                className="preview-circle"
+                onClick={() => setRotationAngle(180)}
+                title="Back Silhouette"
+              >
+                <img
+                  src={
+                    girl.id === 'ruby_noir'
+                      ? '/assets/ruby-noir-thumb.jpg'
+                      : '/assets/preset-4.jpg'
+                  }
+                  alt="Back Angle"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* COMPANION CHAT OVERLAY VIEW */}
+        {view === 'chat' && (
+          <div className="companion-overlay-dock">
+            <div className="companion-header">
+              <div>
+                <h3 style={{ margin: 0, color: '#fff', fontSize: 16 }}>
+                  Dialogue with {girl.name}
+                </h3>
+                <span style={{ fontSize: 11, color: '#aaa' }}>
+                  {girl.room} · {girl.emotion} mood · {Math.round(avatarState.affection)}% affection
+                </span>
+              </div>
+              <button
+                style={{ color: '#aaa', fontSize: 16 }}
+                onClick={() => setView('builder')}
+              >
+                ✕ Close Chat
+              </button>
+            </div>
+
+            <div className="companion-log">
+              {chat.length === 0 ? (
+                <div style={{ color: '#777', textAlign: 'center', margin: 'auto' }}>
+                  Say hello to {girl.name} to begin your conversation…
+                </div>
+              ) : (
+                chat.map(m => (
+                  <div key={m.id} className={`chat-bubble ${m.role}`}>
+                    <span className="chat-author">
+                      {m.role === 'user' ? 'YOU' : girl.name.toUpperCase()}
+                    </span>
+                    {m.text}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="companion-input-row">
+              <input
+                className="companion-input"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && sendChat()}
+                placeholder={`Talk to ${girl.name}…`}
+              />
+              <button className="btn-send-chat" disabled={busy} onClick={sendChat}>
+                {busy ? '…' : 'SEND'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STORY OVERLAY VIEW */}
+        {view === 'story' && (
+          <div className="companion-overlay-dock">
+            <div className="companion-header">
+              <div>
+                <h3 style={{ margin: 0, color: '#fff', fontSize: 16 }}>
+                  Campaign: Chapter {story.chapter} - {story.title}
+                </h3>
+                <span style={{ fontSize: 11, color: '#aaa' }}>
+                  Objective: {story.objective} · Relationship Level {story.relationshipLevel}
+                </span>
+              </div>
+              <button style={{ color: '#aaa', fontSize: 16 }} onClick={() => setView('builder')}>
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding: 18, background: '#12121e', borderRadius: 12, border: '1px solid #232338', marginBottom: 14 }}>
+              <p style={{ color: '#ccc', lineHeight: 1.6 }}>{storyPrompt(story)}</p>
+              <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                {storyChapters.map(c => (
+                  <div
+                    key={c.chapter}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: 8,
+                      background: c.chapter === story.chapter ? '#281f44' : '#171726',
+                      border: c.chapter === story.chapter ? '1px solid #904edd' : '1px solid #252538',
+                      color: c.chapter === story.chapter ? '#fff' : '#888'
+                    }}
+                  >
+                    <b>Ch {c.chapter}</b>: {c.title}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button
+              className="btn-generate-media"
+              style={{ alignSelf: 'flex-start' }}
+              onClick={() => setStory(s => advanceStory(s, s.relationshipLevel + 1))}
+            >
+              Advance Story Chapter
+            </button>
+          </div>
+        )}
+
+        {/* VIDEO EXPORT OVERLAY VIEW */}
+        {view === 'export' && (
+          <div className="companion-overlay-dock" style={{ padding: 0 }}>
+            <div style={{ padding: '14px 20px', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #1e1e2d' }}>
+              <h3 style={{ margin: 0, fontSize: 15 }}>Video Render Studio</h3>
+              <button onClick={() => setView('builder')}>✕</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+              <VideoExportPage
+                girl={girl}
+                room={room}
+                latestAssetUrl={currentPreviewUrl}
+                adult={adult}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* GALLERY OVERLAY VIEW */}
+        {view === 'gallery' && (
+          <div className="companion-overlay-dock">
+            <div className="companion-header">
+              <h3 style={{ margin: 0, color: '#fff', fontSize: 16 }}>
+                Generation Archive ({gallery.length})
+              </h3>
+              <button onClick={() => setView('builder')}>✕</button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
+              {gallery.map(item => (
+                <div
+                  key={item.id}
+                  style={{ background: '#12121e', border: '1px solid #232338', borderRadius: 10, padding: 10 }}
+                >
+                  <img
+                    src={item.assetUrl}
+                    alt="Generation"
+                    style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 8 }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+                    <button onClick={() => setGallery(toggleFavorite(item.id))}>
+                      {item.favorite ? '★' : '☆'}
                     </button>
-                  )}
+                    {item.assetUrl && (
+                      <button onClick={() => downloadMedia(item.assetUrl!, `${item.id}.png`)}>
+                        Export
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* 4. RIGHT CUSTOMIZATION ACCORDION PANEL (Matching Picture 2) */}
+      <aside className="inspector-panel">
+        <div className="inspector-scroll">
+          {/* Section: APPEARANCE */}
+          <div className="accordion-item">
+            <button className="accordion-trigger" onClick={() => toggleSection('appearance')}>
+              <span>Appearance</span>
+              <span className={`accordion-chevron ${openSections.appearance ? 'open' : ''}`}>▼</span>
+            </button>
+
+            {openSections.appearance && (
+              <div className="accordion-body">
+                {/* Gender Selector (4 pills matching Picture 2) */}
+                <div className="inspector-label">
+                  <span>Gender</span>
+                  <div className="gender-selector">
+                    <button
+                      className={`gender-btn ${draft.gender === 'male' ? 'active' : ''}`}
+                      onClick={() => setDraft(d => ({ ...d, gender: 'male' }))}
+                      title="Male"
+                    >
+                      ♂
+                    </button>
+                    <button
+                      className={`gender-btn ${draft.gender === 'female' ? 'active' : ''}`}
+                      onClick={() => setDraft(d => ({ ...d, gender: 'female' }))}
+                      title="Female"
+                    >
+                      ♀
+                    </button>
+                    <button
+                      className={`gender-btn ${draft.gender === 'nonbinary' ? 'active' : ''}`}
+                      onClick={() => setDraft(d => ({ ...d, gender: 'nonbinary' }))}
+                      title="Non-Binary"
+                    >
+                      ⚧
+                    </button>
+                    <button
+                      className={`gender-btn ${draft.gender === 'android' ? 'active' : ''}`}
+                      onClick={() => setDraft(d => ({ ...d, gender: 'android' }))}
+                      title="Android / Cyber"
+                    >
+                      🤖
+                    </button>
+                  </div>
+                </div>
+
+                {/* Skin Tone Swatches (8 circles matching Picture 2) */}
+                <div className="inspector-label">
+                  <span>Skin Tone</span>
+                  <div className="skintone-swatches">
+                    {skinToneSwatches.map(s => (
+                      <div
+                        key={s.tone}
+                        className={`skintone-dot ${draft.skinTone === s.tone ? 'active' : ''}`}
+                        style={{ backgroundColor: s.color }}
+                        onClick={() => setDraft(d => ({ ...d, skinTone: s.tone }))}
+                        title={s.name}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Head Shape Slider */}
+                <div className="inspector-label">
+                  <div className="slider-stepper-row">
+                    <span>Head Shape</span>
+                    <span className="stepper-val">&lt; 0{draft.headShapeIndex || 4} / 12 &gt;</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={1}
+                    max={12}
+                    value={draft.headShapeIndex || 4}
+                    onChange={e => setDraft(d => ({ ...d, headShapeIndex: Number(e.target.value) }))}
+                    className="slider-track"
+                  />
+                </div>
+
+                {/* Age Slider */}
+                <div className="inspector-label">
+                  <div className="slider-stepper-row">
+                    <span>Age</span>
+                    <span className="stepper-val">{draft.age}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={18}
+                    max={60}
+                    value={draft.age}
+                    onChange={e => setDraft(d => ({ ...d, age: Number(e.target.value) }))}
+                    className="slider-track"
+                  />
+                </div>
+
+                {/* Skin Details Avatars */}
+                <div className="inspector-label">
+                  <span>Skin Details</span>
+                  <div className="skin-details-grid">
+                    {['Glow', 'Porcelain', 'Freckles', 'Matte'].map(sd => (
+                      <button
+                        key={sd}
+                        className={`skin-detail-card ${draft.extra?.includes(sd.toLowerCase()) ? 'active' : ''}`}
+                        onClick={() =>
+                          setDraft(d => ({
+                            ...d,
+                            extra: d.extra ? `${d.extra}, ${sd.toLowerCase()} skin` : `${sd.toLowerCase()} skin`
+                          }))
+                        }
+                      >
+                        {sd}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Color Accent */}
+                <div className="accent-row">
+                  <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)' }}>
+                    COLOR ACCENT
+                  </span>
+                  <div
+                    className="accent-circle-dot"
+                    style={{
+                      backgroundColor: draft.colorAccent || '#904EDD',
+                      boxShadow: `0 0 10px ${draft.colorAccent || '#904EDD'}`
+                    }}
+                    onClick={() => {
+                      setDockTab('color');
+                    }}
+                    title="Click to tune in color wheel"
+                  />
                 </div>
               </div>
-            </article>
-          ))
-        )}
-      </div>
+            )}
+          </div>
+
+          {/* Section: CLOTHING & LINGERIE (Crucial for Picture 1!) */}
+          <div className="accordion-item">
+            <button className="accordion-trigger" onClick={() => toggleSection('clothing')}>
+              <span>Clothing & Lingerie</span>
+              <span className={`accordion-chevron ${openSections.clothing ? 'open' : ''}`}>▼</span>
+            </button>
+
+            {openSections.clothing && (
+              <div className="accordion-body">
+                <label className="inspector-label">
+                  <span>Corset & Lingerie Style</span>
+                  <select
+                    className="inspector-select"
+                    value={draft.outfit}
+                    onChange={e => setDraft(d => ({ ...d, outfit: e.target.value }))}
+                  >
+                    {avatarOptions.outfit.map(o => (
+                      <option key={o} value={o}>
+                        {o.slice(0, 42)}…
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="inspector-label">
+                  <span>Neckwear & Choker</span>
+                  <select
+                    className="inspector-select"
+                    value={draft.chokerStyle || 'ruby red velvet choker with gold medallion'}
+                    onChange={e => setDraft(d => ({ ...d, chokerStyle: e.target.value }))}
+                  >
+                    {avatarOptions.chokerStyle.map(c => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="inspector-label">
+                  <span>Hosiery & Stockings</span>
+                  <select
+                    className="inspector-select"
+                    value={draft.hosieryStyle || 'sheer black fishnet stockings'}
+                    onChange={e => setDraft(d => ({ ...d, hosieryStyle: e.target.value }))}
+                  >
+                    {avatarOptions.hosieryStyle.map(h => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="inspector-label">
+                  <span>Environment Backdrop</span>
+                  <select
+                    className="inspector-select"
+                    value={roomId}
+                    onChange={e => setRoomId(e.target.value)}
+                  >
+                    {rooms.map(r => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* Section: HAIR */}
+          <div className="accordion-item">
+            <button className="accordion-trigger" onClick={() => toggleSection('hair')}>
+              <span>Hair & Color</span>
+              <span className={`accordion-chevron ${openSections.hair ? 'open' : ''}`}>▼</span>
+            </button>
+
+            {openSections.hair && (
+              <div className="accordion-body">
+                <label className="inspector-label">
+                  <span>Hair Style</span>
+                  <select
+                    className="inspector-select"
+                    value={draft.hairStyle}
+                    onChange={e => setDraft(d => ({ ...d, hairStyle: e.target.value }))}
+                  >
+                    {avatarOptions.hairStyle.map(h => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="inspector-label">
+                  <span>Hair Color</span>
+                  <select
+                    className="inspector-select"
+                    value={draft.hairColor}
+                    onChange={e => setDraft(d => ({ ...d, hairColor: e.target.value }))}
+                  >
+                    {avatarOptions.hairColor.map(hc => (
+                      <option key={hc} value={hc}>
+                        {hc}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* Section: MAKEUP & FACE */}
+          <div className="accordion-item">
+            <button className="accordion-trigger" onClick={() => toggleSection('makeup')}>
+              <span>Eyes & Makeup</span>
+              <span className={`accordion-chevron ${openSections.makeup ? 'open' : ''}`}>▼</span>
+            </button>
+
+            {openSections.makeup && (
+              <div className="accordion-body">
+                <label className="inspector-label">
+                  <span>Lipstick Shade</span>
+                  <select
+                    className="inspector-select"
+                    value={draft.lipstickShade || 'bold ruby red satin'}
+                    onChange={e => setDraft(d => ({ ...d, lipstickShade: e.target.value }))}
+                  >
+                    {avatarOptions.lipstickShade.map(ls => (
+                      <option key={ls} value={ls}>
+                        {ls}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="inspector-label">
+                  <span>Eye Color</span>
+                  <select
+                    className="inspector-select"
+                    value={draft.eyeColor}
+                    onChange={e => setDraft(d => ({ ...d, eyeColor: e.target.value }))}
+                  >
+                    {avatarOptions.eyeColor.map(ec => (
+                      <option key={ec} value={ec}>
+                        {ec}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="inspector-label">
+                  <span>Expression</span>
+                  <select
+                    className="inspector-select"
+                    value={draft.expression}
+                    onChange={e => setDraft(d => ({ ...d, expression: e.target.value }))}
+                  >
+                    {avatarOptions.expression.map(ex => (
+                      <option key={ex} value={ex}>
+                        {ex}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* Section: BODY & POSE */}
+          <div className="accordion-item">
+            <button className="accordion-trigger" onClick={() => toggleSection('body')}>
+              <span>Body & Pose</span>
+              <span className={`accordion-chevron ${openSections.body ? 'open' : ''}`}>▼</span>
+            </button>
+
+            {openSections.body && (
+              <div className="accordion-body">
+                <label className="inspector-label">
+                  <span>Body Build</span>
+                  <select
+                    className="inspector-select"
+                    value={draft.bodyType}
+                    onChange={e => setDraft(d => ({ ...d, bodyType: e.target.value }))}
+                  >
+                    {avatarOptions.bodyType.map(bt => (
+                      <option key={bt} value={bt}>
+                        {bt}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="inspector-label">
+                  <span>Pose & Reclining Angle</span>
+                  <select
+                    className="inspector-select"
+                    value={draft.pose}
+                    onChange={e => setDraft(d => ({ ...d, pose: e.target.value }))}
+                  >
+                    {avatarOptions.pose.map(p => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      {/* 5. BOTTOM MASTER FOOTER BAR (Matching Picture 2) */}
+      <footer className="master-footer">
+        <div className="footer-left">
+          <div className="avatar-id-tag">
+            <span>AVATAR ID</span>
+            <b style={{ color: '#fff' }}>
+              {girl.id === 'ruby_noir'
+                ? 'RUBY_NOIR_9X4C'
+                : girl.id === 'matrix_07'
+                ? 'MATRIX_07_8X9A'
+                : `${girl.name.toUpperCase().replace(/\s+/g, '_')}_ID`}
+            </b>
+            <button onClick={copyAvatarId} title="Copy Avatar ID">
+              {copiedId ? '✓' : '⎘'}
+            </button>
+          </div>
+
+          <button className="btn-load-outfit" onClick={handleRandomize}>
+            <span>👚</span> LOAD OUTFIT
+          </button>
+        </div>
+
+        <div className="footer-right">
+          {saveToast && (
+            <span style={{ color: '#7ff0bd', fontSize: 12, fontWeight: 700 }}>
+              ✓ Avatar identity saved!
+            </span>
+          )}
+
+          <button className="btn-cancel" onClick={() => setView('builder')}>
+            CANCEL
+          </button>
+
+          <button
+            className="btn-generate-media"
+            disabled={busy}
+            onClick={handleGenerate}
+          >
+            {busy ? 'RENDERING…' : '✨ GENERATE RENDER'}
+          </button>
+
+          <div className="split-save-btn">
+            <button className="save-main-btn" onClick={handleSaveAvatar}>
+              SAVE AVATAR
+            </button>
+            <button className="save-arrow-btn" onClick={() => setView('gallery')}>
+              ▼
+            </button>
+          </div>
+        </div>
+      </footer>
+
+      {/* SETTINGS MODAL */}
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 }

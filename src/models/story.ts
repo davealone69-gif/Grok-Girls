@@ -7,6 +7,6 @@ export const storyChapters:StoryChapter[]=[
  {chapter:4,title:'New Horizons',objective:'Plan the next scene',roomId:'outdoor',minRelationship:3,actionPrompt:'confident cinematic moment'}
 ];
 export function storyForLevel(level:number):StoryChapter{return [...storyChapters].reverse().find(c=>level>=c.minRelationship)??storyChapters[0]}
-export function initialStory(level:number):StoryState{const c=storyForLevel(level);return {...c,relationshipLevel:level,completedObjectives:[],flags:[]}}
-export function advanceStory(state:StoryState,level:number):StoryState{const next=storyForLevel(level);if(next.chapter<=state.chapter)return {...state,relationshipLevel:level};return {...next,relationshipLevel:level,completedObjectives:[...state.completedObjectives,state.objective]}}
+export function initialStory(level:number):StoryState{const c=storyForLevel(level);return {chapter:c.chapter,title:c.title,objective:c.objective,roomId:c.roomId,actionPrompt:c.actionPrompt,relationshipLevel:level,completedObjectives:[],flags:[]}}
+export function advanceStory(state:StoryState,level:number):StoryState{const next=storyForLevel(level);if(next.chapter<=state.chapter)return {...state,relationshipLevel:level};return {chapter:next.chapter,title:next.title,objective:next.objective,roomId:next.roomId,actionPrompt:next.actionPrompt,relationshipLevel:level,completedObjectives:[...state.completedObjectives,state.objective],flags:[...state.flags]}}
 export function storyPrompt(state:StoryState):string{return `Story chapter ${state.chapter}: ${state.title}. Objective: ${state.objective}. Direction: ${state.actionPrompt}.`}

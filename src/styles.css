@@ -3732,3 +3732,10 @@ a.btn-generate-media:hover {
     display: none;
   }
 }
+
+/* Short modal titles on phones — keep the header row to one clean line */
+@media (max-width: 900px) {
+  .hide-mobile-inline {
+    display: none;
+  }
+}

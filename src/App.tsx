@@ -3322,7 +3322,9 @@ export default function App() {
         <div className="modal-backdrop" onClick={() => setVariationsOpen(false)}>
           <div className="modal-card variations-card" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>⧉ 4 Variations — {girl.name}</h3>
+              <h3>
+                ⧉ 4 Variations <span className="hide-mobile-inline">— {girl.name}</span>
+              </h3>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="prompt-mini-btn" disabled={busy} onClick={handleBatchRender}>
                   ↻ RE-ROLL ALL

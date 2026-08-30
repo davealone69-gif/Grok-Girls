@@ -1,11 +1,11 @@
 {
   "name": "Grok Girls Studio",
   "short_name": "Grok Girls",
-  "description": "AAA cyberpunk gothic avatar creator & companion studio — design personas, render scenes, chat and story.",
+  "description": "AAA cyberpunk gothic avatar creator & companion studio \u2014 design personas, render scenes, chat and story.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "any",
+  "orientation": "portrait",
   "background_color": "#07070d",
   "theme_color": "#904edd",
   "icons": [

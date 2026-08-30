@@ -211,6 +211,32 @@ export default function App() {
     setOpenSections(prev => ({ ...prev, [s]: !prev[s] }));
   };
 
+  // ---- mobile responsiveness ----
+  const [isMobile, setIsMobile] = useState(() => {
+    try {
+      return window.matchMedia('(max-width: 900px)').matches;
+    } catch {
+      return false;
+    }
+  });
+  const [mobileSheet, setMobileSheet] = useState<'none' | 'inspector'>('none');
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 900px)');
+    const onChange = (e: MediaQueryListEvent) => {
+      setIsMobile(e.matches);
+      if (!e.matches) setMobileSheet('none');
+    };
+    mq.addEventListener?.('change', onChange);
+    return () => mq.removeEventListener?.('change', onChange);
+  }, []);
+
+  const openSection = (sec: InspectorSection) => {
+    setView('builder');
+    setOpenSections(prev => ({ ...prev, [sec]: true }));
+    if (isMobile) setMobileSheet('inspector');
+  };
+
   /* --------------------------------------------- viewport & lighting */
   const [zoomLevel, setZoomLevel] = useState(1);
   const [rotationAngle, setRotationAngle] = useState(0);
@@ -1114,7 +1140,11 @@ export default function App() {
 
   /* -------------------------------------------------------------- view */
   return (
-    <div className={`app-container ${immersive ? 'immersive' : ''}`}>
+    <div
+      className={`app-container ${immersive ? 'immersive' : ''} ${isMobile ? 'mobile' : ''} ${
+        mobileSheet === 'inspector' ? 'inspector-open' : ''
+      }`}
+    >
       {/* 1. LEFT VERTICAL NAVIGATION RAIL */}
       <aside className="nav-rail">
         <div className="brand-logo" title="Grok Girls Studio">
@@ -1123,8 +1153,23 @@ export default function App() {
 
         <div className="rail-menu">
           <button
+            className={`rail-btn ${view === 'presets' ? 'active' : ''}`}
+            onClick={() => {
+              setView('presets');
+              if (isMobile) setMobileSheet('none');
+            }}
+            title="Preset Identities"
+          >
+            <span className="rail-icon">🗂️</span>
+            <span>Presets</span>
+          </button>
+
+          <button
             className={`rail-btn ${view === 'builder' ? 'active' : ''}`}
-            onClick={() => setView('builder')}
+            onClick={() => {
+              setView('builder');
+              if (isMobile) setMobileSheet('none');
+            }}
             title="Appearance Studio"
           >
             <span className="rail-icon">💀</span>
@@ -1134,8 +1179,7 @@ export default function App() {
           <button
             className={`rail-btn ${openSections.body && view === 'builder' ? 'active' : ''}`}
             onClick={() => {
-              setView('builder');
-              setOpenSections(p => ({ ...p, body: true }));
+              openSection('body');
             }}
             title="Body & Build"
           >
@@ -1146,8 +1190,7 @@ export default function App() {
           <button
             className={`rail-btn ${openSections.clothing && view === 'builder' ? 'active' : ''}`}
             onClick={() => {
-              setView('builder');
-              setOpenSections(p => ({ ...p, clothing: true }));
+              openSection('clothing');
             }}
             title="Lingerie & Corsetry"
           >
@@ -1170,8 +1213,7 @@ export default function App() {
           <button
             className={`rail-btn ${openSections.face && view === 'builder' ? 'active' : ''}`}
             onClick={() => {
-              setView('builder');
-              setOpenSections(p => ({ ...p, face: true }));
+              openSection('face');
             }}
             title="Face & Makeup"
           >
@@ -1182,8 +1224,7 @@ export default function App() {
           <button
             className={`rail-btn ${openSections.eyes && view === 'builder' ? 'active' : ''}`}
             onClick={() => {
-              setView('builder');
-              setOpenSections(p => ({ ...p, eyes: true }));
+              openSection('eyes');
             }}
             title="Eyes & Eyeliner"
           >
@@ -1194,8 +1235,7 @@ export default function App() {
           <button
             className="rail-btn"
             onClick={() => {
-              setView('builder');
-              setOpenSections(p => ({ ...p, clothing: true }));
+              openSection('clothing');
             }}
             title="Chokers & Accessories"
           >
@@ -1206,8 +1246,7 @@ export default function App() {
           <button
             className={`rail-btn ${openSections.augments && view === 'builder' ? 'active' : ''}`}
             onClick={() => {
-              setView('builder');
-              setOpenSections(p => ({ ...p, augments: true }));
+              openSection('augments');
             }}
             title="Augments"
           >
@@ -1218,8 +1257,7 @@ export default function App() {
           <button
             className={`rail-btn ${openSections.tattoos && view === 'builder' ? 'active' : ''}`}
             onClick={() => {
-              setView('builder');
-              setOpenSections(p => ({ ...p, tattoos: true }));
+              openSection('tattoos');
             }}
             title="Tattoos & Lace"
           >
@@ -2367,7 +2405,15 @@ export default function App() {
       </section>
 
       {/* 4. RIGHT CUSTOMIZATION ACCORDION PANEL (Matching Picture 2) */}
+      {isMobile && mobileSheet === 'inspector' && (
+        <div className="mobile-backdrop" onClick={() => setMobileSheet('none')} />
+      )}
       <aside className="inspector-panel">
+        {isMobile && (
+          <button className="mobile-sheet-close" onClick={() => setMobileSheet('none')}>
+            ✕ CLOSE PANELS
+          </button>
+        )}
         <div className="inspector-scroll">
           {/* Section: APPEARANCE */}
           <div className="accordion-item">
@@ -3201,6 +3247,13 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MOBILE EDIT FAB */}
+      {isMobile && view === 'builder' && mobileSheet !== 'inspector' && (
+        <button className="mobile-edit-fab" onClick={() => setMobileSheet('inspector')}>
+          ✏️ EDIT IDENTITY
+        </button>
       )}
 
       {/* SETTINGS MODAL */}

@@ -26,6 +26,7 @@
   "devDependencies": {
     "@types/node": "latest",
     "@types/react": "latest",
-    "@types/react-dom": "latest"
+    "@types/react-dom": "latest",
+    "axe-core": "^4.13.0"
   }
 }

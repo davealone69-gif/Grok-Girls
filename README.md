@@ -1,145 +1,91 @@
-<div align="center">
+# Grok Girls Studio
 
-# Grok Girls Character Studio
+AAA-style cyberpunk / gothic-glamour **character creator & companion studio** — a fully client-side React + Vite app. Design a persona (the flagship preset is **Ruby Noir**: crimson hair, lace corset, fishnets, red velvet choker, reclining in a dark leather armchair under moody noir lighting), chat with her, run story chapters, and render images/video.
 
-**Next-generation interactive AI persona studio, avatar identity designer, companion dialogue engine, and multimedia generation suite.**
+> All personas are fictional adults (18+). The app includes a built-in 18+ toggle in the left rail. Keep interactions respectful.
 
-[![React](https://img.shields.io/badge/React-18+-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5+-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-6+-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![Status](https://img.shields.io/badge/Status-Active_&_Working-22C55E?style=flat-square)](#)
+## Features
 
-</div>
+### Avatar Studio (Builder)
+- **Left nav rail** — Appearance, Body, Clothing, Hair, Face, Eyes, Accessories, Augments, Tattoos, Animations, Premium, Help + Randomize, Settings, 18+ toggle, Chat.
+- **Presets drawer** — Ruby Noir, Matrix_07, Shadow Synth, Crazzers AI, Silver Valkyrie, Sugarlab AI, Flirty Rouge + custom/imported personas. Create new presets anytime.
+- **PRESETS browser** — full-grid identity browser with LOAD buttons.
+- **IMPORT tab** — import an image as a new preset, restore a gallery JSON archive, or reset all local data.
+- **Viewport** — drag to pan, ROTATE / ZOOM / PAN / RANDOM / PNG export, lighting modes (Noir armchair mood, Studio, Full, Bust, Wireframe), camera status chip, multi-angle preview circles.
+- **Scene prompt editor** (✎ in header) — the prompt compiles live from your builder choices; edit, copy, or rebuild it.
+- **Lower dock** — HAIR STYLE grid, HAIR COLOR wheel (canvas HSV wheel + sliders + hex + swatches + named color chips), FACIAL HAIR presets, EYEBROWS shapes + thickness.
+- **Details & add-ons** — click to cycle: Choker, Corset, Fishnets, Piercings, Scars, Makeup, Face Paint, Cyberware.
+- **Right inspector** — Appearance (gender, 8 skin tones, head shape slider, age slider, skin details, color accent), Hair, Eyes, Face, Body, Clothing & Lingerie (corset, choker, hosiery, scene backdrop, room), Tattoos, Augments.
+- **Footer** — Avatar ID + copy, LOAD OUTFIT wardrobe drawer, generation ENGINE selector (Local / OpenRouter / Gemini / Custom), CANCEL, GENERATE RENDER, SAVE AVATAR.
+- **Local Noir render engine** — zero-config procedural SVG renderer that draws a stylized boudoir portrait reflecting your actual choices (hair colour, corset, fishnets, choker, accent light, cyber scene). Cloud providers render via their APIs when configured.
 
----
+### Companion features
+- **Chat** — in-character dialogue; keyword-based local engine by default, or OpenRouter / Gemini / Custom LLMs when keys are configured. Quick-reply chips, affection state machine, per-persona memory that feeds future generations.
+- **Story** — 4 chapters (First Meeting, Private Space, Nightlife, New Horizons), relationship-gated chapter jumps, per-room scene actions that render story images straight to the gallery.
+- **Video studio** — VideoExportPage render settings with the active persona.
+- **Gallery** — every render lands here; favorite, set-as-viewport, download PNG, delete, export/import JSON archives.
+- **Premium modal** — feature list + Stripe payment-link redirect (configure link in `src/services/keys.ts`).
+- **Help modal** — in-app guide (Esc closes any overlay).
 
-## 🌟 Core Features
+## Quick start
 
-- **🎭 Character Persona Studio**
-  - Instant access to seeded companion personas (`Crazzers AI`, `Secrets AI`, `Sugarlab AI`, `Flirty AI`).
-  - Create and save custom personas with tailored traits, backstories, mood states, and visual preferences.
-  - Adaptive relationship states: tracks emotional mood, energy, trust, and affection.
-
-- **🎨 Avatar Identity Designer (`AvatarCreator`)**
-  - Deep character customization: ethnicity, body build, facial structure, eye color/shape, hair style/color, skin tone, wardrobe, poses, and expressions.
-  - **Identity Randomizer**: Roll balanced, coherent character traits with one click.
-  - Dynamic prompt compilation for consistent identity preservation across media generations.
-
-- **💬 Memory-Aware Companion Dialogue**
-  - Interactive chat system with real-time emotional memory.
-  - Companions recall past conversations, shared moments, and current environmental cues.
-  - Works offline in **Local Procedural Mode** or with live cloud LLMs.
-
-- **📸 Scene & Environment Engine**
-  - Switch between multi-camera environments: Photo Studio, Luxury Penthouse, Neon Nightclub, and Rooftop at Blue Hour.
-  - Select contextual interactions and camera framing presets (e.g. Centered Portrait, Sofa Lounge, Private Booth, Railing View).
-
-- **🎬 Video Export & Render Studio**
-  - Production-ready render settings: 720p, 1080p, 1440p, 4K UHD.
-  - Custom frame rates (24, 30, 60 FPS), aspect ratios (16:9, 9:16, 1:1, 21:9), and camera motion dynamics.
-  - Animated render progress simulator and keyframe preview.
-
-- **🖼️ Generations Archive & Gallery**
-  - Visual gallery of generated media with favorites filter.
-  - Direct media export and download.
-  - Full JSON backup: export and import gallery archives across devices.
-
-- **⚡ Multi-Provider AI Routing**
-  - **Local Procedural Mode**: High-speed, zero-config offline SVG generation engine.
-  - **OpenRouter**: Access Claude 3.5, GPT-4o, Llama 3, and FLUX diffusion models.
-  - **Google Gemini**: Gemini 2.5 Flash chat & Imagen generation.
-  - **Custom Endpoints**: Connect your self-hosted LLMs or ComfyUI/Automatic1111 pipelines.
-  - In-app **API Settings Modal**: Safely store keys in local browser storage.
-
-- **🔞 Adult Mode Overlay**
-  - Global toggle adjusting generation prompts, avatar specs, companion chat policies, and story content for mature (18+) creative workflows.
-
----
-
-## 🚀 Quick Start
-
-### 1. Prerequisites
-- **Node.js** 20+ (recommended)
-- **npm** or **pnpm**
-
-### 2. Installation
 ```bash
-git clone https://github.com/davealone69-gif/Grok-Girls.git
-cd Grok-Girls
 npm install
+npm run dev      # http://localhost:5173
+npm run build    # production build to dist/
 ```
 
-### 3. Development Server
-```bash
-npm run dev
-```
-The app will be available at `http://localhost:5173`.
+## AI provider configuration
 
-### 4. Production Build
-```bash
-npm run build
-npm run preview
-```
-
----
-
-## 🔑 Environment Configuration
-
-You can configure provider keys either through the **in-app "API Settings" modal** or via a `.env.local` file:
+Configure in the in-app ⚙ **Settings** modal (stored in your browser's localStorage), or via `.env.local`:
 
 ```env
-# OpenRouter Configuration
+# OpenRouter (chat + image via compatible endpoints)
 VITE_OPENROUTER_API_KEY=your_openrouter_key
 VITE_OPENROUTER_CHAT_MODEL=openai/gpt-4o-mini
-VITE_OPENROUTER_IMAGE_ENDPOINT=https://openrouter.ai/api/v1/chat/completions
+VITE_OPENROUTER_IMAGE_MODEL=openrouter/auto
 
-# Google Gemini Configuration
+# Google Gemini
 VITE_GEMINI_API_KEY=your_gemini_key
 VITE_GEMINI_CHAT_MODEL=gemini-2.5-flash
 
-# Custom Endpoint Configuration
-VITE_CUSTOM_AI_KEY=your_token
+# Custom provider
+VITE_CUSTOM_API_KEY=your_token
 VITE_CUSTOM_CHAT_ENDPOINT=https://your-custom-llm.example.com/v1/chat/completions
+VITE_CUSTOM_IMAGE_ENDPOINT=https://your-custom-image.example.com/v1/generate
 ```
 
----
+Image/video generation endpoints can also be set per-mode in the Settings modal pattern (`getSavedEndpoint(p, mode)`), or via `VITE_<PROVIDER>_IMAGE_ENDPOINT` / `VITE_<PROVIDER>_VIDEO_ENDPOINT`.
 
-## 📁 Architecture & File Structure
+The **Local engine needs no keys** — it always works offline and produces the stylized Noir render.
+
+## Project structure
 
 ```
-Grok-Girls/
-├── index.html                     # Entry HTML document
-├── package.json                   # Dependencies and scripts
-├── tsconfig.json                  # TypeScript bundler configuration
-├── vite.config.ts                 # Vite server & preview configuration
-└── src/
-    ├── main.tsx                   # React root hydration
-    ├── App.tsx                    # Main Studio layout and navigation
-    ├── styles.css                 # Dark neon studio design system
-    ├── theme.ts                   # AppTheme tokens and typography
-    ├── components/
-    │   ├── AvatarCreator.tsx      # Avatar identity customizer
-    │   └── SettingsModal.tsx      # In-app API credentials manager
-    ├── models/
-    │   ├── story.ts               # Campaign chapters & relationship engine
-    │   └── studio.ts              # Persona specs, rooms, and prompts
-    ├── pages/
-    │   └── VideoExportPage.tsx    # HD/4K video render studio
-    └── services/
-        ├── avatarCreator.ts       # Trait options & prompt compiler
-        ├── avatarEditor.ts        # Avatar persistence adapter
-        ├── avatarState.ts         # Emotional state and bond dynamics
-        ├── chat.ts                # Dialogue engine with persona memory
-        ├── gallery.ts             # Gallery storage and favorite toggling
-        ├── media.ts               # Download helpers and JSON import/export
-        ├── memory.ts              # Conversational and prompt memory
-        ├── providers.ts           # Local, OpenRouter, Gemini, Custom adapters
-        ├── stripe.ts              # Optional checkout link routing
-        └── supabase.ts            # Supabase auth/storage client
+src/
+├── App.tsx                    # Studio shell: rail, presets, viewport, dock, inspector, overlays
+├── styles.css                 # Full cyberpunk design system
+├── components/
+│   ├── ColorWheel.tsx         # Canvas HSV color wheel
+│   ├── SettingsModal.tsx      # API key management (localStorage)
+│   └── AvatarCreator.tsx      # Legacy creator component
+├── models/
+│   ├── studio.ts              # Girls, rooms, prompt builder, seed personas
+│   └── story.ts               # Story chapters & progression
+├── services/
+│   ├── avatarCreator.ts       # AvatarDraft, options, randomizer, prompt compiler, draft persistence
+│   ├── providers.ts           # Local Noir engine + OpenRouter/Gemini/Custom clients + fallback cascade
+│   ├── chat.ts                # Companion dialogue (local + cloud)
+│   ├── memory.ts              # Persona memory + generation prompt assembly
+│   ├── gallery.ts / media.ts  # Gallery CRUD, favorites, JSON export/import, downloads
+│   ├── avatarState.ts         # Mood/affection/trust state machine
+│   ├── avatarEditor.ts        # Avatar save/load options
+│   └── stripe.ts / keys.ts    # Payment link redirect + runtime config
+└── pages/
+    └── VideoExportPage.tsx    # Video render settings
 ```
 
----
-
-## 📄 License
-
-MIT License. Designed for creative character design and fictional companion interactions.
+## Notes
+- Everything persists in browser localStorage — personas, drafts, chats, gallery, settings.
+- The Noir render engine (`createLocalPlaceholderSvg`) parses the compiled prompt and stylizes the scene accordingly — check `public/assets/noir-render-demo.svg` for a sample.
+- Sandbox preview note: filesystem previews have no network access; the live dev server preview is the best way to use the app.

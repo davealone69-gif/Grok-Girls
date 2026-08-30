@@ -67,94 +67,366 @@ export function saveEndpoint(p: string, url: string, m?: Mode) {
   } catch {}
 }
 
+/* ------------------------------------------------------------------ */
+/* Local procedural "NOIR RENDER" engine                               */
+/* Draws a stylized boudoir portrait SVG that reflects the prompt:     */
+/* hair colour, outfit hints, accent colour, cyber/neon scene cues.    */
+/* ------------------------------------------------------------------ */
+
+function hashSeed(str: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function mulberry32(a: number) {
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+interface RenderPalette {
+  hair: string;
+  hairHi: string;
+  accent: string;
+  skin: string;
+  corset: string;
+  backdrop: [string, string, string];
+  neon: boolean;
+}
+
+function paletteFromPrompt(prompt: string): RenderPalette {
+  const p = prompt.toLowerCase();
+  let hair = '#8a3b28';
+  let hairHi = '#d97a5a';
+  if (p.includes('ruby red') || p.includes('crimson') || p.includes('burgundy')) {
+    hair = '#c81e3a';
+    hairHi = '#ff6b85';
+  } else if (p.includes('electric purple') || p.includes('violet')) {
+    hair = '#7b3fe4';
+    hairHi = '#c39bff';
+  } else if (p.includes('jet black') || p.includes('pitch black')) {
+    hair = '#1b1b26';
+    hairHi = '#4d4d66';
+  } else if (p.includes('platinum') || p.includes('silver')) {
+    hair = '#cfd2e0';
+    hairHi = '#ffffff';
+  } else if (p.includes('blonde') || p.includes('champagne')) {
+    hair = '#e0b56a';
+    hairHi = '#f8e6b8';
+  } else if (p.includes('neon cyan') || p.includes('cyan')) {
+    hair = '#00c8d6';
+    hairHi = '#8ff6ff';
+  } else if (p.includes('auburn')) {
+    hair = '#a13a22';
+    hairHi = '#e07a4e';
+  } else if (p.includes('dark brown')) {
+    hair = '#4a2e22';
+    hairHi = '#7a5040';
+  }
+
+  let accent = '#e62040';
+  const accentMatch = prompt.match(/color accent:\s*(#[0-9a-fA-F]{6})/i);
+  if (accentMatch) accent = accentMatch[1];
+
+  const skin = p.includes('rich espresso')
+    ? '#6b4331'
+    : p.includes('deep bronze')
+    ? '#8a5a3b'
+    : p.includes('golden tan')
+    ? '#c08a5e'
+    : p.includes('olive')
+    ? '#caa080'
+    : p.includes('cybernetic pale')
+    ? '#d8e2eb'
+    : '#e9c3ae';
+
+  const corset =
+    p.includes('black satin') || p.includes('midnight') || p.includes('leather jacket')
+      ? '#16161f'
+      : '#57101f';
+
+  const neon = p.includes('neon') || p.includes('club') || p.includes('cyber') || p.includes('matrix');
+  const backdrop: [string, string, string] = neon
+    ? ['#0b0e1e', '#2a0f4a', '#00f2fe']
+    : p.includes('moonlight') || p.includes('blue hour')
+    ? ['#0a1220', '#12203a', '#5aa0ff']
+    : ['#120a10', '#2b0d16', accent];
+
+  return { hair, hairHi, accent, skin, corset, backdrop, neon };
+}
+
 export function createLocalPlaceholderSvg(prompt: string, mode: Mode, width = 768, height = 768): string {
   const isVideo = mode === 'video';
+  const W = width;
+  const H = height;
+  const pal = paletteFromPrompt(prompt);
   const pLower = prompt.toLowerCase();
-  
-  let col1 = '#3b1c6d';
-  let col2 = '#e94560';
-  let accent = '#ff6b8a';
-  
-  if (pLower.includes('neon') || pLower.includes('club')) {
-    col1 = '#0f2042';
-    col2 = '#00f2fe';
-    accent = '#e65cff';
-  } else if (pLower.includes('penthouse') || pLower.includes('luxury') || pLower.includes('gold')) {
-    col1 = '#2b1b0e';
-    col2 = '#e5a93b';
-    accent = '#ffe082';
-  } else if (pLower.includes('crimson') || pLower.includes('flirty')) {
-    col1 = '#380a15';
-    col2 = '#f43f5e';
-    accent = '#fb7185';
-  } else if (pLower.includes('sugarlab') || pLower.includes('pastel')) {
-    col1 = '#281c3d';
-    col2 = '#c084fc';
-    accent = '#f472b6';
-  }
 
   const nameMatch = prompt.match(/^([A-Za-z0-9 ]+?)(?:,| adult|\()/i);
   const name = nameMatch ? nameMatch[1].trim() : 'Grok Persona';
+  const seedId = String(hashSeed(prompt) % 1000000).padStart(6, '0');
 
-  const cleanPrompt = prompt
-    .replace(/[<>&"]/g, '')
-    .slice(0, 140)
-    + (prompt.length > 140 ? '…' : '');
+  const hasFishnets = pLower.includes('fishnet');
+  const hasChoker = pLower.includes('choker');
+  const hasThighHighs = pLower.includes('thigh-high') || pLower.includes('stockings');
+  const hasGown = pLower.includes('gown') || pLower.includes('robe') || pLower.includes('dress');
+  const hasCyber = pLower.includes('cyber') || pLower.includes('augment') || pLower.includes('led');
+  const hasTattoo = pLower.includes('tattoo');
+
+  const cx = W * 0.5;
+  const headY = H * 0.34;
+  const torsoY = H * 0.52;
+  const headR = W * 0.085;
+
+  // Hair silhouette (behind everything)
+  const hairPath = `
+    M ${cx - 95} ${H * 0.86}
+    C ${cx - 150} ${H * 0.55}, ${cx - 165} ${H * 0.34}, ${cx - 118} ${H * 0.22}
+    C ${cx - 70} ${H * 0.10}, ${cx + 70} ${H * 0.10}, ${cx + 118} ${H * 0.22}
+    C ${cx + 165} ${H * 0.34}, ${cx + 150} ${H * 0.55}, ${cx + 95} ${H * 0.86}
+    C ${cx + 60} ${H * 0.72}, ${cx + 45} ${H * 0.60}, ${cx + 30} ${H * 0.50}
+    C ${cx + 10} ${H * 0.62}, ${cx - 10} ${H * 0.62}, ${cx - 30} ${H * 0.50}
+    C ${cx - 45} ${H * 0.60}, ${cx - 60} ${H * 0.72}, ${cx - 95} ${H * 0.86} Z
+  `;
+
+  const chairFill = '#241522';
+  const chairHighlight = '#3d2438';
+
+  const netPattern = hasFishnets
+    ? `
+  <pattern id="fishnet" width="9" height="9" patternUnits="userSpaceOnUse">
+    <path d="M0 0 L9 9 M9 0 L0 9" stroke="#0c0c14" stroke-width="1.1" opacity="0.75"/>
+    <path d="M0 4.5 L9 4.5 M4.5 0 L4.5 9" stroke="#0c0c14" stroke-width="0.5" opacity="0.5"/>
+  </pattern>`
+    : '';
+
+  const legGrad = `
+    <linearGradient id="skinGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="${pal.skin}"/>
+      <stop offset="85%" stop-color="${pal.skin}"/>
+      <stop offset="100%" stop-color="${pal.accent}" stop-opacity="0.55"/>
+    </linearGradient>`;
+
+  const legLeft = `
+    <path d="M ${cx - 52} ${torsoY} C ${cx - 62} ${H * 0.62}, ${cx - 58} ${H * 0.74}, ${cx - 50} ${H * 0.90}
+             L ${cx - 8} ${H * 0.90} C ${cx - 16} ${H * 0.74}, ${cx - 20} ${H * 0.62}, ${cx - 22} ${torsoY} Z"
+          fill="url(#skinGrad)"/>
+    ${hasThighHighs ? `
+    <path d="M ${cx - 56} ${H * 0.68} C ${cx - 54} ${H * 0.75}, ${cx - 52} ${H * 0.86}, ${cx - 50} ${H * 0.90}
+             L ${cx - 8} ${H * 0.90} C ${cx - 12} ${H * 0.86}, ${cx - 14} ${H * 0.75}, ${cx - 18} ${H * 0.68} Z"
+          fill="#0e0e16" opacity="0.9"/>` : ''}
+    ${hasFishnets ? `
+    <path d="M ${cx - 52} ${torsoY} C ${cx - 62} ${H * 0.62}, ${cx - 58} ${H * 0.74}, ${cx - 50} ${H * 0.90}
+             L ${cx - 8} ${H * 0.90} C ${cx - 16} ${H * 0.74}, ${cx - 20} ${H * 0.62}, ${cx - 22} ${torsoY} Z"
+          fill="url(#fishnet)"/>` : ''}`;
+
+  const legRight = `
+    <path d="M ${cx + 22} ${torsoY} C ${cx + 20} ${H * 0.62}, ${cx + 34} ${H * 0.76}, ${cx + 52} ${H * 0.90}
+             L ${cx + 8} ${H * 0.90} C ${cx + 4} ${H * 0.76}, ${cx - 4} ${H * 0.62}, ${cx - 2} ${torsoY} Z"
+          fill="url(#skinGrad)"/>
+    ${hasThighHighs ? `
+    <path d="M ${cx + 14} ${H * 0.70} C ${cx + 26} ${H * 0.78}, ${cx + 44} ${H * 0.88}, ${cx + 52} ${H * 0.90}
+             L ${cx + 8} ${H * 0.90} C ${cx + 6} ${H * 0.88}, ${cx + 8} ${H * 0.78}, ${cx + 10} ${H * 0.70} Z"
+          fill="#0e0e16" opacity="0.9"/>` : ''}
+    ${hasFishnets ? `
+    <path d="M ${cx + 22} ${torsoY} C ${cx + 20} ${H * 0.62}, ${cx + 34} ${H * 0.76}, ${cx + 52} ${H * 0.90}
+             L ${cx + 8} ${H * 0.90} C ${cx + 4} ${H * 0.76}, ${cx - 4} ${H * 0.62}, ${cx - 2} ${torsoY} Z"
+          fill="url(#fishnet)"/>` : ''}`;
+
+  const torso = hasGown
+    ? `<path d="M ${cx - 46} ${H * 0.36} C ${cx - 70} ${H * 0.42}, ${cx - 78} ${H * 0.60}, ${cx - 68} ${H * 0.90}
+             L ${cx + 68} ${H * 0.90} C ${cx + 78} ${H * 0.60}, ${cx + 70} ${H * 0.42}, ${cx + 46} ${H * 0.36}
+             C ${cx + 30} ${H * 0.40}, ${cx + 18} ${H * 0.38}, ${cx} ${H * 0.37}
+             C ${cx - 18} ${H * 0.38}, ${cx - 30} ${H * 0.40}, ${cx - 46} ${H * 0.36} Z"
+          fill="${pal.corset}"/>`
+    : `<path d="M ${cx - 44} ${H * 0.37} C ${cx - 60} ${H * 0.44}, ${cx - 62} ${H * 0.52}, ${cx - 52} ${H * 0.62}
+             L ${cx - 40} ${torsoY} L ${cx + 40} ${torsoY} L ${cx + 52} ${H * 0.62}
+             C ${cx + 62} ${H * 0.52}, ${cx + 60} ${H * 0.44}, ${cx + 44} ${H * 0.37}
+             C ${cx + 28} ${H * 0.41}, ${cx + 14} ${H * 0.39}, ${cx} ${H * 0.385}
+             C ${cx - 14} ${H * 0.39}, ${cx - 28} ${H * 0.41}, ${cx - 44} ${H * 0.37} Z"
+          fill="${pal.corset}"/>
+      <path d="M ${cx - 40} ${H * 0.40} L ${cx + 40} ${H * 0.40} M ${cx - 38} ${H * 0.46} L ${cx + 38} ${H * 0.46}
+               M ${cx - 34} ${H * 0.52} L ${cx + 34} ${H * 0.52} M ${cx - 28} ${H * 0.58} L ${cx + 28} ${H * 0.58}"
+            stroke="${pal.accent}" stroke-width="1" opacity="0.55" fill="none"/>`;
+
+  const armLeft = `
+    <path d="M ${cx - 50} ${H * 0.40} C ${cx - 86} ${H * 0.46}, ${cx - 96} ${H * 0.56}, ${cx - 88} ${H * 0.66}
+             L ${cx - 70} ${H * 0.62} C ${cx - 76} ${H * 0.56}, ${cx - 70} ${H * 0.50}, ${cx - 52} ${H * 0.47} Z"
+          fill="url(#skinGrad)"/>`;
+  const armRight = `
+    <path d="M ${cx + 50} ${H * 0.40} C ${cx + 86} ${H * 0.46}, ${cx + 96} ${H * 0.56}, ${cx + 88} ${H * 0.66}
+             L ${cx + 70} ${H * 0.62} C ${cx + 76} ${H * 0.56}, ${cx + 70} ${H * 0.50}, ${cx + 52} ${H * 0.47} Z"
+          fill="url(#skinGrad)"/>`;
+
+  const head = `
+    <ellipse cx="${cx}" cy="${headY}" rx="${headR}" ry="${headR * 1.22}" fill="url(#skinGrad)"/>
+    <path d="M ${cx - headR * 0.55} ${headY + headR * 0.15} Q ${cx} ${headY + headR * 0.32} ${cx + headR * 0.55} ${headY + headR * 0.15} Z"
+          fill="#000000" opacity="0.16"/>
+    <path d="M ${cx - headR * 0.62} ${headY + headR * 0.52} Q ${cx - headR * 0.3} ${headY + headR * 0.42} ${cx - headR * 0.08} ${headY + headR * 0.5}"
+          stroke="${pal.accent}" stroke-width="${headR * 0.16}" stroke-linecap="round" fill="none" opacity="0.9"/>
+    <path d="M ${cx + headR * 0.62} ${headY + headR * 0.52} Q ${cx + headR * 0.3} ${headY + headR * 0.42} ${cx + headR * 0.08} ${headY + headR * 0.5}"
+          stroke="${pal.accent}" stroke-width="${headR * 0.16}" stroke-linecap="round" fill="none" opacity="0.9"/>
+    <path d="M ${cx - headR * 0.28} ${headY - headR * 0.42} Q ${cx - headR * 0.14} ${headY - headR * 0.52} ${cx} ${headY - headR * 0.44} Q ${cx + headR * 0.14} ${headY - headR * 0.52} ${cx + headR * 0.28} ${headY - headR * 0.42}"
+          stroke="#241a2e" stroke-width="2" fill="none" opacity="0.85"/>`;
+
+  const choker = hasChoker
+    ? `<path d="M ${cx - headR * 0.55} ${headY + headR * 1.18} Q ${cx} ${headY + headR * 1.42} ${cx + headR * 0.55} ${headY + headR * 1.18} L ${cx + headR * 0.5} ${headY + headR * 1.34} Q ${cx} ${headY + headR * 1.58} ${cx - headR * 0.5} ${headY + headR * 1.34} Z"
+        fill="${pal.accent}" opacity="0.95"/>
+      <circle cx="${cx}" cy="${headY + headR * 1.4}" r="${headR * 0.12}" fill="#f59e0b"/>`
+    : '';
+
+  const rimLight = `
+    <path d="M ${cx + 52} ${H * 0.62} C ${cx + 62} ${H * 0.52}, ${cx + 60} ${H * 0.44}, ${cx + 44} ${H * 0.37}
+             C ${cx + 30} ${H * 0.41}, ${cx + 16} ${H * 0.39}, ${cx + headR * 0.9} ${headY - headR * 0.2}"
+          stroke="${pal.accent}" stroke-width="3" fill="none" opacity="0.75"
+          style="filter: url(#rimGlow)"/>`;
+
+  const cyberGlow = hasCyber
+    ? `<circle cx="${cx + headR * 0.95}" cy="${headY - headR * 0.35}" r="4" fill="${pal.accent}" style="filter: url(#rimGlow)"/>
+       <path d="M ${cx + headR * 0.8} ${headY + headR * 0.1} L ${cx + headR * 1.15} ${headY + headR * 0.35}" stroke="${pal.accent}" stroke-width="2" opacity="0.9"/>`
+    : '';
+
+  const tattoo = hasTattoo
+    ? `<path d="M ${cx - 78} ${H * 0.50} q 6 -10 12 0 q -6 10 -12 0 M ${cx - 72} ${H * 0.50} q 6 -10 12 0"
+            stroke="${pal.accent}" stroke-width="1.6" fill="none" opacity="0.8"/>`
+    : '';
+
+  const grain = `
+    <filter id="grainF">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="${hashSeed(prompt) % 999}"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.07"/></feComponentTransfer>
+      <feComposite operator="over" in2="SourceGraphic"/>
+    </filter>`;
+
+  const vignette = `
+    <radialGradient id="vignette" cx="50%" cy="45%" r="70%">
+      <stop offset="55%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.85"/>
+    </radialGradient>`;
+
+  const HUD = `
+    <path d="M 26 26 L 26 64 M 26 26 L 64 26 M ${W - 64} 26 L ${W - 26} 26 M ${W - 26} 26 L ${W - 26} 64
+             M 26 ${H - 64} L 26 ${H - 26} M 26 ${H - 26} L 64 ${H - 26} M ${W - 26} ${H - 64} L ${W - 26} ${H - 26} M ${W - 64} ${H - 26} L ${W - 26} ${H - 26}"
+          stroke="${pal.accent}" stroke-width="2" fill="none" opacity="0.8"/>`;
+
+  const badges = `
+    <rect x="30" y="${H - 96}" width="${isVideo ? 226 : 188}" height="30" rx="6" fill="#0b0b14" stroke="${pal.accent}" stroke-opacity="0.6"/>
+    <text x="44" y="${H - 76}" fill="#ffffff" font-family="monospace" font-size="13" font-weight="700" letter-spacing="2">
+      ${isVideo ? 'NOIR RENDER · VIDEO 60FPS' : 'NOIR RENDER · 8K MASTER'}
+    </text>
+    <rect x="${W - 122}" y="${H - 96}" width="92" height="30" rx="6" fill="#0b0b14" stroke="#34344a"/>
+    <text x="${W - 108}" y="${H - 76}" fill="${pal.accent}" font-family="monospace" font-size="13" font-weight="700" letter-spacing="1">
+      SEED ${seedId}
+    </text>
+    <rect x="30" y="34" width="170" height="30" rx="6" fill="#0b0b14" stroke="#34344a"/>
+    <text x="44" y="54" fill="#a0a0b8" font-family="monospace" font-size="12" font-weight="700" letter-spacing="1.5">
+      GROK GIRLS STUDIO
+    </text>`;
+
+  const caption = `
+    <rect x="${W * 0.5 - 150}" y="${H - 40}" width="300" height="26" rx="13" fill="#0b0b14" fill-opacity="0.82" stroke="${pal.accent}" stroke-opacity="0.35"/>
+    <text x="${W * 0.5}" y="${H - 22}" fill="#fff" text-anchor="middle" font-family="Inter, sans-serif" font-size="13" font-weight="700" letter-spacing="1">
+      ${name.replace(/[<>&"]/g, '').slice(0, 26).toUpperCase()}
+    </text>`;
 
   const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="100%" height="100%">
   <defs>
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0a0a12"/>
-      <stop offset="50%" stop-color="${col1}"/>
-      <stop offset="100%" stop-color="#0d0d1a"/>
+      <stop offset="0%" stop-color="${pal.backdrop[0]}"/>
+      <stop offset="55%" stop-color="${pal.backdrop[1]}"/>
+      <stop offset="100%" stop-color="#050508"/>
     </linearGradient>
-    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="${col2}" stop-opacity="0.8"/>
-      <stop offset="100%" stop-color="${accent}" stop-opacity="0.2"/>
-    </linearGradient>
-    <radialGradient id="halo" cx="50%" cy="42%" r="45%">
-      <stop offset="0%" stop-color="${accent}" stop-opacity="0.35"/>
-      <stop offset="60%" stop-color="${col2}" stop-opacity="0.1"/>
+    <radialGradient id="keyLight" cx="42%" cy="30%" r="55%">
+      <stop offset="0%" stop-color="${pal.accent}" stop-opacity="0.4"/>
+      <stop offset="60%" stop-color="${pal.accent}" stop-opacity="0.08"/>
       <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
     </radialGradient>
-    <filter id="blurFilter" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="30"/>
+    ${legGrad}
+    ${netPattern}
+    ${grain}
+    ${vignette}
+    <filter id="rimGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="6"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="26"/>
     </filter>
   </defs>
 
-  <rect width="${width}" height="${height}" fill="url(#bgGrad)"/>
-  <circle cx="${width * 0.5}" cy="${height * 0.42}" r="${width * 0.38}" fill="url(#halo)"/>
+  <rect width="${W}" height="${H}" fill="url(#bgGrad)"/>
+  <circle cx="${W * 0.4}" cy="${H * 0.3}" r="${W * 0.5}" fill="url(#keyLight)"/>
 
-  <circle cx="${width * 0.75}" cy="${height * 0.3}" r="140" fill="${col2}" opacity="0.22" filter="url(#blurFilter)"/>
-  <circle cx="${width * 0.25}" cy="${height * 0.6}" r="160" fill="${accent}" opacity="0.18" filter="url(#blurFilter)"/>
-
-  <g transform="translate(${width * 0.5}, ${height * 0.45})">
-    <path d="M -180,180 C -150,90 -90,70 -40,55 L 40,55 C 90,70 150,90 180,180 Z" fill="#141424" stroke="${col2}" stroke-width="1.5" stroke-opacity="0.6"/>
-    <rect x="-24" y="5" width="48" height="58" rx="10" fill="#1f1e33"/>
-    <ellipse cx="0" cy="-45" rx="72" ry="85" fill="${col1}" opacity="0.7"/>
-    <path d="M -50,-60 Q 0,-70 50,-60 Q 55,5 0,45 Q -55,5 -50,-60 Z" fill="#24233a" stroke="${accent}" stroke-width="1.5" stroke-opacity="0.8"/>
-    <path d="M -60,-65 Q -30,-110 35,-95 Q 65,-60 62,15 Q 40,-30 20,-60 Q -10,-80 -60,-65 Z" fill="url(#glowGrad)"/>
-    <ellipse cx="-20" cy="-22" rx="7" ry="3.5" fill="${accent}" opacity="0.85"/>
-    <ellipse cx="20" cy="-22" rx="7" ry="3.5" fill="${accent}" opacity="0.85"/>
+  <!-- window light beams -->
+  <g opacity="0.10">
+    <path d="M ${W * 0.1} 0 L ${W * 0.34} 0 L ${W * 0.55} ${H} L ${W * 0.26} ${H} Z" fill="${pal.backdrop[2]}"/>
+    <path d="M ${W * 0.42} 0 L ${W * 0.5} 0 L ${W * 0.66} ${H} L ${W * 0.55} ${H} Z" fill="${pal.backdrop[2]}"/>
   </g>
 
-  <g transform="translate(32, 44)">
-    <rect width="180" height="32" rx="8" fill="#11111d" stroke="${col2}" stroke-width="1" opacity="0.9"/>
-    <text x="14" y="21" fill="#ffffff" font-family="Inter, sans-serif" font-size="12" font-weight="700" letter-spacing="1.5">
-      GROK GIRLS ${isVideo ? 'VIDEO' : 'IMAGE'}
-    </text>
+  <!-- crimson glow pool -->
+  <ellipse cx="${cx + 40}" cy="${H * 0.78}" rx="${W * 0.36}" ry="${H * 0.16}" fill="${pal.accent}" opacity="0.14" style="filter: url(#softGlow)"/>
+
+  <!-- armchair -->
+  <g>
+    <path d="M ${cx - 210} ${H * 0.98} L ${cx - 196} ${H * 0.34} C ${cx - 196} ${H * 0.24}, ${cx - 168} ${H * 0.18}, ${cx - 150} ${H * 0.20}
+             L ${cx - 96} ${H * 0.24} L ${cx - 70} ${H * 0.72} C ${cx - 74} ${H * 0.82}, ${cx - 88} ${H * 0.90}, ${cx - 102} ${H * 0.92} Z"
+          fill="${chairFill}"/>
+    <path d="M ${cx + 210} ${H * 0.98} L ${cx + 196} ${H * 0.34} C ${cx + 196} ${H * 0.24}, ${cx + 168} ${H * 0.18}, ${cx + 150} ${H * 0.20}
+             L ${cx + 96} ${H * 0.24} L ${cx + 70} ${H * 0.72} C ${cx + 74} ${H * 0.82}, ${cx + 88} ${H * 0.90}, ${cx + 102} ${H * 0.92} Z"
+          fill="${chairFill}"/>
+    <path d="M ${cx - 190} ${H * 0.98} L ${cx - 178} ${H * 0.38} Q ${cx - 170} ${H * 0.30} ${cx - 158} ${H * 0.30} L ${cx - 102} ${H * 0.34}"
+          fill="none" stroke="${chairHighlight}" stroke-width="3" opacity="0.8"/>
+    <path d="M ${cx + 190} ${H * 0.98} L ${cx + 178} ${H * 0.38} Q ${cx + 170} ${H * 0.30} ${cx + 158} ${H * 0.30} L ${cx + 102} ${H * 0.34}"
+          fill="none" stroke="${chairHighlight}" stroke-width="3" opacity="0.8"/>
+    <path d="M ${cx - 118} ${H * 0.99} C ${cx - 96} ${H * 0.93}, ${cx + 96} ${H * 0.93}, ${cx + 118} ${H * 0.99} L ${cx + 118} ${H}
+             L ${cx - 118} ${H} Z" fill="#180f16"/>
+    ${[0, 1, 2, 3].map(i => `<circle cx="${cx - 168}" cy="${H * 0.42 + i * 28}" r="3.4" fill="#3d2438"/>`).join('')}
+    ${[0, 1, 2, 3].map(i => `<circle cx="${cx + 168}" cy="${H * 0.42 + i * 28}" r="3.4" fill="#3d2438"/>`).join('')}
   </g>
 
-  <g transform="translate(32, ${height - 110})">
-    <rect width="${width - 64}" height="78" rx="12" fill="#10101a" fill-opacity="0.88" stroke="#34344a" stroke-width="1"/>
-    <text x="20" y="28" fill="#ffffff" font-family="Inter, sans-serif" font-size="16" font-weight="700">
-      ${name}
-    </text>
-    <text x="20" y="54" fill="#a0a0b8" font-family="Inter, sans-serif" font-size="12">
-      ${cleanPrompt}
-    </text>
-  </g>
+  <!-- hair -->
+  <path d="${hairPath}" fill="${pal.hair}"/>
+  <path d="${hairPath}" fill="none" stroke="${pal.hairHi}" stroke-width="2.4" opacity="0.5"
+        style="filter: url(#rimGlow)"/>
+  <path d="M ${cx - 66} ${H * 0.30} C ${cx - 86} ${H * 0.42}, ${cx - 88} ${H * 0.52}, ${cx - 74} ${H * 0.60}"
+        stroke="${pal.hairHi}" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.35"/>
+  <path d="M ${cx + 66} ${H * 0.30} C ${cx + 86} ${H * 0.42}, ${cx + 88} ${H * 0.52}, ${cx + 74} ${H * 0.60}"
+        stroke="${pal.hairHi}" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.35"/>
+
+  <!-- legs -->
+  ${legLeft}
+  ${legRight}
+
+  <!-- torso & arms -->
+  ${torso}
+  ${armLeft}
+  ${armRight}
+
+  <!-- neck, head, face -->
+  <rect x="${cx - headR * 0.22}" y="${headY + headR * 0.7}" width="${headR * 0.44}" height="${headR * 0.72}" fill="url(#skinGrad)"/>
+  ${head}
+  ${choker}
+  ${cyberGlow}
+  ${tattoo}
+  ${rimLight}
+
+  <!-- vignette + grain -->
+  <rect width="${W}" height="${H}" fill="url(#vignette)"/>
+  <rect width="${W}" height="${H}" filter="url(#grainF)" opacity="0.5"/>
+
+  ${HUD}
+  ${badges}
+  ${caption}
 </svg>
 `.trim();
 
@@ -173,16 +445,18 @@ async function parse(response: Response, p: ProviderName, m: Mode): Promise<Gene
     d.output?.url ??
     d.output?.[0]?.url ??
     d.data?.[0]?.url ??
+    d.data?.[0]?.b64_json ??
     d.images?.[0]?.url ??
     d.video?.url;
+  const b64 = d.data?.[0]?.b64_json;
   const job = d.id ?? d.jobId ?? d.task_id;
   return {
     provider: p,
-    status: m === 'video' && !url ? 'queued' : 'ready',
-    assetUrl: url,
+    status: m === 'video' && !url && !b64 ? 'queued' : 'ready',
+    assetUrl: url ?? (b64 ? `data:image/png;base64,${b64}` : undefined),
     jobId: job,
     text: d.text ?? d.message,
-    warning: url || job ? undefined : 'Provider returned no media URL'
+    warning: url || b64 || job ? undefined : 'Provider returned no media URL'
   };
 }
 
@@ -237,7 +511,7 @@ class Local {
       provider: 'local',
       status: 'ready',
       assetUrl,
-      text: `Local procedural ${r.mode} generated. Switch provider to OpenRouter, Gemini or Custom for cloud neural inference.`
+      text: `Local procedural ${r.mode} rendered with the Noir engine. Connect OpenRouter, Gemini or a Custom endpoint in ⚙ Settings for cloud neural inference.`
     };
   }
 }
@@ -267,7 +541,7 @@ export async function generateWithFallback(
       const out = await p.generate(r);
       if (out.status === 'ready' || out.status === 'queued' || p.name === 'local') return out;
     } catch (e) {
-      if (p.name === preferred) {
+      if (p.name === preferred && preferred !== 'local') {
         return {
           provider: p.name,
           status: 'error',
@@ -290,7 +564,7 @@ export async function generateWithFallback(
 export async function chatWithProvider(messages: ChatMessage[], preferred: ProviderName = 'openrouter') {
   const e = env();
   if (preferred === 'local') return { provider: 'local' as const, text: 'Local companion mode is active.' };
-  
+
   if (preferred === 'openrouter') {
     const key = getSavedApiKey('openrouter');
     if (!key) return { provider: 'openrouter' as const, text: 'OpenRouter API key is not configured.', warning: 'Set VITE_OPENROUTER_API_KEY or configure in Settings.' };
@@ -309,7 +583,7 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
     const d = await r.json();
     return { provider: 'openrouter' as const, text: d.choices?.[0]?.message?.content ?? 'No response.' };
   }
-  
+
   if (preferred === 'gemini') {
     const key = getSavedApiKey('gemini');
     if (!key) return { provider: 'gemini' as const, text: 'Gemini API key is not configured.', warning: 'Set VITE_GEMINI_API_KEY or configure in Settings.' };

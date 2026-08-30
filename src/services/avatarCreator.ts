@@ -23,6 +23,13 @@ export interface AvatarDraft {
   hosieryStyle?: string;
   lingerieLace?: string;
   chairSetting?: string;
+  tattooStyle?: string;
+  augmentStyle?: string;
+  scarStyle?: string;
+  facePaintStyle?: string;
+  browShape?: string;
+  browThickness?: number;
+  facialHair?: string;
   piercingsCount?: number;
   tattoosCount?: number;
 }
@@ -108,6 +115,14 @@ export const avatarOptions = {
     'nude velvet matte',
     'electric neon magenta'
   ],
+  makeupStyle: [
+    'dark smokey eyeshadow with winged eyeliner',
+    'glitter cut-crease glam eyes',
+    'natural soft glam',
+    'cyberpunk graphic liner with neon accents',
+    'gothic heavy kohl liner',
+    'bronzed editorial glow'
+  ],
   chokerStyle: [
     'ruby red velvet choker with gold medallion',
     'black lace ribbon choker',
@@ -122,6 +137,39 @@ export const avatarOptions = {
     'suspender garter belt with fishnets',
     'sheer black pantyhose',
     'bare legs'
+  ],
+  tattooStyle: [
+    'none',
+    'delicate rose vine tattoo on shoulder',
+    'blackwork thigh tattoo peeking above stocking line',
+    'ornamental sternum mandala tattoo',
+    'small script tattoo on collarbone',
+    'cyber-line geometric arm tattoo'
+  ],
+  augmentStyle: [
+    'none',
+    'subtle glowing temple LED implant',
+    'chrome cyber ear cuff with data pulse',
+    'neck data-port with soft glow',
+    'holographic wrist interface',
+    'full cyber spine implant'
+  ],
+  scarStyle: ['none', 'tiny brow scar', 'faint cheek scar', 'hero scar on shoulder'],
+  facePaintStyle: ['none', 'tribal cheek mark', 'neon accent line across eyes', 'gothic tear mark'],
+  browShape: ['arched', 'straight', 'soft rounded', 'bold angled', 'thin feathered', 'natural full'],
+  facialHair: [
+    'none',
+    'clean shaven with light stubble shadow',
+    'cyber beard implant lines',
+    'gothic goatee',
+    'precisely lined beard'
+  ],
+  chairSetting: [
+    'vintage tufted dark leather armchair, moody boudoir with crimson edge lighting',
+    'black velvet chaise lounge, candlelit gothic boudoir',
+    'dark leather wingback by a rain-streaked window, cold blue moonlight with red neon rim',
+    'cyberpunk throne chair, magenta and cyan neon haze',
+    'high-fashion studio with dark seamless backdrop and colored gels'
   ]
 };
 
@@ -145,10 +193,37 @@ export function randomizeAvatar(current: AvatarDraft): AvatarDraft {
     pose: isGothGlam ? avatarOptions.pose[0] : getRandomOption(avatarOptions.pose),
     expression: isGothGlam ? avatarOptions.expression[0] : getRandomOption(avatarOptions.expression),
     lipstickShade: isGothGlam ? 'bold ruby red satin' : getRandomOption(avatarOptions.lipstickShade),
+    makeupStyle: getRandomOption(avatarOptions.makeupStyle),
     chokerStyle: isGothGlam ? 'ruby red velvet choker with gold medallion' : getRandomOption(avatarOptions.chokerStyle),
     hosieryStyle: isGothGlam ? 'sheer black fishnet stockings' : getRandomOption(avatarOptions.hosieryStyle),
+    tattooStyle: getRandomOption(avatarOptions.tattooStyle),
+    augmentStyle: getRandomOption(avatarOptions.augmentStyle),
+    scarStyle: getRandomOption(avatarOptions.scarStyle),
+    facePaintStyle: getRandomOption(avatarOptions.facePaintStyle),
+    browShape: getRandomOption(avatarOptions.browShape),
+    browThickness: 1 + Math.floor(Math.random() * 5),
+    facialHair: Math.random() > 0.85 ? getRandomOption(avatarOptions.facialHair) : 'none',
+    piercingsCount: Math.random() > 0.5 ? 1 + Math.floor(Math.random() * 4) : 0,
     colorAccent: isGothGlam ? '#E62040' : '#904EDD'
   };
+}
+
+const DRAFT_KEY = 'grok-girls-draft-v1';
+
+export function loadDraft(id: string, fallback: AvatarDraft): AvatarDraft {
+  try {
+    const raw = localStorage.getItem(`${DRAFT_KEY}:${id}`);
+    if (!raw) return fallback;
+    return { ...fallback, ...(JSON.parse(raw) as Partial<AvatarDraft>) };
+  } catch {
+    return fallback;
+  }
+}
+
+export function saveDraft(d: AvatarDraft) {
+  try {
+    localStorage.setItem(`${DRAFT_KEY}:${d.id}`, JSON.stringify(d));
+  } catch {}
 }
 
 export function buildDraftPrompt(draft: AvatarDraft, adult = true): string {
@@ -156,10 +231,36 @@ export function buildDraftPrompt(draft: AvatarDraft, adult = true): string {
     ? 'Adult content allowed. Mature boudoir, sensual lingerie photography. Consenting adult 18+.'
     : 'Tasteful high-fashion portrait.';
 
-  const makeup = draft.lipstickShade ? `Lipstick: ${draft.lipstickShade}, dark smokey eyeshadow with winged eyeliner.` : '';
-  const choker = draft.chokerStyle && draft.chokerStyle !== 'none' ? `Wearing ${draft.chokerStyle}.` : '';
-  const hosiery = draft.hosieryStyle && draft.hosieryStyle !== 'bare legs' ? `Wearing ${draft.hosieryStyle}.` : '';
-  const setting = 'Setting: seated/reclining in a vintage tufted dark leather armchair, dark moody atmosphere with crimson edge lighting.';
+  const makeup = draft.makeupStyle
+    ? `Makeup: ${draft.makeupStyle}.`
+    : draft.lipstickShade
+    ? `Makeup: ${draft.lipstickShade}, dark smokey eyeshadow with winged eyeliner.`
+    : '';
+  const lips = draft.lipstickShade ? `Lipstick: ${draft.lipstickShade}.` : '';
+  const choker =
+    draft.chokerStyle && draft.chokerStyle !== 'none' ? `Wearing ${draft.chokerStyle}.` : '';
+  const hosiery =
+    draft.hosieryStyle && draft.hosieryStyle !== 'bare legs' ? `Wearing ${draft.hosieryStyle}.` : '';
+  const tattoo =
+    draft.tattooStyle && draft.tattooStyle !== 'none' ? `Tattoo: ${draft.tattooStyle}.` : '';
+  const augment =
+    draft.augmentStyle && draft.augmentStyle !== 'none' ? `Cyber augment: ${draft.augmentStyle}.` : '';
+  const scar = draft.scarStyle && draft.scarStyle !== 'none' ? `Facial detail: ${draft.scarStyle}.` : '';
+  const facePaint =
+    draft.facePaintStyle && draft.facePaintStyle !== 'none' ? `Face paint: ${draft.facePaintStyle}.` : '';
+  const piercings =
+    draft.piercingsCount && draft.piercingsCount > 0
+      ? `Piercings: subtle silver ear and navel studs (${draft.piercingsCount} pieces).`
+      : '';
+  const brows = draft.browShape
+    ? `Eyebrows: ${draft.browShape} shape, ${draft.browThickness || 3}/5 thickness.`
+    : '';
+  const facial =
+    draft.facialHair && draft.facialHair !== 'none' ? `Facial hair: ${draft.facialHair}.` : '';
+  const setting =
+    draft.chairSetting ||
+    'Setting: seated/reclining in a vintage tufted dark leather armchair, dark moody atmosphere with crimson edge lighting.';
+  const accent = draft.colorAccent ? `Color accent: ${draft.colorAccent}.` : '';
 
-  return `${draft.name}, adult fictional character (18+), ${draft.ethnicity}, ${draft.bodyType} build, ${draft.eyeColor} ${draft.eyeShape} eyes, ${draft.faceShape} face, ${draft.hairColor} ${draft.hairStyle} hair, ${draft.skinTone} skin. Wearing ${draft.outfit}. ${choker} ${hosiery} ${makeup} Pose: ${draft.pose}, ${draft.expression}. ${setting} ${draft.extra || ''}. Highly detailed 8k photography, realistic fabric textures, lace detail, cinematic lighting, masterpiece. ${adultBit}`;
+  return `${draft.name}, adult fictional character (18+), ${draft.ethnicity}, ${draft.bodyType} build, ${draft.eyeColor} ${draft.eyeShape} eyes, ${draft.faceShape} face, ${draft.hairColor} ${draft.hairStyle} hair, ${draft.skinTone} skin. Wearing ${draft.outfit}. ${choker} ${hosiery} ${makeup} ${lips} ${brows} ${facial} ${tattoo} ${augment} ${scar} ${facePaint} ${piercings} Pose: ${draft.pose}, ${draft.expression}. ${setting} ${accent} ${draft.extra || ''}. Highly detailed 8k photography, realistic fabric textures, lace detail, cinematic lighting, masterpiece. ${adultBit}`;
 }

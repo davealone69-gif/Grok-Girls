@@ -100,6 +100,39 @@ export const stylePresets: StylePreset[] = [
     prompt: 'deep crimson room, red velvet drapes, theatrical spotlight, dramatic saturated reds',
     filter: 'contrast(1.2) saturate(1.3) brightness(0.98) drop-shadow(0 0 44px rgba(255, 43, 78, 0.4))',
     description: 'Saturated theatrical red velvet set.'
+  },
+  {
+    id: 'explicit',
+    name: 'Explicit Hard',
+    icon: '🔥',
+    accent: '#FF0040',
+    lighting: 'noir',
+    chair: 'leather sofa mid-sex, explicit adult scene, detailed anatomy',
+    prompt: 'explicit graphic sexual act, detailed anatomy, fluids, intense pleasure, hardcore adult photography, 18+',
+    filter: 'contrast(1.25) saturate(1.15) brightness(1.0) drop-shadow(0 0 40px rgba(255, 0, 64, 0.45))',
+    description: 'Hardcore explicit sex scene lighting and framing.'
+  },
+  {
+    id: 'aftercare',
+    name: 'Afterglow',
+    icon: '💦',
+    accent: '#FF6B9D',
+    lighting: 'studio',
+    chair: 'rumpled sheets, post-sex afterglow, soft window light',
+    prompt: 'post-sex afterglow, cum on skin, soft exhausted pleasure, intimate close-up, adult',
+    filter: 'saturate(0.95) brightness(1.05) drop-shadow(0 15px 35px rgba(255, 107, 157, 0.3))',
+    description: 'Soft post-sex intimacy and fluids.'
+  },
+  {
+    id: 'bondage',
+    name: 'Bondage Suite',
+    icon: '⛓',
+    accent: '#9B59B6',
+    lighting: 'noir',
+    chair: 'dark bondage frame, leather restraints, dramatic side light',
+    prompt: 'bondage restraints, collar, explicit adult power exchange, detailed, 18+',
+    filter: 'contrast(1.2) brightness(0.95) drop-shadow(0 0 35px rgba(155, 89, 182, 0.4))',
+    description: 'Restrained explicit power-play scene.'
   }
 ];
 

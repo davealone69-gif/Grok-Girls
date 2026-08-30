@@ -55,20 +55,67 @@ export const avatarOptions = {
     'sheer black boudoir bodysuit with lace floral embroidery',
     'luxury silk robe with delicate lace bralette',
     'leather crop biker jacket with lace bralette and high-waist leather pants',
-    'midnight gothic dress with sheer sleeves and choker'
+    'midnight gothic dress with sheer sleeves and choker',
+    'fully nude, detailed adult anatomy',
+    'torn open lingerie, breasts and genitals exposed',
+    'collar and cuffs only, fully nude',
+    'micro bikini barely covering',
+    'open robe, nothing underneath',
+    'stockings and garter only, no panties',
+    'latex catsuit unzipped to the navel',
+    'wet see-through white shirt, no bra'
   ],
-  pose: ['sensually reclining back in dark leather armchair, delicate hand on chest', 'perched on edge of dark leather armchair, leaning forward with seductive eye contact', 'centered three-quarter confident portrait', 'reclining on velvet chaise lounge with arched back', 'leaning back against leather cushions with legs crossed', 'dramatic shoulder glance with parted lips', 'standing against dark seamless backdrop, hands on hips'],
-  expression: ['alluring parted lips and seductive gaze', 'intense focused gaze', 'sultry subtle smile', 'confident commanding look', 'playful half-smile', 'dreamy relaxed gaze'],
-  lipstickShade: ['bold ruby red satin', 'deep crimson velvet', 'dark plum gothic', 'blood red gloss', 'nude velvet matte', 'electric neon magenta'],
-  makeupStyle: ['dark smokey eyeshadow with winged eyeliner', 'glitter cut-crease glam eyes', 'natural soft glam', 'cyberpunk graphic liner with neon accents', 'gothic heavy kohl liner', 'bronzed editorial glow'],
-  chokerStyle: ['ruby red velvet choker with gold medallion', 'black lace ribbon choker', 'studded leather collar', 'delicate gold chain choker', 'cybernetic glowing LED band', 'none'],
-  hosieryStyle: ['sheer black fishnet stockings', 'black lace-top thigh-high stockings', 'suspender garter belt with fishnets', 'sheer black pantyhose', 'bare legs'],
+  pose: [
+    'sensually reclining back in dark leather armchair, delicate hand on chest',
+    'perched on edge of dark leather armchair, leaning forward with seductive eye contact',
+    'centered three-quarter confident portrait',
+    'reclining on velvet chaise lounge with arched back',
+    'leaning back against leather cushions with legs crossed',
+    'dramatic shoulder glance with parted lips',
+    'standing against dark seamless backdrop, hands on hips',
+    'on all fours, arched back, looking over shoulder',
+    'legs spread wide, presenting, one hand between thighs',
+    'kneeling, mouth open, looking up',
+    'bent over furniture, ass presented',
+    'cowgirl position mid-ride',
+    'missionary, legs wrapped high',
+    'facesitting, grinding down',
+    'standing against wall, one leg lifted around partner',
+    'on back, knees to chest, presenting'
+  ],
+  expression: [
+    'alluring parted lips and seductive gaze',
+    'intense focused gaze',
+    'sultry subtle smile',
+    'confident commanding look',
+    'playful half-smile',
+    'dreamy relaxed gaze',
+    'orgasm face, eyes rolled, mouth open',
+    'desperate lust, biting lip hard',
+    'submissive pleasure, tears of intensity',
+    'dominant smirk while riding',
+    'ahegao-style extreme pleasure',
+    'gasping mid-thrust'
+  ],
+  lipstickShade: ['bold ruby red satin', 'deep crimson velvet', 'dark plum gothic', 'blood red gloss', 'nude velvet matte', 'electric neon magenta', 'smeared after oral'],
+  makeupStyle: ['dark smokey eyeshadow with winged eyeliner', 'glitter cut-crease glam eyes', 'natural soft glam', 'cyberpunk graphic liner with neon accents', 'gothic heavy kohl liner', 'bronzed editorial glow', 'ruined makeup after sex, tears and smeared lipstick'],
+  chokerStyle: ['ruby red velvet choker with gold medallion', 'black lace ribbon choker', 'studded leather collar', 'delicate gold chain choker', 'cybernetic glowing LED band', 'none', 'thick bondage collar with O-ring'],
+  hosieryStyle: ['sheer black fishnet stockings', 'black lace-top thigh-high stockings', 'suspender garter belt with fishnets', 'sheer black pantyhose', 'bare legs', 'ripped fishnets mid-sex'],
   tattooStyle: ['none', 'delicate rose vine tattoo on shoulder', 'blackwork thigh tattoo peeking above stocking line', 'ornamental sternum mandala tattoo', 'small script tattoo on collarbone', 'cyber-line geometric arm tattoo'],
   augmentStyle: ['none', 'subtle glowing temple LED implant', 'chrome cyber ear cuff with data pulse', 'neck data-port with soft glow', 'holographic wrist interface', 'full cyber spine implant'],
   scarStyle: ['none', 'tiny brow scar', 'faint cheek scar', 'hero scar on shoulder'],
   facePaintStyle: ['none', 'tribal cheek mark', 'neon accent line across eyes', 'gothic tear mark'],
   browShape: ['arched', 'straight', 'soft rounded', 'bold angled', 'thin feathered', 'natural full'],
-  chairSetting: ['vintage tufted dark leather armchair, moody boudoir with crimson edge lighting', 'black velvet chaise lounge, candlelit gothic boudoir', 'dark leather wingback by a rain-streaked window, cold blue moonlight with red neon rim', 'cyberpunk throne chair, magenta and cyan neon haze', 'high-fashion studio with dark seamless backdrop and colored gels']
+  chairSetting: [
+    'vintage tufted dark leather armchair, moody boudoir with crimson edge lighting',
+    'black velvet chaise lounge, candlelit gothic boudoir',
+    'dark leather wingback by a rain-streaked window, cold blue moonlight with red neon rim',
+    'cyberpunk throne chair, magenta and cyan neon haze',
+    'high-fashion studio with dark seamless backdrop and colored gels',
+    'leather sofa mid-sex, city lights through window',
+    'glass table edge, bent over',
+    'rooftop railing at night'
+  ]
 };
 
 export function getRandomOption<T>(list: readonly T[] | T[]): T {
@@ -125,7 +172,7 @@ export function saveDraft(d: AvatarDraft) {
 
 export function buildDraftPrompt(draft: AvatarDraft, adult = true): string {
   const adultBit = adult
-    ? 'Adult content allowed. Mature boudoir, sensual lingerie photography. Consenting adult 18+.'
+    ? 'Adult content allowed. Explicit graphic sexual acts, detailed anatomy, fluids, penetration, oral, anal fully permitted when requested. Consenting adult 18+.'
     : 'Tasteful high-fashion portrait.';
 
   const makeup = draft.makeupStyle ? `Makeup: ${draft.makeupStyle}.` : draft.lipstickShade ? `Makeup: ${draft.lipstickShade}, dark smokey eyeshadow with winged eyeliner.` : '';

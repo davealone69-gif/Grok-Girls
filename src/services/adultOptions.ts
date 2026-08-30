@@ -26,7 +26,10 @@ export const adultOptions = {
     'no clothing, artistic fine-art presentation',
     'fully nude, explicit adult presentation',
     'torn lingerie, mid-sex state',
-    'collar and restraints only'
+    'collar and restraints only',
+    'stockings and garter only',
+    'open shirt nothing underneath',
+    'micro bikini aside'
   ],
   coverage: [
     'fully covered styling',
@@ -36,7 +39,8 @@ export const adultOptions = {
     'unclothed artistic figure with non-explicit framing',
     'full explicit nudity, detailed anatomy',
     'spread legs, exposed genitals, graphic detail',
-    'penetrated, fluids visible'
+    'penetrated, fluids visible',
+    'cum on skin, post-sex'
   ],
   pose: [
     'standing relaxed three-quarter pose',
@@ -44,8 +48,6 @@ export const adultOptions = {
     'reclining editorial pose',
     'back-facing over-shoulder pose',
     'side-profile silhouette pose',
-    'arms folded naturally for modest framing',
-    'kneeling fashion pose with non-explicit framing',
     'on all fours, arched back, looking back',
     'legs spread wide, presenting',
     'missionary, legs wrapped around partner',
@@ -54,84 +56,84 @@ export const adultOptions = {
     'facesitting, grinding on mouth',
     'bent over furniture, gripping edges',
     'kneeling oral, looking up',
-    'standing against wall, one leg lifted'
+    'standing against wall, one leg lifted',
+    'prone bone flat',
+    'lotus face to face',
+    '69 mutual oral',
+    'reverse cowgirl ass view'
   ],
   bodyPresentation: [
     'natural adult anatomy',
     'athletic adult physique',
     'curvy adult physique',
     'slim adult physique',
-    'soft natural proportions',
-    'stylized fashion-model proportions',
     'detailed aroused genitals, wet',
     'breasts with erect nipples',
-    'ass spread, detailed'
+    'ass spread, detailed',
+    'cum covered',
+    'flushed post-orgasm'
   ],
   scene: [
     'private luxury bedroom studio',
     'dark leather boudoir studio',
-    'minimalist fine-art studio',
     'luxury penthouse bedroom',
     'velvet chaise lounge set',
-    'warm candlelit editorial set',
     'cyberpunk private suite',
     'leather armchair mid-sex',
     'sofa sex scene',
     'against neon wall',
-    'rooftop railing outdoor sex'
+    'rooftop railing outdoor sex',
+    'mirror sex scene',
+    'shower wet sex',
+    'car backseat risk'
   ],
   lighting: [
     'soft diffused studio light',
     'dramatic rim lighting',
     'warm candlelit glow',
     'low-key cinematic lighting',
-    'cool moonlight with subtle rim light',
-    'high-fashion beauty lighting',
     'harsh explicit close-up lighting',
-    'neon cyber sex lighting'
+    'neon cyber sex lighting',
+    'flash photography explicit',
+    'moonlight through blinds'
   ],
   camera: [
     'full-body editorial framing',
     'three-quarter portrait framing',
-    'side-profile composition',
-    'rear three-quarter composition',
-    'wide environmental composition',
-    '85mm fashion photography look',
     'close-up genital detail',
     'POV oral / penetration',
-    'over-shoulder thrusting view'
+    'over-shoulder thrusting view',
+    'from below looking up',
+    'mirror reflection shot',
+    'extreme close-up fluids'
   ],
   styling: [
     'luxury fashion editorial',
     'gothic glamour',
-    'cinematic fine-art photography',
-    'modern boudoir editorial',
-    'cyberpunk fashion editorial',
-    'classic monochrome fine-art',
     'explicit adult photography',
-    'hardcore graphic sex scene'
+    'hardcore graphic sex scene',
+    'amateur realistic sex',
+    'cinematic erotic'
   ],
   accessories: [
     'none',
-    'velvet choker and delicate jewelry',
-    'gold body chain',
-    'silk stockings and garter accessories',
-    'ornamental jewelry',
-    'cybernetic jewelry accents',
+    'velvet choker',
     'collar and leash',
     'restraints / cuffs',
-    'vibrator / toy visible'
+    'vibrator / toy visible',
+    'ball gag',
+    'blindfold',
+    'nipple clamps'
   ],
   mood: [
     'confident and composed',
     'sensual and elegant',
-    'mysterious and cinematic',
-    'relaxed and intimate',
-    'bold editorial attitude',
-    'dreamy fine-art atmosphere',
     'desperate lust',
     'dominant / submissive',
-    'orgasmic intensity'
+    'orgasmic intensity',
+    'overstimulated',
+    'claimed / marked',
+    'afterglow soft'
   ],
   act: [
     'none',
@@ -147,7 +149,14 @@ export const adultOptions = {
     'creampie, internal cumshot visible',
     'facial, cum on face',
     'double penetration',
-    'toy play, dildo / vibrator'
+    'toy play, dildo / vibrator',
+    '69 mutual oral',
+    'squirting orgasm',
+    'prone bone',
+    'standing wall sex',
+    'lotus intimate',
+    'collared sex',
+    'overstimulation multiple orgasms'
   ]
 } as const;
 

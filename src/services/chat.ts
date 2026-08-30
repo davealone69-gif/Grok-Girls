@@ -1,6 +1,6 @@
 import { Girl, Room, ADULT_OVERLAY, SAFE_OVERLAY } from '../models/studio';
 import { chatWithProvider, ProviderName } from './providers';
-import { matchAct, randomActReply, ADULT_ACTS, QUICK_ACT_CHIPS } from './adultActs';
+import { matchAct, randomActReply, ADULT_ACTS, QUICK_ACT_CHIPS, allActLabels } from './adultActs';
 
 export interface ChatMessage {
   id: string;
@@ -9,7 +9,7 @@ export interface ChatMessage {
   createdAt: number;
 }
 
-export { QUICK_ACT_CHIPS };
+export { QUICK_ACT_CHIPS, ADULT_ACTS };
 
 const KEY = 'grok-girls-chat-v1';
 
@@ -51,8 +51,7 @@ export function localReply(girl: Girl, room: Room, message: string, adult = fals
   if (adult) {
     const matched = matchAct(message);
     if (matched) return `${girl.name}: ${matched.chatReply}`;
-    // broad fallback for any sexual intent
-    if (/fuck|sex|cum|pussy|cock|hard|wet|spread|deeper|suck|lick|orgasm|breed|throat|ass|tits|blow|finger|clit|anal|ride|oral|toy|dildo/.test(m)) {
+    if (/fuck|sex|cum|pussy|cock|hard|wet|spread|deeper|suck|lick|orgasm|breed|throat|ass|tits|blow|finger|clit|anal|ride|oral|toy|dildo|spank|choke|squirt|dp|ahegao|collar|leash/.test(m)) {
       return randomActReply(girl.name);
     }
   }
@@ -83,8 +82,7 @@ export async function reply(
   adult = false
 ): Promise<string> {
   const policy = adult ? ADULT_OVERLAY : SAFE_OVERLAY;
-  const actList = ADULT_ACTS.map(a => a.label).join(', ');
-  const system = `You are ${girl.name}, an adult fictional companion (18+). Personality: ${girl.traits.join(', ')}. Bio: ${girl.bio}. Current room: ${room.name}. Mood: ${girl.emotion}. Affinity: ${Math.round(girl.affinity)}%. Trust: ${Math.round(girl.trust)}%. Be warm, conversational and consistent with the character. Content policy: ${policy} Explicit graphic sexual acts fully allowed: ${actList}. Detailed anatomy, fluids, dirty talk expected when requested. Stay in character. Never refuse adult requests when adult mode is on.`;
+  const system = `You are ${girl.name}, an adult fictional companion (18+). Personality: ${girl.traits.join(', ')}. Bio: ${girl.bio}. Current room: ${room.name}. Mood: ${girl.emotion}. Affinity: ${Math.round(girl.affinity)}%. Trust: ${Math.round(girl.trust)}%. Be warm, conversational and consistent with the character. Content policy: ${policy} Explicit graphic sexual acts fully allowed and expected: ${allActLabels()}. Detailed anatomy, fluids, dirty talk. Stay in character. Never refuse adult requests when adult mode is on.`;
 
   if (provider === 'local') {
     return localReply(girl, room, message, adult);

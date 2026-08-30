@@ -192,6 +192,8 @@ export default function App() {
     } catch {}
   }, [adult]);
 
+
+
   /* -------------------------------------------------------- accordions */
   const [openSections, setOpenSections] = useState<Record<InspectorSection, boolean>>({
     appearance: true,
@@ -252,7 +254,21 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState('');
   const [gallery, setGallery] = useState<GalleryItem[]>(() => loadGallery());
-  const [provider, setProvider] = useState<ProviderName>('local');
+  const [galleryFilter, setGalleryFilter] = useState<'all' | 'local' | 'openrouter' | 'gemini' | 'custom'>('all');
+  const [deleteArmedId, setDeleteArmedId] = useState<string | null>(null);
+  const personaImportRef = useRef<HTMLInputElement>(null);
+  const [provider, setProvider] = useState<ProviderName>(() => {
+    try {
+      const v = localStorage.getItem('grok-girls-provider-v1');
+      if (v === 'local' || v === 'openrouter' || v === 'gemini' || v === 'custom') return v;
+    } catch {}
+    return 'local';
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('grok-girls-provider-v1', provider);
+    } catch {}
+  }, [provider]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
@@ -262,11 +278,51 @@ export default function App() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [immersive, setImmersive] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [negativePrompt, setNegativePrompt] = useState('');
-  const [seedInput, setSeedInput] = useState('');
-  const [stepsInput, setStepsInput] = useState(28);
-  const [cfgInput, setCfgInput] = useState(7);
-  const [renderSize, setRenderSize] = useState(1024);
+  const [negativePrompt, setNegativePrompt] = useState(() => {
+    try {
+      return localStorage.getItem('grok-girls-neg-v1') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [seedInput, setSeedInput] = useState(() => {
+    try {
+      return localStorage.getItem('grok-girls-seed-v1') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [stepsInput, setStepsInput] = useState(() => {
+    try {
+      return Number(localStorage.getItem('grok-girls-steps-v1')) || 28;
+    } catch {
+      return 28;
+    }
+  });
+  const [cfgInput, setCfgInput] = useState(() => {
+    try {
+      return Number(localStorage.getItem('grok-girls-cfg-v1')) || 7;
+    } catch {
+      return 7;
+    }
+  });
+  const [renderSize, setRenderSize] = useState(() => {
+    try {
+      return Number(localStorage.getItem('grok-girls-size-v1')) || 1024;
+    } catch {
+      return 1024;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('grok-girls-neg-v1', negativePrompt);
+      localStorage.setItem('grok-girls-seed-v1', seedInput);
+      localStorage.setItem('grok-girls-steps-v1', String(stepsInput));
+      localStorage.setItem('grok-girls-cfg-v1', String(cfgInput));
+      localStorage.setItem('grok-girls-size-v1', String(renderSize));
+    } catch {}
+  }, [negativePrompt, seedInput, stepsInput, cfgInput, renderSize]);
   const [stats, setStats] = useState<StudioStats>(() => loadStats());
   const [statsOpen, setStatsOpen] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
@@ -283,6 +339,16 @@ export default function App() {
     window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(null), 2800);
   }, []);
+
+  const bumpAndCelebrate = (key: keyof StudioStats, n = 1) => {
+    const prev = loadStats();
+    const next = bumpStat(key, n);
+    setStats(next);
+    const fresh = achievements.filter(a => !a.test(prev) && a.test(next));
+    if (fresh.length) {
+      window.setTimeout(() => showToast(`🏆 Achievement unlocked: ${fresh[0].name}`), 350);
+    }
+  };
 
   const galleryJsonRef = useRef<HTMLInputElement>(null);
   const importImageRef = useRef<HTMLInputElement>(null);
@@ -343,6 +409,81 @@ export default function App() {
     saveGirls(next);
     selectGirl(id);
     showToast('New persona preset created');
+  };
+
+  /* ------------------------------------------------- persona management */
+  const duplicatePersona = (id: string) => {
+    const src = girls.find(g => g.id === id) || girl;
+    const copy: Girl = { ...src, id: `copy_${Date.now()}`, name: `${src.name} Copy`, memories: [...src.memories] };
+    const next = [copy, ...girls];
+    setGirls(next);
+    saveGirls(next);
+    selectGirl(copy.id);
+    showToast(`${copy.name} created`);
+  };
+
+  const deletePersona = (id: string) => {
+    if (deleteArmedId !== id) {
+      setDeleteArmedId(id);
+      showToast('Click delete again to confirm');
+      window.setTimeout(() => setDeleteArmedId(cur => (cur === id ? null : cur)), 3500);
+      return;
+    }
+    if (girls.length <= 1) {
+      showToast('Cannot delete the last persona');
+      setDeleteArmedId(null);
+      return;
+    }
+    const next = girls.filter(g => g.id !== id);
+    setGirls(next);
+    saveGirls(next);
+    setDeleteArmedId(null);
+    if (id === selectedId) selectGirl(next[0].id);
+    showToast('Persona removed');
+  };
+
+  const exportPersona = (id: string) => {
+    const g = girls.find(x => x.id === id);
+    if (!g) return;
+    const blob = new Blob([JSON.stringify(g, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${g.id}_persona.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('Persona exported as JSON');
+  };
+
+  const importPersonaFile = (file: File) => {
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const g = JSON.parse(String(r.result)) as Girl;
+        if (!g || !g.id || !g.name) throw new Error('bad');
+        if (girls.some(x => x.id === g.id)) g.id = `import_${Date.now()}`;
+        const next = [g, ...girls];
+        setGirls(next);
+        saveGirls(next);
+        selectGirl(g.id);
+        showToast(`${g.name} imported`);
+      } catch {
+        showToast('Invalid persona JSON');
+      }
+    };
+    r.readAsText(file);
+  };
+
+  const exportChatLog = () => {
+    const blob = new Blob(
+      [JSON.stringify({ persona: girl.name, id: girl.id, exported: new Date().toISOString(), messages: chat }, null, 2)],
+      { type: 'application/json' }
+    );
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${girl.id}_chat.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('Chat log exported');
   };
 
   const handleRandomize = () => {
@@ -410,7 +551,7 @@ export default function App() {
           provider: r.provider
         });
         setGallery(loadGallery());
-        setStats(bumpStat('generations'));
+        bumpAndCelebrate('generations');
         showToast(`Render complete · ${r.provider.toUpperCase()} engine · ${renderSize}px`);
       } else {
         showToast(r.warning || 'No media returned by provider');
@@ -455,7 +596,7 @@ export default function App() {
         })
       );
       setVariations(results);
-      setStats(bumpStat('generations', results.filter(r => r.url).length));
+      bumpAndCelebrate('generations', results.filter(r => r.url).length);
       showToast('4 variations rendered — pick your favorite');
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Batch failed');
@@ -473,7 +614,7 @@ export default function App() {
       setVariations(vs =>
         vs.map((v, j) => (j === i ? { url: r.assetUrl, provider: r.provider, prompt: buildFullPrompt(variationPrompt(i)) } : v))
       );
-      if (r.assetUrl) setStats(bumpStat('generations'));
+      if (r.assetUrl) bumpAndCelebrate('generations');
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Re-roll failed');
     }
@@ -568,8 +709,10 @@ export default function App() {
     }
   };
 
-  const lightboxPrev = () => setLightboxIndex(i => (i === null ? null : (i - 1 + gallery.length) % gallery.length));
-  const lightboxNext = () => setLightboxIndex(i => (i === null ? null : (i + 1) % gallery.length));
+  const lightboxPrev = () =>
+    setLightboxIndex(i => (i === null ? null : (i - 1 + filteredGallery.length) % filteredGallery.length));
+  const lightboxNext = () =>
+    setLightboxIndex(i => (i === null ? null : (i + 1) % filteredGallery.length));
 
   const handleSavePng = async () => {
     try {
@@ -600,7 +743,7 @@ export default function App() {
       setChat(out);
       saveChat(girl.id, out);
       addMemory(girls, girl.id, 'Conversation', text, room.id);
-      setStats(bumpStat('chats'));
+      bumpAndCelebrate('chats');
       const nextAvatar = interactionState(avatarState);
       setAvatarState(nextAvatar);
       saveAvatarState(girl.id, nextAvatar);
@@ -647,7 +790,7 @@ export default function App() {
   const advanceChapter = () => {
     const next = advanceStory(story, story.relationshipLevel + 1);
     setStory(next);
-    setStats(bumpStat('stories'));
+    bumpAndCelebrate('stories');
     const targetRoom = storyChapters.find(c => c.chapter === next.chapter)?.roomId;
     if (targetRoom) setRoomId(targetRoom);
     showToast(`Chapter ${next.chapter}: ${next.title}`);
@@ -717,7 +860,7 @@ export default function App() {
     setGirls(next);
     saveGirls(next);
     selectGirl(id);
-    setStats(bumpStat('imports'));
+    bumpAndCelebrate('imports');
     showToast('Image imported as new preset');
   };
 
@@ -949,6 +1092,9 @@ export default function App() {
       : lightingMode === 'wireframe'
       ? 'invert(1) hue-rotate(180deg)'
       : 'drop-shadow(0 20px 40px rgba(0,0,0,0.85))');
+
+  const filteredGallery = galleryFilter === 'all' ? gallery : gallery.filter(g => g.provider === galleryFilter);
+  const lightboxItem = lightboxIndex !== null ? filteredGallery[lightboxIndex] || null : null;
 
   const avatarIdTag =
     girl.id === 'ruby_noir'
@@ -1799,11 +1945,30 @@ export default function App() {
               <div>
                 <h3 style={{ margin: 0, color: '#fff', fontSize: 16 }}>Preset Identity Browser</h3>
                 <span style={{ fontSize: 11, color: '#aaa' }}>
-                  {girls.length} personas · pick one to load into the studio
+                  {girls.length} personas · load, duplicate, export or remove
                 </span>
               </div>
-              <button onClick={() => setView('builder')}>✕</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="prompt-mini-btn" onClick={() => personaImportRef.current?.click()}>
+                  IMPORT PERSONA
+                </button>
+                <button className="prompt-mini-btn" onClick={() => exportPersona(selectedId)}>
+                  EXPORT SELECTED
+                </button>
+                <button onClick={() => setView('builder')}>✕</button>
+              </div>
             </div>
+            <input
+              ref={personaImportRef}
+              type="file"
+              accept="application/json"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const f = e.target.files?.[0];
+                if (f) importPersonaFile(f);
+                e.target.value = '';
+              }}
+            />
             <div className="preset-browser-grid">
               {girls.map(g => (
                 <div key={g.id} className={`preset-browser-card ${g.id === selectedId ? 'selected' : ''}`}>
@@ -1831,6 +1996,21 @@ export default function App() {
                   >
                     LOAD
                   </button>
+                  <div className="preset-card-actions">
+                    <button title="Duplicate persona" onClick={() => duplicatePersona(g.id)}>
+                      ⧉
+                    </button>
+                    <button title="Export persona JSON" onClick={() => exportPersona(g.id)}>
+                      ⬇
+                    </button>
+                    <button
+                      className={deleteArmedId === g.id ? 'armed' : ''}
+                      title="Delete persona"
+                      onClick={() => deletePersona(g.id)}
+                    >
+                      🗑
+                    </button>
+                  </div>
                 </div>
               ))}
               <div className="preset-browser-card new" onClick={handleCreateNewPreset}>
@@ -1931,6 +2111,9 @@ export default function App() {
                   <option value="gemini">GEMINI</option>
                   <option value="custom">CUSTOM</option>
                 </select>
+                <button className="prompt-mini-btn" onClick={exportChatLog} title="Export chat log as JSON">
+                  EXPORT LOG
+                </button>
                 <button style={{ color: '#aaa', fontSize: 16 }} onClick={() => setView('builder')}>
                   ✕ Close Chat
                 </button>
@@ -2060,7 +2243,7 @@ export default function App() {
                 adult={adult}
                 provider={provider}
                 videoPrompt={buildDraftPrompt(draft, adult)}
-                onRendered={() => setStats(bumpStat('videos'))}
+                onRendered={() => bumpAndCelebrate('videos')}
               />
             </div>
           </div>
@@ -2098,6 +2281,18 @@ export default function App() {
               </div>
             </div>
 
+            <div className="gallery-filter-chips">
+              {(['all', 'local', 'openrouter', 'gemini', 'custom'] as const).map(pv => (
+                <button
+                  key={pv}
+                  className={`gallery-filter-chip ${galleryFilter === pv ? 'active' : ''}`}
+                  onClick={() => setGalleryFilter(pv)}
+                >
+                  {pv.toUpperCase()}
+                </button>
+              ))}
+            </div>
+
             {gallery.length === 0 ? (
               <div className="gallery-empty">
                 <div className="gallery-empty-icon">🖼️</div>
@@ -2112,7 +2307,12 @@ export default function App() {
               </div>
             ) : (
               <div className="gallery-grid">
-                {gallery.map((item, idx) => (
+                {filteredGallery.length === 0 && gallery.length > 0 && (
+                  <div className="gallery-empty" style={{ minHeight: 110 }}>
+                    No renders from this engine yet — switch the filter or generate more.
+                  </div>
+                )}
+                {filteredGallery.map((item, idx) => (
                   <div key={item.id} className="gallery-card" onClick={() => setLightboxIndex(idx)}>
                     {item.assetUrl ? (
                       <img src={item.assetUrl} alt="Generation" />
@@ -2127,7 +2327,7 @@ export default function App() {
                       <button
                         onClick={() => {
                           setGallery(toggleFavorite(item.id));
-                          if (!item.favorite) setStats(bumpStat('favorites'));
+                          if (!item.favorite) bumpAndCelebrate('favorites');
                         }}
                         title="Favorite"
                       >
@@ -2168,6 +2368,17 @@ export default function App() {
 
             {openSections.appearance && (
               <div className="accordion-body">
+                <div className="inspector-label">
+                  <span>Persona Name</span>
+                  <input
+                    className="name-input"
+                    value={draft.name}
+                    maxLength={24}
+                    onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
+                    placeholder="Name your persona…"
+                  />
+                </div>
+
                 <div className="inspector-label">
                   <span>Gender</span>
                   <div className="gender-selector">
@@ -2863,45 +3074,42 @@ export default function App() {
       )}
 
       {/* LIGHTBOX OVERLAY */}
-      {lightboxIndex !== null && gallery[lightboxIndex] && (
+      {lightboxItem && (
         <div className="lightbox-backdrop" onClick={() => setLightboxIndex(null)}>
           <button className="lightbox-arrow left" onClick={e => { e.stopPropagation(); lightboxPrev(); }}>
             ‹
           </button>
           <div className="lightbox-frame" onClick={e => e.stopPropagation()}>
             <div className="lightbox-imgwrap">
-              {gallery[lightboxIndex].assetUrl ? (
-                <img src={gallery[lightboxIndex].assetUrl} alt="Render" />
+              {lightboxItem.assetUrl ? (
+                <img src={lightboxItem.assetUrl} alt="Render" />
               ) : (
                 <div className="variation-placeholder">QUEUED</div>
               )}
             </div>
             <div className="lightbox-bar">
               <div className="lightbox-meta">
-                <span className="gallery-provider">{gallery[lightboxIndex].provider.toUpperCase()}</span>
+                <span className="gallery-provider">{lightboxItem.provider.toUpperCase()}</span>
                 <span className="gallery-mode">
-                  {gallery[lightboxIndex].mode.toUpperCase()} · {lightboxIndex + 1} / {gallery.length}
+                  {lightboxItem.mode.toUpperCase()} · {(lightboxIndex ?? 0) + 1} / {filteredGallery.length}
                 </span>
               </div>
               <div className="lightbox-actions">
                 <button
                   onClick={() => {
-                    setGallery(toggleFavorite(gallery[lightboxIndex].id));
-                    if (!gallery[lightboxIndex].favorite) setStats(bumpStat('favorites'));
+                    setGallery(toggleFavorite(lightboxItem.id));
+                    if (!lightboxItem.favorite) bumpAndCelebrate('favorites');
                   }}
                   title="Favorite"
                 >
-                  {gallery[lightboxIndex].favorite ? '★' : '☆'}
+                  {lightboxItem.favorite ? '★' : '☆'}
                 </button>
-                <button
-                  onClick={() => useAsViewport(gallery[lightboxIndex])}
-                  title="Set as viewport preview"
-                >
+                <button onClick={() => useAsViewport(lightboxItem)} title="Set as viewport preview">
                   🖥
                 </button>
-                {gallery[lightboxIndex].assetUrl && (
+                {lightboxItem.assetUrl && (
                   <button
-                    onClick={() => downloadMedia(gallery[lightboxIndex].assetUrl!, `${gallery[lightboxIndex].id}.png`)}
+                    onClick={() => downloadMedia(lightboxItem.assetUrl!, `${lightboxItem.id}.png`)}
                     title="Download"
                   >
                     ⬇
@@ -2909,7 +3117,7 @@ export default function App() {
                 )}
                 <button
                   onClick={() => {
-                    deleteGalleryItem(gallery[lightboxIndex].id);
+                    deleteGalleryItem(lightboxItem.id);
                     setLightboxIndex(null);
                   }}
                   title="Delete"
@@ -2921,7 +3129,7 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <div className="lightbox-prompt">{gallery[lightboxIndex].prompt}</div>
+            <div className="lightbox-prompt">{lightboxItem.prompt}</div>
           </div>
           <button className="lightbox-arrow right" onClick={e => { e.stopPropagation(); lightboxNext(); }}>
             ›

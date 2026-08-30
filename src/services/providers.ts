@@ -42,7 +42,7 @@ export function saveApiKey(p: string, key: string) {
   } catch {}
 }
 
-export function getSavedEndpoint(p: string, m?: Mode): string {
+export function getSavedEndpoint(p: string, m?: Mode | 'chat'): string {
   try {
     if (m) {
       const modeKey = localStorage.getItem(`grok-girls-endpoint-${p.toLowerCase()}-${m}`);
@@ -58,13 +58,33 @@ export function getSavedEndpoint(p: string, m?: Mode): string {
   return env()[`VITE_${p.toUpperCase()}_ENDPOINT`] ?? '';
 }
 
-export function saveEndpoint(p: string, url: string, m?: Mode) {
+export function saveEndpoint(p: string, url: string, m?: Mode | 'chat') {
   try {
     if (m) {
       localStorage.setItem(`grok-girls-endpoint-${p.toLowerCase()}-${m}`, url.trim());
     } else {
       localStorage.setItem(`grok-girls-endpoint-${p.toLowerCase()}`, url.trim());
     }
+  } catch {}
+}
+
+export function getSavedModel(p: string, m?: Mode | 'chat'): string {
+  try {
+    const k = m
+      ? `grok-girls-model-${p.toLowerCase()}-${m}`
+      : `grok-girls-model-${p.toLowerCase()}`;
+    const v = localStorage.getItem(k);
+    if (v && v.trim()) return v.trim();
+  } catch {}
+  return '';
+}
+
+export function saveModel(p: string, model: string, m?: Mode | 'chat') {
+  try {
+    const k = m
+      ? `grok-girls-model-${p.toLowerCase()}-${m}`
+      : `grok-girls-model-${p.toLowerCase()}`;
+    localStorage.setItem(k, model.trim());
   } catch {}
 }
 
@@ -164,16 +184,23 @@ function paletteFromPrompt(prompt: string): RenderPalette {
   return { hair, hairHi, accent, skin, corset, backdrop, neon };
 }
 
-export function createLocalPlaceholderSvg(prompt: string, mode: Mode, width = 768, height = 768): string {
+export function createLocalPlaceholderSvg(
+  prompt: string,
+  mode: Mode,
+  width = 768,
+  height = 768,
+  seed?: number
+): string {
   const isVideo = mode === 'video';
   const W = width;
   const H = height;
   const pal = paletteFromPrompt(prompt);
   const pLower = prompt.toLowerCase();
 
+  const seedVal = seed ?? hashSeed(prompt + W + H);
   const nameMatch = prompt.match(/^([A-Za-z0-9 ]+?)(?:,| adult|\()/i);
   const name = nameMatch ? nameMatch[1].trim() : 'Grok Persona';
-  const seedId = String(hashSeed(prompt) % 1000000).padStart(6, '0');
+  const seedId = String(seedVal % 1000000).padStart(6, '0');
 
   const hasFishnets = pLower.includes('fishnet');
   const hasChoker = pLower.includes('choker');
@@ -307,7 +334,7 @@ export function createLocalPlaceholderSvg(prompt: string, mode: Mode, width = 76
 
   const grain = `
     <filter id="grainF">
-      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="${hashSeed(prompt) % 999}"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="${seedVal % 999}"/>
       <feColorMatrix type="saturate" values="0"/>
       <feComponentTransfer><feFuncA type="linear" slope="0.07"/></feComponentTransfer>
       <feComposite operator="over" in2="SourceGraphic"/>
@@ -503,6 +530,8 @@ async function parse(response: Response, p: ProviderName, m: Mode): Promise<Gene
 }
 
 function defaultModel(p: ProviderName, m: Mode): string {
+  const saved = getSavedModel(p, m) || getSavedModel(p);
+  if (saved) return saved;
   if (p === 'openrouter') {
     return m === 'image'
       ? env()['VITE_OPENROUTER_IMAGE_MODEL'] ?? 'google/gemini-2.5-flash-image-preview'
@@ -592,7 +621,7 @@ class Local {
     return true;
   }
   async generate(r: GenerationRequest): Promise<GenerationResult> {
-    const assetUrl = createLocalPlaceholderSvg(r.prompt, r.mode, r.width ?? 768, r.height ?? 768);
+    const assetUrl = createLocalPlaceholderSvg(r.prompt, r.mode, r.width ?? 768, r.height ?? 768, r.seed);
     return {
       provider: 'local',
       status: 'ready',
@@ -657,7 +686,8 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
   if (preferred === 'openrouter') {
     const key = getSavedApiKey('openrouter');
     if (!key) return { provider: 'openrouter' as const, text: 'OpenRouter API key is not configured.', warning: 'Set VITE_OPENROUTER_API_KEY or configure in Settings.' };
-    const endpoint = getSavedEndpoint('openrouter') || e.VITE_OPENROUTER_CHAT_ENDPOINT || 'https://openrouter.ai/api/v1/chat/completions';
+    const endpoint =
+      getSavedEndpoint('openrouter', 'chat') || e.VITE_OPENROUTER_CHAT_ENDPOINT || 'https://openrouter.ai/api/v1/chat/completions';
     const r = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -666,7 +696,10 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
         'HTTP-Referer': typeof location !== 'undefined' ? location.origin : 'http://localhost',
         'X-Title': 'Grok Girls'
       },
-      body: JSON.stringify({ model: e.VITE_OPENROUTER_CHAT_MODEL ?? 'openai/gpt-4o-mini', messages })
+      body: JSON.stringify({
+        model: e.VITE_OPENROUTER_CHAT_MODEL ?? getSavedModel('openrouter', 'chat') ?? getSavedModel('openrouter') ?? 'openai/gpt-4o-mini',
+        messages
+      })
     });
     if (!r.ok) throw new Error(`OpenRouter HTTP ${r.status}`);
     const d = await r.json();
@@ -676,8 +709,10 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
   if (preferred === 'gemini') {
     const key = getSavedApiKey('gemini');
     if (!key) return { provider: 'gemini' as const, text: 'Gemini API key is not configured.', warning: 'Set VITE_GEMINI_API_KEY or configure in Settings.' };
-    const model = e.VITE_GEMINI_CHAT_MODEL ?? 'gemini-2.5-flash';
+    const model =
+      e.VITE_GEMINI_CHAT_MODEL ?? getSavedModel('gemini', 'chat') ?? getSavedModel('gemini') ?? 'gemini-2.5-flash';
     const endpoint =
+      getSavedEndpoint('gemini', 'chat') ||
       getSavedEndpoint('gemini') ||
       e.VITE_GEMINI_CHAT_ENDPOINT ||
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -696,12 +731,15 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
   }
 
   const key = getSavedApiKey('custom');
-  const endpoint = getSavedEndpoint('custom') || e.VITE_CUSTOM_CHAT_ENDPOINT || '';
+  const endpoint = getSavedEndpoint('custom', 'chat') || e.VITE_CUSTOM_CHAT_ENDPOINT || '';
   if (!key || !endpoint) return { provider: 'custom' as const, text: 'Custom provider API key or endpoint is not configured.' };
   const r = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model: e.VITE_CUSTOM_CHAT_MODEL, messages })
+    body: JSON.stringify({
+      model: e.VITE_CUSTOM_CHAT_MODEL ?? getSavedModel('custom', 'chat') ?? getSavedModel('custom'),
+      messages
+    })
   });
   if (!r.ok) throw new Error(`Custom HTTP ${r.status}`);
   const d = await r.json();

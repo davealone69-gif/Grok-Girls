@@ -8,6 +8,7 @@ AAA-style cyberpunk / gothic-glamour **character creator & companion studio** �
 
 ### Avatar Studio (Builder)
 - **Left nav rail** — Appearance, Body, Clothing, Hair, Face, Eyes, Accessories, Augments, Tattoos, Animations, Premium, Help + Randomize, Stats & Achievements, Settings, 18+ toggle, Chat.
+- **Persona management** — rename any persona (Appearance → Persona Name), duplicate (⧉), delete with double-click confirm, export/import personas as JSON files from the PRESETS browser.
 - **Scene Style presets** — one-click mood library (Noir Boudoir, Cyber Neon, Golden Hour, Candlelight, Pastel Dream, B&W Noir, Blue Hour, Red Room): each sets the viewport filter, backdrop, accent color, and prompt style together.
 - **⧉ x4 Variations** — batch-render four alternate poses/angles at once, re-roll any single card, and apply the winner to the viewport + gallery.
 - **Advanced render controls** — negative prompt, seed, steps, CFG, and resolution (1024/1536/2048) in the prompt editor; all forwarded to cloud providers (A1111-style `negative_prompt`, `steps`, `cfg_scale`, `seed`) and used by the local engine.
@@ -26,10 +27,10 @@ AAA-style cyberpunk / gothic-glamour **character creator & companion studio** �
 - **HD-model prompt engine** — all compiled prompts target ultra-HD photorealistic 3D character renders (DAZ Studio Genesis 8 HD style, Iray GI, 8K pore-level skin, SSS), so cloud generations match the HD model look.
 
 ### Companion features
-- **Chat** — in-character dialogue; keyword-based local engine by default, or OpenRouter / Gemini / Custom LLMs when keys are configured. Quick-reply chips, affection state machine, per-persona memory that feeds future generations.
 - **Story** — 4 chapters (First Meeting, Private Space, Nightlife, New Horizons), relationship-gated chapter jumps, per-room scene actions that render story images straight to the gallery.
 - **Video studio** — real video pipeline: cloud providers return actual clips; **Local mode records a genuine 5-second WebM in-browser** (Ken Burns camera motion, scanlines, film grain, HUD frame, progress) with quality/FPS/aspect/motion presets and one-click download.
-- **Gallery** — every render lands here; click any card for a **fullscreen lightbox** (←/→ arrows, favorite, set-as-viewport, download, delete, prompt caption); export/import JSON archives; **CONTACT SHEET** downloads a PNG grid of your renders; copy the viewport image straight to the clipboard.
+- **Gallery** — every render lands here; engine filter chips (ALL / LOCAL / OPENROUTER / GEMINI / CUSTOM); click any card for a **fullscreen lightbox** (←/→ arrows, favorite, set-as-viewport, download, delete, prompt caption); export/import JSON archives; **CONTACT SHEET** downloads a PNG grid of your renders; copy the viewport image straight to the clipboard.
+- **Chat** — in-character dialogue with quick-reply chips, engine selector, **chat log export** (JSON), and per-persona memory that feeds future generations.
 - **Stats & achievements** — renders, favorites, messages, chapters, imports, clips are tracked with 8 unlockable achievement badges.
 - **Premium modal** — feature list + Stripe payment-link redirect (configure link in `src/services/keys.ts`).
 - **Help modal** — in-app guide (Esc closes any overlay) + keyboard shortcuts: `R` rotate · `Z` zoom · `P` prompt editor · `G` generate · `S` save · `V` video studio · `C` chat · `F` fullscreen · `Ctrl+Z` / `Ctrl+Y` undo/redo · `←`/`→` lightbox navigation.
@@ -44,7 +45,7 @@ npm run build    # production build to dist/
 
 ## AI provider configuration
 
-Configure in the in-app ⚙ **Settings** modal (stored in your browser's localStorage), or via `.env.local`:
+Configure in the in-app ⚙ **Settings** modal (stored in your browser's localStorage), or via `.env.local`. The Settings modal now includes **per-provider model pickers** (image + chat models for OpenRouter and Gemini) and **per-mode custom endpoints** (chat / image / video):
 
 ```env
 # OpenRouter (chat + image via compatible endpoints)

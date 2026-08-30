@@ -2657,3 +2657,138 @@ a.btn-generate-media:hover {
   border-color: var(--border-glow);
   box-shadow: 0 0 16px rgba(123, 63, 228, 0.3);
 }
+
+/* ==========================================================================
+   PERSONA MANAGEMENT + SETTINGS UPGRADE
+   ========================================================================== */
+
+/* ---- persona name input ---- */
+.name-input {
+  width: 100%;
+  background: #0c0c16;
+  border: 1px solid #2c2c42;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  padding: 8px 10px;
+  outline: none;
+}
+.name-input:focus {
+  border-color: var(--border-active);
+  box-shadow: 0 0 10px rgba(144, 78, 221, 0.25);
+}
+.name-input::placeholder {
+  color: #5c5c78;
+}
+
+/* ---- preset browser card actions ---- */
+.preset-card-actions {
+  display: flex;
+  gap: 6px;
+  margin: 0 12px 12px;
+}
+.preset-card-actions button {
+  flex: 1;
+  background: #1a1a2a;
+  border: 1px solid #2e2e46;
+  color: #b9b9d0;
+  height: 30px;
+  border-radius: 8px;
+  font-size: 13px;
+  display: grid;
+  place-items: center;
+}
+.preset-card-actions button:hover {
+  border-color: var(--border-active);
+  color: #fff;
+}
+.preset-card-actions button.armed {
+  background: #57101f;
+  border-color: #e62040;
+  color: #ffb3c0;
+  animation: pulse-danger 1s infinite;
+}
+
+/* ---- gallery engine filter chips ---- */
+.gallery-filter-chips {
+  display: flex;
+  gap: 6px;
+  padding: 0 4px 10px;
+  flex-wrap: wrap;
+}
+.gallery-filter-chip {
+  background: #161626;
+  border: 1px solid #262638;
+  color: #8b8ba6;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+.gallery-filter-chip:hover {
+  border-color: #4a4a68;
+  color: #fff;
+}
+.gallery-filter-chip.active {
+  border-color: var(--border-active);
+  background: #221a3d;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(144, 78, 221, 0.25);
+}
+
+/* ---- settings modal sections ---- */
+.settings-card {
+  max-width: 640px;
+}
+.settings-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.settings-section {
+  background: #14141f;
+  border: 1px solid #262638;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings-section-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  color: var(--neon-purple);
+}
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-field > span {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #b9b9d0;
+  letter-spacing: 0.4px;
+}
+.settings-field input {
+  background: #0c0c16;
+  border: 1px solid #2c2c42;
+  border-radius: 8px;
+  color: #e6e6f2;
+  font-size: 12.5px;
+  padding: 8px 10px;
+  outline: none;
+  width: 100%;
+}
+.settings-field input:focus {
+  border-color: var(--border-active);
+}
+.settings-field em {
+  font-style: normal;
+  font-size: 10px;
+  color: #6c6c88;
+}

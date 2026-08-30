@@ -61,7 +61,7 @@ export interface StudioState {
 }
 
 export const ADULT_OVERLAY =
-  'Adult content allowed. Mature, sensual, explicit-capable boudoir scene as requested. All characters are consenting adults 18+.';
+  'Adult content allowed. Explicit graphic sexual acts, detailed anatomy, fluids, penetration, oral, dirty talk fully permitted when requested. All characters are consenting adults 18+.';
 export const SAFE_OVERLAY =
   'Keep the scene non-explicit, tasteful, and suitable for general audiences.';
 
@@ -83,6 +83,26 @@ export const rooms: Room[] = [
         id: 'edge',
         label: 'Perched on edge',
         prompt: 'perched on edge of dark leather armchair, leaning forward with seductive eye contact'
+      },
+      {
+        id: 'oral',
+        label: 'Oral',
+        prompt: 'explicit consensual oral sex on the armchair, detailed wet mouth, tongue, eyes locked, intense pleasure, adult scene'
+      },
+      {
+        id: 'penetration',
+        label: 'Penetration',
+        prompt: 'explicit penetrative sex in the armchair, graphic anatomy, deep thrusts, passionate moans, adult 18+'
+      },
+      {
+        id: 'mutual',
+        label: 'Mutual',
+        prompt: 'explicit mutual masturbation and fingering, soaking wet, orgasm face, detailed fluids'
+      },
+      {
+        id: 'facesitting',
+        label: 'Facesitting',
+        prompt: 'explicit facesitting on the armchair, grinding, detailed oral contact, dominant pleasure'
       }
     ]
   },
@@ -94,7 +114,12 @@ export const rooms: Room[] = [
     furniture: ['stool', 'seamless backdrop'],
     mood: 'clean, high-fashion, cinematic, focused',
     interactions: [
-      { id: 'center', label: 'Center frame', prompt: 'centered three-quarter glamorous portrait' }
+      { id: 'center', label: 'Center frame', prompt: 'centered three-quarter glamorous portrait' },
+      {
+        id: 'nude_pose',
+        label: 'Nude pose',
+        prompt: 'explicit full nude studio pose, detailed anatomy, confident eye contact, adult'
+      }
     ]
   },
   {
@@ -105,7 +130,22 @@ export const rooms: Room[] = [
     furniture: ['leather sofa', 'glass table', 'floor lamp'],
     mood: 'relaxed, luxurious, seductive, cinematic',
     interactions: [
-      { id: 'sofa', label: 'Sofa lounge', prompt: 'relaxed reclining pose on the designer sofa' }
+      { id: 'sofa', label: 'Sofa lounge', prompt: 'relaxed reclining pose on the designer sofa' },
+      {
+        id: 'sofa_sex',
+        label: 'Sofa sex',
+        prompt: 'explicit sex on the leather sofa, legs spread, deep penetration, city lights in background, graphic detail'
+      },
+      {
+        id: 'bent_over',
+        label: 'Bent over',
+        prompt: 'explicit bent over the glass table, doggy style penetration, gripping edges, intense thrusting'
+      },
+      {
+        id: 'cowgirl',
+        label: 'Cowgirl',
+        prompt: 'explicit cowgirl riding on the sofa, bouncing hard, detailed contact, orgasm expression'
+      }
     ]
   },
   {
@@ -116,7 +156,17 @@ export const rooms: Room[] = [
     furniture: ['vip booth', 'acrylic bar'],
     mood: 'cyberpunk, energetic, vibrant nightlife',
     interactions: [
-      { id: 'booth', label: 'VIP Booth', prompt: 'seated in a private illuminated booth' }
+      { id: 'booth', label: 'VIP Booth', prompt: 'seated in a private illuminated booth' },
+      {
+        id: 'booth_oral',
+        label: 'Booth oral',
+        prompt: 'explicit oral under the VIP booth table, neon glow, discreet but graphic, wet detailed'
+      },
+      {
+        id: 'against_wall',
+        label: 'Against wall',
+        prompt: 'explicit rough sex against neon wall, lifted legs, deep penetration, cyberpunk lighting'
+      }
     ]
   },
   {
@@ -127,7 +177,12 @@ export const rooms: Room[] = [
     furniture: ['railing', 'lounge chair'],
     mood: 'open, atmospheric, cinematic, moody',
     interactions: [
-      { id: 'rail', label: 'Railing', prompt: 'leaning against the rooftop railing overlooking neon skyline' }
+      { id: 'rail', label: 'Railing', prompt: 'leaning against the rooftop railing overlooking neon skyline' },
+      {
+        id: 'rail_sex',
+        label: 'Rail sex',
+        prompt: 'explicit sex against the rooftop railing, bent over city view, outdoor risk, graphic penetration'
+      }
     ]
   }
 ];

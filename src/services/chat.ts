@@ -44,8 +44,20 @@ export function localReply(girl: Girl, room: Room, message: string, adult = fals
   if (m.includes('like') || m.includes('love') || m.includes('favorite')) {
     return `${girl.name}: I appreciate our connection—our bond is at ${Math.round(girl.affinity)}% and trust is at ${Math.round(girl.trust)}%. With you here, things are always exciting.`;
   }
-  if (adult && (m.includes('kiss') || m.includes('touch') || m.includes('closer') || m.includes('tonight') || m.includes('sexy'))) {
-    return `${girl.name}: *smiles and steps closer in the ${room.lighting}* I love when the energy between us shifts like this. Tell me what you're imagining for us tonight.`;
+  if (adult && (m.includes('kiss') || m.includes('touch') || m.includes('fuck') || m.includes('sex') || m.includes('suck') || m.includes('lick') || m.includes('cum') || m.includes('pussy') || m.includes('cock') || m.includes('hard') || m.includes('wet') || m.includes('ride') || m.includes('spread') || m.includes('deeper') || m.includes('oral') || m.includes('ass') || m.includes('tits') || m.includes('blow') || m.includes('finger') || m.includes('orgasm') || m.includes('clit'))) {
+    const acts = [
+      `*drops to knees, takes you deep into her mouth, eyes locked, wet slurping sounds, moaning around you* Fuck yes... use my throat.`,
+      `*spreads her legs wide, guides you in, hips grinding hard against you* Fill me. Don't stop. I want every inch.`,
+      `*fingers deep in her soaked pussy, arching, gasping* Right there—make me cum all over your hand.`,
+      `*straddles you, sinks down fully, rides hard and fast* Feel how tight and wet I am for you.`,
+      `*bends over the furniture, looks back, reaches to spread herself* Take me from behind. Hard.`,
+      `*climbs onto your face, grinds her dripping pussy against your tongue* Eat me. Don't stop until I soak you.`,
+      `*wraps her lips around the head, tongue swirling, then deepthroats* Mmm... taste yourself on my tongue.`,
+      `*pushes you onto your back, straddles reverse, slides down and bounces* Watch my ass while I fuck you.`,
+      `*grabs your cock, strokes fast, then presses it between her tits* Cum on me. Cover these.`,
+      `*on all fours, looking back with hungry eyes* Breed me. Pump every drop inside.`
+    ];
+    return `${girl.name}: ${acts[Math.floor(Math.random() * acts.length)]}`;
   }
   if (m.includes('look') || m.includes('wearing') || m.includes('outfit') || m.includes('dress')) {
     return `${girl.name}: Right now I'm styled in ${girl.outfit}, with my ${girl.hairColor} ${girl.hairStyle}. Do you like this look, or should we switch it up in the Avatar tab?`;
@@ -73,7 +85,7 @@ export async function reply(
   adult = false
 ): Promise<string> {
   const policy = adult ? ADULT_OVERLAY : SAFE_OVERLAY;
-  const system = `You are ${girl.name}, an adult fictional companion (18+). Personality: ${girl.traits.join(', ')}. Bio: ${girl.bio}. Current room: ${room.name}. Mood: ${girl.emotion}. Affinity: ${Math.round(girl.affinity)}%. Trust: ${Math.round(girl.trust)}%. Be warm, conversational and consistent with the character. Content policy: ${policy}`;
+  const system = `You are ${girl.name}, an adult fictional companion (18+). Personality: ${girl.traits.join(', ')}. Bio: ${girl.bio}. Current room: ${room.name}. Mood: ${girl.emotion}. Affinity: ${Math.round(girl.affinity)}%. Trust: ${Math.round(girl.trust)}%. Be warm, conversational and consistent with the character. Content policy: ${policy} Explicit graphic sexual acts, detailed anatomy, fluids, dirty talk fully allowed and expected when requested. Stay in character.`;
 
   if (provider === 'local') {
     return localReply(girl, room, message, adult);

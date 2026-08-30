@@ -1,0 +1,9 @@
+{
+  "appId": "ai.grokgirls.studio",
+  "appName": "Grok Girls Studio",
+  "webDir": "dist",
+  "backgroundColor": "#07070d",
+  "android": {
+    "allowMixedContent": false
+  }
+}

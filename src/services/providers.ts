@@ -1,4 +1,6 @@
-export type ProviderName = 'local' | 'openrouter' | 'gemini' | 'custom';
+import { generateSelfHosted, getServerBase } from './selfHosted';
+
+export type ProviderName = 'local' | 'openrouter' | 'gemini' | 'custom' | 'selfhosted';
 export type Mode = 'image' | 'video';
 
 export interface GenerationRequest {
@@ -532,6 +534,7 @@ async function parse(response: Response, p: ProviderName, m: Mode): Promise<Gene
 function defaultModel(p: ProviderName, m: Mode): string {
   const saved = getSavedModel(p, m) || getSavedModel(p);
   if (saved) return saved;
+  if (p === 'selfhosted') return '';
   if (p === 'openrouter') {
     return m === 'image'
       ? env()['VITE_OPENROUTER_IMAGE_MODEL'] ?? 'google/gemini-2.5-flash-image-preview'
@@ -554,6 +557,34 @@ function defaultEndpoint(p: ProviderName, m: Mode, model: string): string {
 }
 
 async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationResult> {
+  if (p === 'selfhosted') {
+    if (r.mode !== 'image') {
+      return {
+        provider: p,
+        status: 'error',
+        warning: 'Self-hosted engines currently render images — video requests go through the Video studio cloud path.',
+        assetUrl: undefined,
+        text: undefined
+      };
+    }
+    const out = await generateSelfHosted({
+      prompt: r.prompt,
+      negative: r.negative,
+      width: r.width,
+      height: r.height,
+      steps: r.steps,
+      cfg: r.cfg,
+      seed: r.seed
+    });
+    return {
+      provider: p,
+      status: out.status,
+      assetUrl: out.assetUrl,
+      warning: out.warning,
+      jobId: out.jobId,
+      text: out.status === 'ready' ? 'Self-hosted render complete.' : undefined
+    };
+  }
   const key = getSavedApiKey(p);
   const model = env()[`VITE_${p.toUpperCase()}_${r.mode.toUpperCase()}_MODEL`] ?? env()[`VITE_${p.toUpperCase()}_MODEL`] ?? defaultModel(p, r.mode);
   const endpoint = getSavedEndpoint(p, r.mode) || (p === 'custom' ? '' : defaultEndpoint(p, r.mode, model));
@@ -634,6 +665,9 @@ class Local {
 class Cloud {
   constructor(public readonly name: Exclude<ProviderName, 'local'>) {}
   available() {
+    if (this.name === 'selfhosted') {
+      return Boolean(getServerBase());
+    }
     if (this.name === 'custom') {
       return Boolean(getSavedApiKey(this.name) && getSavedEndpoint(this.name));
     }
@@ -682,6 +716,33 @@ export async function generateWithFallback(
 export async function chatWithProvider(messages: ChatMessage[], preferred: ProviderName = 'openrouter') {
   const e = env();
   if (preferred === 'local') return { provider: 'local' as const, text: 'Local companion mode is active.' };
+
+  if (preferred === 'selfhosted') {
+    const chatEndpoint = getSavedEndpoint('custom', 'chat') || e.VITE_CUSTOM_CHAT_ENDPOINT || '';
+    if (!chatEndpoint) {
+      return {
+        provider: 'selfhosted' as const,
+        text: 'The self-hosted server is for image generation only. Switch the chat engine to Local, OpenRouter, Gemini or Custom to talk.',
+        warning: 'No chat endpoint configured for self-hosted mode.'
+      };
+    }
+    // Route self-hosted chat through an OpenAI-compatible endpoint if one is configured.
+    const key = getSavedApiKey('custom');
+    const r = await fetch(chatEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+      body: JSON.stringify({
+        model: e.VITE_CUSTOM_CHAT_MODEL ?? getSavedModel('custom', 'chat') ?? getSavedModel('custom'),
+        messages
+      })
+    });
+    if (!r.ok) throw new Error(`Self-hosted chat HTTP ${r.status}`);
+    const d = await r.json();
+    return {
+      provider: 'selfhosted' as const,
+      text: d.choices?.[0]?.message?.content ?? d.text ?? 'No response.'
+    };
+  }
 
   if (preferred === 'openrouter') {
     const key = getSavedApiKey('openrouter');

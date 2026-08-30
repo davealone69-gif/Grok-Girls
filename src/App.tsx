@@ -5,6 +5,7 @@ import { addMemory, buildGenerationPrompt, loadGirls, saveGirls } from './servic
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName } from './services/providers';
+import { getServerBase } from './services/selfHosted';
 import { ChatMessage, loadChat, reply, saveChat } from './services/chat';
 import { saveAvatar } from './services/avatarEditor';
 import { downloadMedia, exportGallery, importGallery } from './services/media';
@@ -254,13 +255,14 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState('');
   const [gallery, setGallery] = useState<GalleryItem[]>(() => loadGallery());
-  const [galleryFilter, setGalleryFilter] = useState<'all' | 'local' | 'openrouter' | 'gemini' | 'custom'>('all');
+  const [galleryFilter, setGalleryFilter] = useState<'all' | 'local' | 'openrouter' | 'gemini' | 'custom' | 'selfhosted'>('all');
   const [deleteArmedId, setDeleteArmedId] = useState<string | null>(null);
   const personaImportRef = useRef<HTMLInputElement>(null);
   const [provider, setProvider] = useState<ProviderName>(() => {
     try {
       const v = localStorage.getItem('grok-girls-provider-v1');
-      if (v === 'local' || v === 'openrouter' || v === 'gemini' || v === 'custom') return v;
+      if (v === 'local' || v === 'openrouter' || v === 'gemini' || v === 'custom' || v === 'selfhosted')
+        return v;
     } catch {}
     return 'local';
   });
@@ -537,6 +539,13 @@ export default function App() {
   });
 
   const handleGenerate = async () => {
+    if (provider === 'selfhosted' && !getServerBase()) {
+      showToast('Configure your self-hosted server in ⚙ Settings → Self-Hosted first');
+      setResult(
+        'SELF-HOSTED engine selected but no server URL is configured. Open ⚙ Settings and enter your A1111 (port 7860) or ComfyUI (port 8188) address.'
+      );
+      return;
+    }
     setBusy(true);
     setResult('Synthesizing high-detail avatar render…');
     try {
@@ -2110,6 +2119,7 @@ export default function App() {
                   <option value="openrouter">OPENROUTER</option>
                   <option value="gemini">GEMINI</option>
                   <option value="custom">CUSTOM</option>
+                  <option value="selfhosted">SELF-HOSTED</option>
                 </select>
                 <button className="prompt-mini-btn" onClick={exportChatLog} title="Export chat log as JSON">
                   EXPORT LOG
@@ -2282,7 +2292,7 @@ export default function App() {
             </div>
 
             <div className="gallery-filter-chips">
-              {(['all', 'local', 'openrouter', 'gemini', 'custom'] as const).map(pv => (
+              {(['all', 'local', 'openrouter', 'gemini', 'custom', 'selfhosted'] as const).map(pv => (
                 <button
                   key={pv}
                   className={`gallery-filter-chip ${galleryFilter === pv ? 'active' : ''}`}
@@ -2854,6 +2864,7 @@ export default function App() {
               <option value="openrouter">OPENROUTER</option>
               <option value="gemini">GEMINI</option>
               <option value="custom">CUSTOM</option>
+              <option value="selfhosted">SELF-HOSTED</option>
             </select>
           </label>
         </div>

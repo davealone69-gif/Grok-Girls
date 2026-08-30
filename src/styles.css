@@ -3348,3 +3348,143 @@ a.btn-generate-media:hover {
     -webkit-tap-highlight-color: transparent;
   }
 }
+
+/* ==========================================================================
+   PHONE LANDSCAPE MODE  (screen rotates sideways — layout adapts)
+   ========================================================================== */
+@media (max-width: 900px) and (orientation: landscape) {
+  .app-container {
+    flex-direction: row;
+  }
+
+  /* rail moves back to the LEFT edge, vertical icon column */
+  .nav-rail {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    width: 58px;
+    height: auto;
+    flex-direction: column;
+    padding: 6px 0;
+    border-top: none;
+    border-right: 1px solid var(--border-subtle);
+  }
+  .nav-rail .brand-logo {
+    width: 38px;
+    height: 38px;
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    border-radius: 10px;
+  }
+  .nav-rail .rail-menu {
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    gap: 2px;
+    padding: 0 4px;
+  }
+  .nav-rail .rail-btn {
+    flex-direction: column;
+    min-width: 0;
+    width: 100%;
+    height: 44px;
+    padding: 3px 1px;
+    font-size: 7.5px;
+    gap: 1px;
+    line-height: 1.1;
+  }
+  .nav-rail .rail-btn .rail-icon {
+    font-size: 16px;
+  }
+  .nav-rail .rail-footer {
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+  }
+  .nav-rail .rail-footer .rail-btn {
+    min-width: 0;
+    width: 100%;
+    height: 40px;
+  }
+
+  /* viewport fills the rest of the screen */
+  .center-workspace {
+    position: fixed;
+    left: 58px;
+    right: 0;
+    top: 0;
+    bottom: 48px;
+    width: auto;
+    height: auto;
+  }
+
+  .viewport-header {
+    min-height: 38px;
+    padding: 4px 6px;
+  }
+  .icon-tool-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+  }
+
+  /* compact dock in landscape (short screens) */
+  .lower-dock {
+    height: 96px;
+    padding: 4px 6px;
+  }
+  .dock-hair-content {
+    height: 66px;
+  }
+  .dock-tab {
+    padding: 4px 7px;
+  }
+
+  /* slim fixed footer */
+  .master-footer {
+    position: fixed;
+    left: 58px;
+    right: 0;
+    bottom: 0;
+    height: 48px;
+    padding: 4px 8px;
+    border-left: none;
+  }
+  .btn-generate-media {
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+  .btn-batch {
+    padding: 8px 10px;
+  }
+  .save-main-btn {
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+
+  .mobile-edit-fab {
+    right: 12px;
+    bottom: 58px;
+    padding: 8px 14px;
+    font-size: 11px;
+  }
+
+  .inspector-panel {
+    bottom: 48px;
+    width: 72vw;
+    max-width: 400px;
+  }
+  .inspector-scroll {
+    max-height: calc(100dvh - 104px);
+    max-height: calc(100vh - 104px);
+  }
+
+  .status-line {
+    bottom: 54px;
+  }
+  .toast {
+    bottom: 58px;
+  }
+}

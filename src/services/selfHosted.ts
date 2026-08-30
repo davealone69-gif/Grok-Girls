@@ -130,7 +130,7 @@ export async function testConnection(): Promise<SelfHostStatus> {
     return {
       ok: false,
       serverType: 'unknown',
-      message: `No A1111 or ComfyUI API found at ${base}. Check the URL and that the server is running with its API enabled (A1111: launch with --api).`
+      message: `No A1111 or ComfyUI API found at ${base}. Check the URL and that the server is running with its API enabled (A1111: launch with --api). If the browser blocked the request, also add --cors-allow-origins=* (ComfyUI allows browsers by default).`
     };
   }
   saveServerType(type);
@@ -315,16 +315,19 @@ export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHost
         body: JSON.stringify(body)
       });
       if (!r.ok) {
-        throw new Error(`A1111 HTTP ${r.status} — is the API enabled? Launch the WebUI with the --api flag.`);
+        throw new Error(`A1111 HTTP ${r.status} — is the API enabled? Launch the WebUI with --api.`);
       }
       const d = await r.json();
       const b64: string | undefined = d?.images?.[0];
       if (!b64) return { status: 'error', warning: 'A1111 returned no image. Check the server log.' };
       return { status: 'ready', assetUrl: `data:image/png;base64,${b64}` };
     } catch (e) {
+      const hint = e instanceof Error && /fetch|network/i.test(e.message)
+        ? ' If the browser blocked the request (CORS), launch A1111 with: --api --cors-allow-origins=*'
+        : '';
       return {
         status: 'error',
-        warning: `Self-hosted render failed: ${e instanceof Error ? e.message : 'connection error'}`
+        warning: `Self-hosted render failed: ${e instanceof Error ? e.message : 'connection error'}.${hint}`
       };
     }
   }

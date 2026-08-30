@@ -2974,7 +2974,8 @@ a.btn-generate-media:hover {
     padding: 0;
     overflow-x: auto;
     overflow-y: hidden;
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 96px;
     scrollbar-width: none;
   }
   .nav-rail .rail-btn {
@@ -3006,8 +3007,15 @@ a.btn-generate-media:hover {
     flex-shrink: 0;
   }
   .nav-rail .rail-footer .rail-btn {
-    min-width: 44px;
+    min-width: 32px;
+    width: 32px;
     height: 48px;
+    padding: 4px 0;
+  }
+  /* icon-only footer on phones so the main nav keeps enough tappable width
+     (the 18+ state is still shown by the crown button's accent styling) */
+  .nav-rail .rail-footer .rail-btn span:last-child:not(:first-child) {
+    display: none;
   }
 
   /* --- presets drawer hidden (use the PRESETS tab instead) --- */

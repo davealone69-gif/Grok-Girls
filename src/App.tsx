@@ -6,6 +6,7 @@ import { AvatarState, interactionState, loadAvatarState, saveAvatarState, stateP
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
 import { getServerBase } from './services/selfHosted';
+import { isAgeConfirmed, confirmAdultAge } from './services/ageGate';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
 import { NSFW_NEGATIVE } from './services/adultActs';
 import { adultOptions, defaultAdultSelections } from './services/adultOptions';
@@ -367,6 +368,8 @@ export default function App() {
   const [promptOpen, setPromptOpen] = useState(false);
   const [promptOverride, setPromptOverride] = useState('');
   const [resetArmed, setResetArmed] = useState(false);
+  const [ageGateOpen, setAgeGateOpen] = useState(false);
+  const storageWarnRef = useRef(false);
 
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
@@ -380,6 +383,9 @@ export default function App() {
     const prev = loadStats();
     const next = bumpStat(key, n);
     setStats(next);
+    // A storage-full warning matters more than a celebration — never let the
+    // achievement toast overwrite it.
+    if (storageWarnRef.current) return;
     const fresh = achievements.filter(a => !a.test(prev) && a.test(next));
     if (fresh.length) {
       window.setTimeout(() => showToast(`🏆 Achievement unlocked: ${fresh[0].name}`), 350);
@@ -397,7 +403,11 @@ export default function App() {
   const updateGirl = (patch: Partial<Girl>) => {
     const next = girls.map(g => (g.id === girl.id ? { ...g, ...patch } : g));
     setGirls(next);
-    saveGirls(next);
+    const persisted = saveGirls(next);
+    if (!persisted && !storageWarnRef.current) {
+      storageWarnRef.current = true;
+      showToast('⚠ Browser storage is full — changes are session-only. Export/clear gallery items to free space.');
+    }
     saveAvatar({ ...girl, ...patch });
   };
 
@@ -637,6 +647,9 @@ export default function App() {
           setViewportOverride(null);
           updateGirl({ previewUrl: r.assetUrl });
           showToast(`Render complete · ${r.provider.toUpperCase()} engine · ${renderSize}px`);
+          if (storageWarnRef.current) {
+            showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
+          }
         } else {
           // Local procedural preview -> gallery only, keep the HD photo in the viewport
           showToast(
@@ -645,7 +658,7 @@ export default function App() {
               : 'Local preview render added to gallery — tap 🖥 on a gallery card to set it as the viewport image'
           );
         }
-        addGalleryItem({
+        const added = addGalleryItem({
           avatarId: girl.id,
           mode: 'image',
           prompt: buildFullPrompt(compiledPrompt),
@@ -653,6 +666,10 @@ export default function App() {
           provider: r.provider
         });
         setGallery(loadGallery());
+        if (!added.persisted && !storageWarnRef.current) {
+          storageWarnRef.current = true;
+          showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
+        }
         bumpAndCelebrate('generations');
       } else {
         showToast(r.warning || 'No media returned by provider');
@@ -740,9 +757,16 @@ export default function App() {
       setViewportOverride(null);
       updateGirl({ previewUrl: v.url });
       showToast('Variation applied to viewport & saved');
+      if (storageWarnRef.current) {
+        showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
+      }
     }
-    addGalleryItem({ avatarId: girl.id, mode: 'image', prompt: v.prompt, assetUrl: v.url, provider: v.provider });
+    const added = addGalleryItem({ avatarId: girl.id, mode: 'image', prompt: v.prompt, assetUrl: v.url, provider: v.provider });
     setGallery(loadGallery());
+    if (!added.persisted && !storageWarnRef.current) {
+      storageWarnRef.current = true;
+      showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
+    }
     setVariationsOpen(false);
   };
 
@@ -899,11 +923,18 @@ export default function App() {
           setViewportOverride(null);
           updateGirl({ previewUrl: r.assetUrl });
           showToast(`Story scene rendered · ${r.provider.toUpperCase()}`);
+          if (storageWarnRef.current) {
+            showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
+          }
         } else {
           showToast('Story scene preview added to gallery');
         }
-        addGalleryItem({ avatarId: girl.id, mode: 'image', prompt, assetUrl: r.assetUrl, provider: r.provider });
+        const added = addGalleryItem({ avatarId: girl.id, mode: 'image', prompt, assetUrl: r.assetUrl, provider: r.provider });
         setGallery(loadGallery());
+        if (!added.persisted && !storageWarnRef.current) {
+          storageWarnRef.current = true;
+          showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
+        }
       } else {
         showToast(r.warning || 'No media returned');
       }
@@ -1511,7 +1542,13 @@ export default function App() {
 
           <button
             className={`rail-btn crown-btn ${adult ? 'adult-active' : ''}`}
-            onClick={() => setAdult(v => !v)}
+            onClick={() => {
+              if (!adult && !isAgeConfirmed()) {
+                setAgeGateOpen(true);
+              } else {
+                setAdult(v => !v);
+              }
+            }}
             title={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}
           >
             <span className="rail-icon">👑</span>
@@ -3265,6 +3302,44 @@ export default function App() {
                   <span>{o}</span>
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AGE GATE (18+) */}
+      {ageGateOpen && (
+        <div className="modal-backdrop" onClick={() => setAgeGateOpen(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>👑 Adult Mode (18+)</h3>
+              <button className="modal-close" onClick={() => setAgeGateOpen(false)}>
+                ✕
+              </button>
+            </div>
+            <p style={{ color: '#ccc', fontSize: 13, lineHeight: 1.6 }}>
+              Adult Mode unlocks explicit mature content: adult scene direction, 18+ acts, and
+              graphic renders. All personas are fictional adults. This setting is stored only on
+              this device.
+            </p>
+            <p style={{ color: '#ff6b8a', fontSize: 12, fontWeight: 700 }}>
+              You must be 18 or older to enable this.
+            </p>
+            <div className="row" style={{ marginTop: 16, justifyContent: 'flex-end', gap: 10 }}>
+              <button type="button" onClick={() => setAgeGateOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="generate"
+                onClick={() => {
+                  confirmAdultAge();
+                  setAdult(true);
+                  setAgeGateOpen(false);
+                }}
+              >
+                I AM 18+ — ENABLE
+              </button>
             </div>
           </div>
         </div>

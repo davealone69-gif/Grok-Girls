@@ -527,6 +527,17 @@ async function parse(response: Response, p: ProviderName, m: Mode): Promise<Gene
   };
 }
 
+
+/* Cloud calls get a hard timeout too — a hung provider must never leave
+   GENERATE stuck "busy" (self-hosted calls use their own 8s/300s rules). */
+function fetchWithTimeout(url: string, init: RequestInit = {}, ms: number): Promise<Response> {
+  const signal =
+    typeof AbortSignal !== 'undefined' && typeof (AbortSignal as any).timeout === 'function'
+      ? (AbortSignal as any).timeout(ms)
+      : undefined;
+  return fetch(url, { ...init, signal });
+}
+
 function defaultModel(p: ProviderName, m: Mode): string {
   const saved = getSavedModel(p, m) || getSavedModel(p);
   if (saved) return saved;
@@ -637,11 +648,11 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
       negative_prompt: r.negative
     };
   }
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: 'POST',
     headers: p === 'gemini' ? { 'Content-Type': 'application/json' } : headers,
     body: JSON.stringify(body)
-  });
+  }, 120000);
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
     throw new Error(`${p} HTTP ${response.status}${errText ? ` — ${errText.slice(0, 160)}` : ''}`);
@@ -739,14 +750,14 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
     }
     // Route self-hosted chat through an OpenAI-compatible endpoint if one is configured.
     const key = getSavedApiKey('custom');
-    const r = await fetch(chatEndpoint, {
+    const r = await fetchWithTimeout(chatEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },
       body: JSON.stringify({
         model: e.VITE_CUSTOM_CHAT_MODEL ?? getSavedModel('custom', 'chat') ?? getSavedModel('custom'),
         messages
       })
-    });
+    }, 45000);
     if (!r.ok) throw new Error(`Self-hosted chat HTTP ${r.status}`);
     const d = await r.json();
     return {
@@ -760,7 +771,7 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
     if (!key) return { provider: 'openrouter' as const, text: 'OpenRouter API key is not configured.', warning: 'Set VITE_OPENROUTER_API_KEY or configure in Settings.' };
     const endpoint =
       getSavedEndpoint('openrouter', 'chat') || e.VITE_OPENROUTER_CHAT_ENDPOINT || 'https://openrouter.ai/api/v1/chat/completions';
-    const r = await fetch(endpoint, {
+    const r = await fetchWithTimeout(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -772,7 +783,7 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
         model: e.VITE_OPENROUTER_CHAT_MODEL ?? getSavedModel('openrouter', 'chat') ?? getSavedModel('openrouter') ?? 'openai/gpt-4o-mini',
         messages
       })
-    });
+    }, 45000);
     if (!r.ok) throw new Error(`OpenRouter HTTP ${r.status}`);
     const d = await r.json();
     return { provider: 'openrouter' as const, text: d.choices?.[0]?.message?.content ?? 'No response.' };
@@ -792,11 +803,11 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
       .filter(m => m.role !== 'system')
       .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
     const system = messages.find(m => m.role === 'system')?.content;
-    const r = await fetch(`${endpoint}?key=${encodeURIComponent(key)}`, {
+    const r = await fetchWithTimeout(`${endpoint}?key=${encodeURIComponent(key)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ systemInstruction: system ? { parts: [{ text: system }] } : undefined, contents })
-    });
+    }, 45000);
     if (!r.ok) throw new Error(`Gemini HTTP ${r.status}`);
     const d = await r.json();
     return { provider: 'gemini' as const, text: d.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? 'No response.' };
@@ -805,14 +816,14 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
   const key = getSavedApiKey('custom');
   const endpoint = getSavedEndpoint('custom', 'chat') || e.VITE_CUSTOM_CHAT_ENDPOINT || '';
   if (!key || !endpoint) return { provider: 'custom' as const, text: 'Custom provider API key or endpoint is not configured.' };
-  const r = await fetch(endpoint, {
+  const r = await fetchWithTimeout(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
     body: JSON.stringify({
       model: e.VITE_CUSTOM_CHAT_MODEL ?? getSavedModel('custom', 'chat') ?? getSavedModel('custom'),
       messages
     })
-  });
+  }, 45000);
   if (!r.ok) throw new Error(`Custom HTTP ${r.status}`);
   const d = await r.json();
   return { provider: 'custom' as const, text: d.choices?.[0]?.message?.content ?? d.text ?? 'No response.' };

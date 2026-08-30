@@ -20,19 +20,31 @@ export function loadGallery(): GalleryItem[] {
   }
 }
 
-export function saveGallery(items: GalleryItem[]) {
+export function saveGallery(items: GalleryItem[]): boolean {
   try {
     localStorage.setItem(KEY, JSON.stringify(items.slice(0, 500)));
+    return true;
   } catch (e) {
     console.warn('[gallery] Could not persist gallery (storage full?)', e);
+    return false;
   }
 }
 
-export function addGalleryItem(item: Omit<GalleryItem, 'id' | 'createdAt' | 'favorite'>): GalleryItem[] {
+/** True when the newest save really hit localStorage (false = quota exceeded,
+ *  the render lives only in this session). */
+export function isGalleryPersisted(): boolean {
+  try {
+    return Boolean(localStorage.getItem(KEY));
+  } catch {
+    return false;
+  }
+}
+
+export function addGalleryItem(item: Omit<GalleryItem, 'id' | 'createdAt' | 'favorite'>): { items: GalleryItem[]; persisted: boolean } {
   const next = { ...item, id: crypto.randomUUID?.() ?? String(Date.now()), createdAt: Date.now(), favorite: false };
   const all = [next, ...loadGallery()];
-  saveGallery(all);
-  return all;
+  const persisted = saveGallery(all);
+  return { items: all, persisted };
 }
 
 export function toggleFavorite(id: string): GalleryItem[] {

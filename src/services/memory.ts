@@ -60,11 +60,13 @@ export function loadGirls(fallback: Girl[]): Girl[] {
   }
 }
 
-export function saveGirls(girls: Girl[]) {
+export function saveGirls(girls: Girl[]): boolean {
   try {
     localStorage.setItem(KEY, JSON.stringify(girls));
+    return true;
   } catch (e) {
     console.warn('[memory] Could not persist personas (storage full?)', e);
+    return false;
   }
 }
 

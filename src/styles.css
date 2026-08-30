@@ -3288,7 +3288,32 @@ a.btn-generate-media:hover {
   .companion-overlay-dock {
     position: absolute;
     inset: 0;
+    overflow: hidden;
   }
+  /* Chat overlay must fit between the rail and the fixed footer on phones.
+     Chips stay on one scrolling line each so the input row can never be
+     pushed under the footer (SEND must stay tappable in landscape too). */
+  .chat-quick-chips,
+  .chat-quick-chips.adult-acts {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex: 0 0 auto;
+    padding-bottom: 8px;
+  }
+  .chat-quick-chips button,
+  .chat-quick-chips.adult-acts button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .companion-log {
+    min-height: 0;
+  }
+  .companion-input-row {
+    flex: 0 0 auto;
+  }
+
   .gallery-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;

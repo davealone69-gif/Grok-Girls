@@ -320,11 +320,18 @@ export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHost
   if (type === 'a1111') {
     try {
       const body = buildA1111Payload(req);
-      const r = await fetchWithTimeout(`${base}/sdapi/v1/txt2img`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
+      // A1111 txt2img only responds when the image is finished — on a busy
+      // GPU with Hires-Fix this routinely exceeds the discovery timeout.
+      // Give it a full 5 minutes; discovery/short calls keep the 8s cap.
+      const r = await fetchWithTimeout(
+        `${base}/sdapi/v1/txt2img`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        },
+        300000
+      );
       if (!r.ok) {
         throw new Error(`A1111 HTTP ${r.status} — is the API enabled? Launch the WebUI with --api.`);
       }

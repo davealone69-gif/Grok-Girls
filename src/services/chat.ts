@@ -22,7 +22,11 @@ export function loadChat(id: string): ChatMessage[] {
 }
 
 export function saveChat(id: string, messages: ChatMessage[]) {
-  localStorage.setItem(`${KEY}:${id}`, JSON.stringify(messages.slice(-200)));
+  try {
+    localStorage.setItem(`${KEY}:${id}`, JSON.stringify(messages.slice(-200)));
+  } catch (e) {
+    console.warn('[chat] could not persist chat (storage full?)', e);
+  }
 }
 
 export function localReply(girl: Girl, room: Room, message: string, adult = false): string {

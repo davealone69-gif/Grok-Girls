@@ -4,7 +4,7 @@ import { advanceStory, initialStory, StoryState, storyChapters, storyPrompt } fr
 import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDeleted, addActMemory } from './services/memory';
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
-import { generateWithFallback, ProviderName } from './services/providers';
+import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
 import { getServerBase } from './services/selfHosted';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
 import { NSFW_NEGATIVE } from './services/adultActs';
@@ -250,6 +250,9 @@ export default function App() {
   // Session-only viewport override: used when the user explicitly shows a
   // procedural/local render in the viewport without replacing the saved photo.
   const [viewportOverride, setViewportOverride] = useState<string | null>(null);
+  // LIVE PREVIEW: re-render the local procedural preview as the prompt changes
+  // (debounced). Session-only — the saved photo is never touched.
+  const [livePreview, setLivePreview] = useState(false);
   const panStart = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
 
   const onStagePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -555,6 +558,39 @@ export default function App() {
 
   const compiledPrompt = promptOverride.trim() ? promptOverride.trim() : buildDraftPrompt(draft, adult);
 
+  // LIVE PREVIEW effect: while enabled, every prompt change re-renders the
+  // procedural preview into the viewport (debounced ~400ms). It uses the
+  // session-only override, so the saved persona photo is never overwritten.
+  useEffect(() => {
+    if (!livePreview) {
+      setViewportOverride(null);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      const svg = createLocalPlaceholderSvg(
+        compiledPrompt,
+        'image',
+        768,
+        768,
+        seedInput ? Number(seedInput) : undefined
+      );
+      setViewportOverride(svg);
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [livePreview, compiledPrompt, seedInput]);
+
+  const toggleLivePreview = () => {
+    setLivePreview(v => {
+      const next = !v;
+      showToast(
+        next
+          ? 'LIVE PREVIEW ON — the viewport re-renders as you edit. Your saved photo is untouched.'
+          : 'Live preview off — saved photo restored'
+      );
+      return next;
+    });
+  };
+
   // Negative prompt: user's own field + the safety NSFW negatives in 18+ mode
   // (keeps renders to consenting adults only — no minors, no non-consent).
   const combinedNegative = () => {
@@ -597,6 +633,8 @@ export default function App() {
       if (r.assetUrl) {
         if (isRealRenderer) {
           // Real AI render (cloud / self-hosted) -> show it in the viewport
+          setLivePreview(false);
+          setViewportOverride(null);
           updateGirl({ previewUrl: r.assetUrl });
           showToast(`Render complete · ${r.provider.toUpperCase()} engine · ${renderSize}px`);
         } else {
@@ -857,6 +895,8 @@ export default function App() {
       const r = await generateWithFallback({ prompt, mode: 'image', width: 1024, height: 1024 }, provider);
       if (r.assetUrl) {
         if (r.provider !== 'local') {
+          setLivePreview(false);
+          setViewportOverride(null);
           updateGirl({ previewUrl: r.assetUrl });
           showToast(`Story scene rendered · ${r.provider.toUpperCase()}`);
         } else {
@@ -1696,6 +1736,7 @@ export default function App() {
             {/* Camera status chip */}
             <div className="camera-status-chip">
               {Math.round(zoomLevel * 100)}% · {rotationAngle}° · {lightingMode.toUpperCase()}
+              {livePreview ? ' · LIVE PREVIEW (NOT SAVED)' : ''}
               {panning ? ' · DRAGGING' : ''}
             </div>
           </div>
@@ -1721,6 +1762,13 @@ export default function App() {
             </button>
             <button className="hud-btn" onClick={handleRandomize} title="Randomize Attributes">
               <span>🎲</span> RANDOM
+            </button>
+            <button
+              className={`hud-btn ${livePreview ? 'live-active' : ''}`}
+              onClick={toggleLivePreview}
+              title="Live preview: re-render the viewport as you edit the prompt (never overwrites your saved photo)"
+            >
+              <span>◉</span> LIVE
             </button>
             <button className="hud-btn" onClick={handleSavePng} title="Download current render as PNG">
               <span>⬇</span> PNG
@@ -1872,7 +1920,8 @@ export default function App() {
               </div>
               <div className="prompt-editor-foot">
                 The prompt compiles live from your builder choices. Negative/seed/steps/CFG are sent to
-                cloud providers; the local engine uses them for seed & resolution.
+                cloud providers; the local engine uses them for seed & resolution. Toggle ◉ LIVE in the
+                viewport to preview prompt edits instantly.
               </div>
             </div>
           )}
@@ -2155,6 +2204,72 @@ export default function App() {
             </div>
           </div>
         </div>
+
+      {/* 5. BOTTOM MASTER FOOTER BAR (Matching Picture 2) */}
+      <footer className="master-footer">
+        <div className="footer-left">
+          <div className="avatar-id-tag">
+            <span>AVATAR ID</span>
+            <b style={{ color: '#fff' }}>{avatarIdTag}</b>
+            <button onClick={copyAvatarId} title="Copy Avatar ID">
+              {copiedId ? '✓' : '⎘'}
+            </button>
+          </div>
+
+          <button className="btn-load-outfit" onClick={() => setOutfitOpen(true)}>
+            <span>👚</span> LOAD OUTFIT
+          </button>
+
+          <label className="footer-provider-wrap" title="Generation engine">
+            <span>ENGINE</span>
+            <select
+              className="footer-provider-select"
+              value={provider}
+              onChange={e => setProvider(e.target.value as ProviderName)}
+            >
+              <option value="local">LOCAL</option>
+              <option value="openrouter">OPENROUTER</option>
+              <option value="gemini">GEMINI</option>
+              <option value="custom">CUSTOM</option>
+              <option value="selfhosted">SELF-HOSTED</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="footer-right">
+          {saveToast && (
+            <span style={{ color: '#7ff0bd', fontSize: 12, fontWeight: 700 }}>✓ Avatar identity saved!</span>
+          )}
+
+          {busy && <span className="busy-indicator">RENDERING…</span>}
+
+          <button className="btn-cancel" onClick={handleCancel}>
+            CANCEL
+          </button>
+
+          <button
+            className="btn-batch"
+            disabled={busy}
+            onClick={handleBatchRender}
+            title="Generate 4 variations at once"
+          >
+            ⧉ x4
+          </button>
+
+          <button className="btn-generate-media" disabled={busy} onClick={handleGenerate}>
+            {busy ? 'RENDERING…' : '✨ GENERATE RENDER'}
+          </button>
+
+          <div className="split-save-btn">
+            <button className="save-main-btn" onClick={handleSaveAvatar}>
+              SAVE AVATAR
+            </button>
+            <button className="save-arrow-btn" onClick={() => setView('gallery')}>
+              ▼
+            </button>
+          </div>
+        </div>
+      </footer>
 
         {/* PRESETS BROWSER OVERLAY */}
         {view === 'presets' && (
@@ -3124,71 +3239,6 @@ export default function App() {
         </div>
       </aside>
 
-      {/* 5. BOTTOM MASTER FOOTER BAR (Matching Picture 2) */}
-      <footer className="master-footer">
-        <div className="footer-left">
-          <div className="avatar-id-tag">
-            <span>AVATAR ID</span>
-            <b style={{ color: '#fff' }}>{avatarIdTag}</b>
-            <button onClick={copyAvatarId} title="Copy Avatar ID">
-              {copiedId ? '✓' : '⎘'}
-            </button>
-          </div>
-
-          <button className="btn-load-outfit" onClick={() => setOutfitOpen(true)}>
-            <span>👚</span> LOAD OUTFIT
-          </button>
-
-          <label className="footer-provider-wrap" title="Generation engine">
-            <span>ENGINE</span>
-            <select
-              className="footer-provider-select"
-              value={provider}
-              onChange={e => setProvider(e.target.value as ProviderName)}
-            >
-              <option value="local">LOCAL</option>
-              <option value="openrouter">OPENROUTER</option>
-              <option value="gemini">GEMINI</option>
-              <option value="custom">CUSTOM</option>
-              <option value="selfhosted">SELF-HOSTED</option>
-            </select>
-          </label>
-        </div>
-
-        <div className="footer-right">
-          {saveToast && (
-            <span style={{ color: '#7ff0bd', fontSize: 12, fontWeight: 700 }}>✓ Avatar identity saved!</span>
-          )}
-
-          {busy && <span className="busy-indicator">RENDERING…</span>}
-
-          <button className="btn-cancel" onClick={handleCancel}>
-            CANCEL
-          </button>
-
-          <button
-            className="btn-batch"
-            disabled={busy}
-            onClick={handleBatchRender}
-            title="Generate 4 variations at once"
-          >
-            ⧉ x4
-          </button>
-
-          <button className="btn-generate-media" disabled={busy} onClick={handleGenerate}>
-            {busy ? 'RENDERING…' : '✨ GENERATE RENDER'}
-          </button>
-
-          <div className="split-save-btn">
-            <button className="save-main-btn" onClick={handleSaveAvatar}>
-              SAVE AVATAR
-            </button>
-            <button className="save-arrow-btn" onClick={() => setView('gallery')}>
-              ▼
-            </button>
-          </div>
-        </div>
-      </footer>
 
       {/* OUTFIT DRAWER */}
       {outfitOpen && (

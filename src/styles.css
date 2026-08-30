@@ -3739,3 +3739,11 @@ a.btn-generate-media:hover {
     display: none;
   }
 }
+
+/* LIVE PREVIEW toggle — lit cyan while active */
+.hud-btn.live-active {
+  border-color: var(--neon-cyan);
+  color: var(--neon-cyan);
+  background: rgba(0, 242, 254, 0.08);
+  box-shadow: 0 0 12px rgba(0, 242, 254, 0.35);
+}

@@ -8,3 +8,7 @@ build/
 src/services/keys.ts
 *.keystore
 *.jks
+
+# TS incremental build info
+tsconfig.tsbuildinfo
+*.tsbuildinfo

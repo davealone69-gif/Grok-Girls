@@ -1,0 +1,12 @@
+export type StudioMode = 'image' | 'video' | 'chat';
+export type ImageQuality = 'standard' | 'hd' | 'ultra';
+export type AspectRatio = '1:1' | '4:3' | '3:4' | '16:9' | '9:16' | '3:2' | '2:3';
+export interface RenderProfile { mode: StudioMode; quality: ImageQuality; aspectRatio: AspectRatio; width: number; height: number; steps: number; guidance: number; seed?: number; prompt: string; negativePrompt: string; }
+export interface FeatureState { hdImage: boolean; imageVariations: boolean; avatarCreator: boolean; sceneStudio: boolean; videoStudio: boolean; gallery: boolean; importExport: boolean; chat: boolean; story: boolean; providerHealth: boolean; projectBackup: boolean; }
+export const FEATURES: FeatureState = { hdImage:true,imageVariations:true,avatarCreator:true,sceneStudio:true,videoStudio:true,gallery:true,importExport:true,chat:true,story:true,providerHealth:true,projectBackup:true };
+const RATIOS: Record<AspectRatio,[number,number]> = {'1:1':[1,1],'4:3':[4,3],'3:4':[3,4],'16:9':[16,9],'9:16':[9,16],'3:2':[3,2],'2:3':[2,3]};
+export function dimensions(ratio:AspectRatio,quality:ImageQuality):[number,number]{const [rw,rh]=RATIOS[ratio];const long=quality==='ultra'?2048:quality==='hd'?1536:1024;const scale=Math.sqrt((long*long)/(rw*rw+rh*rh));return [Math.round(rw*scale/64)*64,Math.round(rh*scale/64)*64];}
+export function createRenderProfile(input:Partial<RenderProfile>&Pick<RenderProfile,'prompt'>):RenderProfile{const quality=input.quality??'hd';const aspectRatio=input.aspectRatio??'1:1';const [width,height]=dimensions(aspectRatio,quality);return{mode:input.mode??'image',quality,aspectRatio,width,height,steps:input.steps??(quality==='ultra'?40:quality==='hd'?32:24),guidance:input.guidance??7,seed:input.seed,prompt:input.prompt.trim(),negativePrompt:input.negativePrompt?.trim()??''};}
+export function buildPrompt(profile:RenderProfile):string{const quality=profile.quality==='ultra'?'ultra high detail, maximum quality':profile.quality==='hd'?'high detail, HD, sharp focus':'high quality';const negative=profile.negativePrompt?`\nNegative prompt: ${profile.negativePrompt}`:'';return`${profile.prompt}\n${quality}, professional studio render, detailed lighting, clean composition, ${profile.width}x${profile.height}.${negative}`;}
+export function randomSeed():number{return Math.floor(Math.random()*2147483647);}
+export function safeFilename(value:string,ext='png'):string{const clean=value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,64)||'grok-girls-render';return`${clean}-${Date.now()}.${ext}`;}

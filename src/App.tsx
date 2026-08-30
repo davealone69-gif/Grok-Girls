@@ -254,7 +254,7 @@ export default function App() {
   const [viewportOverride, setViewportOverride] = useState<string | null>(null);
   // LIVE PREVIEW: re-render the local procedural preview as the prompt changes
   // (debounced). Session-only — the saved photo is never touched.
-  const [livePreview, setLivePreview] = useState(false);
+  const [livePreview, setLivePreview] = useState(true);  // procedural preview on by default — the viewport is always an app render
   const panStart = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
 
   const onStagePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -300,6 +300,31 @@ export default function App() {
     busyRef.current = false;
     setBusy(false);
   };
+
+  // Track active pointer drags (color wheel etc.) so the LIVE PREVIEW render
+  // waits until release — re-rendering the viewport mid-drag drops frames.
+  const pointerActiveRef = useRef(false);
+  const justReleasedRef = useRef(false);
+  const liveBootRef = useRef(true);
+  const [pointerEpoch, setPointerEpoch] = useState(0);
+  useEffect(() => {
+    const down = () => {
+      pointerActiveRef.current = true;
+    };
+    const up = () => {
+      if (pointerActiveRef.current) {
+        pointerActiveRef.current = false;
+        justReleasedRef.current = true;
+        setPointerEpoch(e => e + 1);
+      }
+    };
+    window.addEventListener('pointerdown', down, true);
+    window.addEventListener('pointerup', up, true);
+    return () => {
+      window.removeEventListener('pointerdown', down, true);
+      window.removeEventListener('pointerup', up, true);
+    };
+  }, []);
   const [result, setResult] = useState('');
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const refreshGallery = useCallback(async () => {
@@ -534,8 +559,6 @@ export default function App() {
       pose: 'sensually reclining back in dark leather armchair, hand on chest',
       expression: 'alluring parted lips and seductive gaze',
       extra: 'smokey dark eye makeup, bold crimson lipstick, dark leather armchair backdrop, sensual rim lighting',
-      thumbnailUrl: '/assets/ruby-noir-thumb.jpg',
-      previewUrl: '/assets/ruby-noir.jpg',
       bio: 'Sensual gothic glamour persona with fiery red waves, lace corsetry, and captivating charm.',
       traits: ['alluring', 'gothic', 'seductive'],
       room: 'Leather Armchair Lounge',
@@ -640,6 +663,11 @@ export default function App() {
     const next = randomizeAvatar(draft);
     setDraft(next);
     updateGirl(draftToGirlPatch(next));
+    // Render the new identity into the viewport immediately (no debounce).
+    setLivePreview(true);
+    setViewportOverride(
+      createLocalPlaceholderSvg(buildDraftPrompt(next, adult), 'image', 768, 768, seedInput ? Number(seedInput) : undefined)
+    );
     showToast('Identity randomized — save to keep it');
   };
 
@@ -670,6 +698,14 @@ export default function App() {
 
   const compiledPrompt = promptOverride.trim() ? promptOverride.trim() : buildDraftPrompt(draft, adult);
 
+  // The app's own procedural render — used whenever there is no saved photo
+  // (default viewport, thumbnails, angle previews). No bundled photos needed.
+  const proceduralPreviewSvg = useMemo(
+    () => createLocalPlaceholderSvg(compiledPrompt, 'image', 768, 768, seedInput ? Number(seedInput) : undefined),
+    [compiledPrompt, seedInput]
+  );
+  const proceduralThumb = (prompt: string) => createLocalPlaceholderSvg(prompt, 'image', 256, 256);
+
   // LIVE PREVIEW effect: while enabled, every prompt change re-renders the
   // procedural preview into the viewport (debounced ~400ms). It uses the
   // session-only override, so the saved persona photo is never overwritten.
@@ -678,18 +714,23 @@ export default function App() {
       setViewportOverride(null);
       return;
     }
+    // Never auto-override at boot — a saved photo (generated render or
+    // imported preset) stays in the viewport until the user actually edits.
+    if (liveBootRef.current) {
+      liveBootRef.current = false;
+      return;
+    }
+    if (pointerActiveRef.current) return; // hold while dragging (epoch re-runs)
+    if (justReleasedRef.current) {
+      justReleasedRef.current = false;
+      setViewportOverride(proceduralPreviewSvg); // instant render on release
+      return;
+    }
     const t = window.setTimeout(() => {
-      const svg = createLocalPlaceholderSvg(
-        compiledPrompt,
-        'image',
-        768,
-        768,
-        seedInput ? Number(seedInput) : undefined
-      );
-      setViewportOverride(svg);
+      if (!pointerActiveRef.current) setViewportOverride(proceduralPreviewSvg);
     }, 400);
     return () => window.clearTimeout(t);
-  }, [livePreview, compiledPrompt, seedInput]);
+  }, [livePreview, compiledPrompt, seedInput, pointerEpoch, proceduralPreviewSvg]);
 
   const toggleLivePreview = () => {
     setLivePreview(v => {
@@ -1395,14 +1436,7 @@ export default function App() {
     }
   ];
 
-  const currentPreviewUrl =
-    viewportOverride ||
-    girl.previewUrl ||
-    (girl.id === 'ruby_noir'
-      ? '/assets/ruby-noir.jpg'
-      : girl.id === 'matrix_07'
-      ? '/assets/matrix-07-center.jpg'
-      : '/assets/ruby-noir.jpg');
+  const currentPreviewUrl = viewportOverride || girl.previewUrl || proceduralPreviewSvg;
 
   const viewportFilter =
     styleFilter ??
@@ -1415,18 +1449,10 @@ export default function App() {
   const filteredGallery = galleryFilter === 'all' ? gallery : gallery.filter(g => g.provider === galleryFilter);
   const lightboxItem = lightboxIndex !== null ? filteredGallery[lightboxIndex] || null : null;
 
-  const presetThumbFallback = (id: string) =>
-    id === 'ruby_noir'
-      ? '/assets/ruby-noir-thumb.jpg'
-      : id === 'matrix_07'
-      ? '/assets/preset-1.jpg'
-      : id === 'kira_hd'
-      ? '/assets/kira-hd-thumb.jpg'
-      : id === 'nova_hd'
-      ? '/assets/nova-hd-thumb.jpg'
-      : id === 'aria_hd'
-      ? '/assets/aria-hd-thumb.jpg'
-      : '/assets/ruby-noir-thumb.jpg';
+  const presetThumbFallback = (id: string) => {
+    const g = girls.find(x => x.id === id);
+    return proceduralThumb(g ? `${g.name} ${g.hairColor} hair ${g.hairStyle}` : 'avatar preview');
+  };
 
   const avatarIdTag =
     girl.id === 'ruby_noir'
@@ -1865,12 +1891,7 @@ export default function App() {
                 const t = e.currentTarget;
                 if (!t.dataset.fallback) {
                   t.dataset.fallback = '1';
-                  t.src =
-                    girl.id === 'ruby_noir'
-                      ? '/assets/ruby-noir.jpg'
-                      : girl.id === 'matrix_07'
-                      ? '/assets/matrix-07-center.jpg'
-                      : girl.thumbnailUrl || '/assets/ruby-noir-thumb.jpg';
+                  t.src = girl.thumbnailUrl || presetThumbFallback(girl.id);
                 }
               }}
               style={{
@@ -2329,7 +2350,7 @@ export default function App() {
                 title="Front Portrait"
               >
                 <img
-                  src={girl.id === 'ruby_noir' ? '/assets/ruby-noir-thumb.jpg' : '/assets/preset-1.jpg'}
+                  src={girl.thumbnailUrl || proceduralThumb(`${girl.name} front portrait`)}
                   alt="Front Angle"
                 />
               </div>
@@ -2337,10 +2358,10 @@ export default function App() {
               <div
                 className="preview-circle"
                 onClick={resetCamera}
-                title="3/4 Reclining Armchair Angle (Picture 1)"
+                title="3/4 Reclining Armchair Angle"
               >
                 <img
-                  src={girl.id === 'ruby_noir' ? '/assets/ruby-noir.jpg' : '/assets/matrix-07-center.jpg'}
+                  src={girl.previewUrl || proceduralThumb(`${girl.name} three-quarter angle`)}
                   alt="3/4 Angle"
                 />
               </div>
@@ -2351,7 +2372,7 @@ export default function App() {
                 title="Back Silhouette"
               >
                 <img
-                  src={girl.id === 'ruby_noir' ? '/assets/ruby-noir-thumb.jpg' : '/assets/preset-4.jpg'}
+                  src={proceduralThumb(`${girl.name} back silhouette`)}
                   alt="Back Angle"
                 />
               </div>

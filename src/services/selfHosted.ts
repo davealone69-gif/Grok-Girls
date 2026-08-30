@@ -111,11 +111,22 @@ export function saveLoraSlots(slots: LoraSlot[]) {
   } catch {}
 }
 
+
+/* Fetch with a hard timeout so an unreachable server can never leave the UI
+   stuck "busy" (and GENERATE disabled) for minutes. */
+function fetchWithTimeout(url: string, init: RequestInit = {}, ms = 8000): Promise<Response> {
+  const signal =
+    typeof AbortSignal !== 'undefined' && typeof (AbortSignal as any).timeout === 'function'
+      ? (AbortSignal as any).timeout(ms)
+      : undefined;
+  return fetch(url, { ...init, signal });
+}
+
 /* ------------------------------ discovery ----------------------------- */
 export async function detectServer(base: string): Promise<SelfHostServerType> {
-  const a1111 = await fetch(`${base}/sdapi/v1/sd-models`, { method: 'GET' }).catch(() => null);
+  const a1111 = await fetchWithTimeout(`${base}/sdapi/v1/sd-models`, { method: 'GET' }).catch(() => null);
   if (a1111 && a1111.ok) return 'a1111';
-  const comfy = await fetch(`${base}/system_stats`, { method: 'GET' }).catch(() => null);
+  const comfy = await fetchWithTimeout(`${base}/system_stats`, { method: 'GET' }).catch(() => null);
   if (comfy && comfy.ok) return 'comfy';
   return 'unknown';
 }
@@ -136,11 +147,11 @@ export async function testConnection(): Promise<SelfHostStatus> {
   saveServerType(type);
   try {
     if (type === 'a1111') {
-      const modelsRes = await fetch(`${base}/sdapi/v1/sd-models`);
+      const modelsRes = await fetchWithTimeout(`${base}/sdapi/v1/sd-models`);
       const models = (await modelsRes.json()) as { title?: string }[];
       let loraCount = 0;
       try {
-        const lorasRes = await fetch(`${base}/sdapi/v1/loras`);
+        const lorasRes = await fetchWithTimeout(`${base}/sdapi/v1/loras`);
         const loras = (await lorasRes.json()) as unknown[];
         loraCount = Array.isArray(loras) ? loras.length : 0;
       } catch {}
@@ -155,7 +166,7 @@ export async function testConnection(): Promise<SelfHostStatus> {
         loraCount
       };
     }
-    const statsRes = await fetch(`${base}/system_stats`);
+    const statsRes = await fetchWithTimeout(`${base}/system_stats`);
     await statsRes.json();
     return { ok: true, serverType: 'comfy', message: 'Connected — ComfyUI server' };
   } catch (e) {
@@ -173,12 +184,12 @@ export async function fetchModels(): Promise<string[]> {
   const type = getServerType() !== 'unknown' ? getServerType() : await detectServer(base);
   try {
     if (type === 'a1111') {
-      const r = await fetch(`${base}/sdapi/v1/sd-models`);
+      const r = await fetchWithTimeout(`${base}/sdapi/v1/sd-models`);
       const d = (await r.json()) as { title?: string }[];
       return Array.isArray(d) ? d.map(m => m.title || '').filter(Boolean) : [];
     }
     if (type === 'comfy') {
-      const r = await fetch(`${base}/object_info/CheckpointLoaderSimple`);
+      const r = await fetchWithTimeout(`${base}/object_info/CheckpointLoaderSimple`);
       const d = await r.json();
       const opts = d?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0];
       return Array.isArray(opts) ? opts : [];
@@ -195,12 +206,12 @@ export async function fetchLoras(): Promise<string[]> {
   const type = getServerType() !== 'unknown' ? getServerType() : await detectServer(base);
   try {
     if (type === 'a1111') {
-      const r = await fetch(`${base}/sdapi/v1/loras`);
+      const r = await fetchWithTimeout(`${base}/sdapi/v1/loras`);
       const d = (await r.json()) as { name?: string }[];
       return Array.isArray(d) ? d.map(l => l.name || '').filter(Boolean) : [];
     }
     if (type === 'comfy') {
-      const r = await fetch(`${base}/object_info/LoraLoader`);
+      const r = await fetchWithTimeout(`${base}/object_info/LoraLoader`);
       const d = await r.json();
       const opts = d?.LoraLoader?.input?.required?.lora_name?.[0];
       return Array.isArray(opts) ? opts : [];
@@ -309,7 +320,7 @@ export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHost
   if (type === 'a1111') {
     try {
       const body = buildA1111Payload(req);
-      const r = await fetch(`${base}/sdapi/v1/txt2img`, {
+      const r = await fetchWithTimeout(`${base}/sdapi/v1/txt2img`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -342,7 +353,7 @@ export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHost
       };
     }
     try {
-      const submit = await fetch(`${base}/prompt`, {
+      const submit = await fetchWithTimeout(`${base}/prompt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: apiJson, client_id: clientId })
@@ -352,7 +363,7 @@ export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHost
       const deadline = Date.now() + 180000;
       while (Date.now() < deadline) {
         await sleep(1500);
-        const h = await fetch(`${base}/history/${prompt_id}`).catch(() => null);
+        const h = await fetchWithTimeout(`${base}/history/${prompt_id}`).catch(() => null);
         if (!h || !h.ok) continue;
         const data = await h.json();
         const entry = data[prompt_id];
@@ -368,7 +379,7 @@ export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHost
             subfolder: img.subfolder || '',
             type: img.type || 'output'
           });
-          const imgRes = await fetch(`${base}/view?${params}`);
+          const imgRes = await fetchWithTimeout(`${base}/view?${params}`);
           if (!imgRes.ok) return { status: 'error', warning: 'ComfyUI image fetch failed.' };
           const blob = await imgRes.blob();
           // Persist as a data URL so the render survives reloads and stays in

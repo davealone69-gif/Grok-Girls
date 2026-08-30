@@ -3747,3 +3747,273 @@ a.btn-generate-media:hover {
   background: rgba(0, 242, 254, 0.08);
   box-shadow: 0 0 12px rgba(0, 242, 254, 0.35);
 }
+
+/* ==========================================================================
+   PHONE PORTRAIT v3 — scaled from the reference studio layout
+   LEFT vertical rail (all sections) · center viewport + HUD · working dock
+   with options · slide-in inspector · footer clear of the phone's nav bar
+   ========================================================================== */
+@media (max-width: 900px) and (orientation: portrait) {
+  /* --- LEFT RAIL (like the reference picture, like landscape mode) --- */
+  .nav-rail {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    width: 58px;
+    height: auto;
+    flex-direction: column;
+    padding: env(safe-area-inset-top, 12px) 0 10px 0;
+    z-index: 900;
+    border-right: 1px solid var(--border-subtle);
+    border-top: none;
+    background: rgba(9, 9, 18, 0.97);
+  }
+  .nav-rail .brand-logo {
+    width: 38px;
+    height: 38px;
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .nav-rail .rail-menu {
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    gap: 2px;
+    padding: 0 4px;
+    min-width: 0;
+  }
+  .nav-rail .rail-btn {
+    flex-direction: column;
+    min-width: 0;
+    width: 100%;
+    height: 42px;
+    padding: 3px 1px;
+    font-size: 7.5px;
+    gap: 1px;
+    line-height: 1.1;
+  }
+  .nav-rail .rail-btn .rail-icon {
+    font-size: 16px;
+  }
+  .nav-rail .rail-footer {
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    flex-shrink: 0;
+  }
+  .nav-rail .rail-footer .rail-btn {
+    width: 100%;
+    min-width: 0;
+    height: 38px;
+    padding: 3px 0;
+  }
+
+  /* --- workspace fills between rail and footer --- */
+  .center-workspace {
+    position: fixed;
+    top: 0;
+    left: 58px;
+    right: 0;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 62px);
+    width: auto;
+    height: auto;
+  }
+
+  /* --- footer: ONE bottom bar, raised above the phone's nav buttons --- */
+  .master-footer {
+    position: fixed;
+    left: 58px;
+    right: 0;
+    bottom: env(safe-area-inset-bottom, 0px);
+    height: 62px;
+    z-index: 850;
+  }
+  .footer-provider-select {
+    max-width: 74px;
+    font-size: 9px;
+    padding: 6px 2px;
+  }
+  .btn-cancel {
+    width: 38px;
+    padding: 8px 0;
+    font-size: 13px;
+    text-align: center;
+  }
+  .btn-batch {
+    width: 40px;
+    padding: 8px 0;
+    font-size: 12px;
+  }
+  .btn-generate-media {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 10px 6px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .split-save-btn .save-main-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 10px 6px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .save-arrow-btn {
+    width: 34px;
+  }
+
+  /* --- DOCK: switch the desktop GRID to a real column (this was the bug —
+         grid columns 1fr 280px 220px crushed the hair section to 0px wide
+         on phones, making the options area look empty) --- */
+  .lower-dock {
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: none;
+    height: 218px;
+    padding: 6px 8px;
+    gap: 6px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .dock-hair-section {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex: 0 0 auto;
+    border-right: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .dock-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 4px;
+    margin-bottom: 0;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+    width: 100%;
+  }
+  .dock-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 9.5px;
+    padding: 6px 9px;
+    background: #14141f;
+    border: 1px solid #262638;
+    border-radius: 8px;
+  }
+  .dock-tab.active {
+    border-color: var(--border-active);
+    background: #221a3d;
+  }
+  .dock-hair-content {
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: 104px;
+    height: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .hair-styles-grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 64px;
+    grid-auto-rows: 68px;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 2px 0 4px;
+    width: max-content;
+    min-width: 100%;
+  }
+  .hair-style-card {
+    width: 64px;
+    height: 68px;
+  }
+  .hair-color-chips {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .hair-color-chip {
+    font-size: 10px;
+    padding: 6px 8px;
+  }
+  .makeup-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .dock-addons-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex: 0 0 auto;
+  }
+  .addons-grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 80px;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 2px 0 4px;
+  }
+  .addon-card {
+    width: 80px;
+    flex: none;
+  }
+
+  /* --- inspector: slide-in sheet over the workspace, above the footer --- */
+  .inspector-panel {
+    top: 0;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 62px);
+    left: 58px;
+    right: 0;
+    width: auto;
+    max-width: 380px;
+    height: auto;
+    z-index: 950;
+  }
+  .mobile-sheet-close {
+    margin: 10px;
+  }
+  .mobile-backdrop {
+    top: 0;
+    bottom: 0;
+    left: 58px;
+    z-index: 940;
+  }
+  .inspector-scroll {
+    max-height: none;
+  }
+
+  /* --- status line + camera chip stay clear of the footer --- */
+  .status-line {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 68px);
+  }
+  .camera-status-chip {
+    white-space: nowrap;
+    max-width: 62vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* Landscape: keep the footer clear of side/bottom system bars too */
+@media (max-width: 900px) and (orientation: landscape) {
+  .nav-rail {
+    padding-top: env(safe-area-inset-top, 8px);
+  }
+  .master-footer {
+    bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .center-workspace {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 48px);
+  }
+}

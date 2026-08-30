@@ -1736,7 +1736,7 @@ export default function App() {
             {/* Camera status chip */}
             <div className="camera-status-chip">
               {Math.round(zoomLevel * 100)}% · {rotationAngle}° · {lightingMode.toUpperCase()}
-              {livePreview ? ' · LIVE PREVIEW (NOT SAVED)' : ''}
+              {livePreview ? ' · LIVE · UNSAVED' : ''}
               {panning ? ' · DRAGGING' : ''}
             </div>
           </div>

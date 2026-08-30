@@ -17,7 +17,7 @@ android {
         }
     }
     signingConfigs {
-        def ks = file('keystore/grok-girls-release.jks')
+        def ks = rootProject.file('keystore/grok-girls-release.jks')
         if (ks.exists()) {
             release {
                 storeFile ks
@@ -34,7 +34,7 @@ android {
             // Sign with the release keystore when it exists (CI decodes it
             // from the RELEASE_KEYSTORE secret); otherwise fall back to an
             // unsigned build (never ships).
-            if (file('keystore/grok-girls-release.jks').exists()) {
+            if (rootProject.file('keystore/grok-girls-release.jks').exists()) {
                 signingConfig signingConfigs.release
             }
         }

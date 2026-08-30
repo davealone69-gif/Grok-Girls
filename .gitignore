@@ -12,3 +12,7 @@ src/services/keys.ts
 # TS incremental build info
 tsconfig.tsbuildinfo
 *.tsbuildinfo
+
+# python test artifacts
+__pycache__/
+*.pyc

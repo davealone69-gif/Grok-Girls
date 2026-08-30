@@ -1,9 +1,13 @@
+import { deleteImage, getImageUrl, isRasterDataUrl, putImage } from './assetStore';
+
 export interface GalleryItem {
   id: string;
   avatarId: string;
   mode: 'image' | 'video';
   prompt: string;
   assetUrl?: string;
+  /** IndexedDB key for raster renders (localStorage stores metadata only) */
+  assetKey?: string;
   provider: string;
   createdAt: number;
   favorite: boolean;
@@ -11,7 +15,7 @@ export interface GalleryItem {
 
 const KEY = 'grok-girls-gallery-v1';
 
-export function loadGallery(): GalleryItem[] {
+function read(): GalleryItem[] {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '[]');
     return Array.isArray(raw) ? (raw as GalleryItem[]) : [];
@@ -20,9 +24,14 @@ export function loadGallery(): GalleryItem[] {
   }
 }
 
+/** Persist metadata only: image bytes live in IndexedDB under assetKey. */
 export function saveGallery(items: GalleryItem[]): boolean {
+  const slim = items.slice(0, 500).map(it => ({
+    ...it,
+    assetUrl: it.assetKey ? undefined : it.assetUrl
+  }));
   try {
-    localStorage.setItem(KEY, JSON.stringify(items.slice(0, 500)));
+    localStorage.setItem(KEY, JSON.stringify(slim));
     return true;
   } catch (e) {
     console.warn('[gallery] Could not persist gallery (storage full?)', e);
@@ -30,8 +39,7 @@ export function saveGallery(items: GalleryItem[]): boolean {
   }
 }
 
-/** True when the newest save really hit localStorage (false = quota exceeded,
- *  the render lives only in this session). */
+/** True when the gallery metadata really hit localStorage. */
 export function isGalleryPersisted(): boolean {
   try {
     return Boolean(localStorage.getItem(KEY));
@@ -40,19 +48,64 @@ export function isGalleryPersisted(): boolean {
   }
 }
 
-export function addGalleryItem(item: Omit<GalleryItem, 'id' | 'createdAt' | 'favorite'>): { items: GalleryItem[]; persisted: boolean } {
-  const next = { ...item, id: crypto.randomUUID?.() ?? String(Date.now()), createdAt: Date.now(), favorite: false };
-  const all = [next, ...loadGallery()];
+/**
+ * Load the gallery and hydrate every image: assetKey -> object URL, and
+ * legacy base64 data URLs -> IndexedDB (one-time migration that shrinks
+ * localStorage). Callers get items whose assetUrl is directly renderable.
+ */
+export async function loadGallery(): Promise<GalleryItem[]> {
+  const items = read();
+  let changed = false;
+  const hydrated: GalleryItem[] = [];
+  for (const it of items) {
+    const out = { ...it };
+    if (it.assetKey) {
+      const url = await getImageUrl(it.assetKey);
+      if (url) out.assetUrl = url;
+    } else if (isRasterDataUrl(it.assetUrl)) {
+      const key = await putImage(it.assetUrl);
+      if (key) {
+        out.assetKey = key;
+        out.assetUrl = (await getImageUrl(key)) ?? it.assetUrl;
+        changed = true;
+      }
+    }
+    hydrated.push(out);
+  }
+  if (changed) saveGallery(hydrated);
+  return hydrated;
+}
+
+export async function addGalleryItem(
+  item: Omit<GalleryItem, 'id' | 'createdAt' | 'favorite'>
+): Promise<{ items: GalleryItem[]; persisted: boolean }> {
+  const next: GalleryItem = {
+    ...item,
+    id: crypto.randomUUID?.() ?? String(Date.now()),
+    createdAt: Date.now(),
+    favorite: false
+  };
+  let out = next;
+  if (isRasterDataUrl(next.assetUrl)) {
+    const key = await putImage(next.assetUrl);
+    if (key) {
+      out = { ...next, assetKey: key, assetUrl: (await getImageUrl(key)) ?? next.assetUrl };
+    }
+  }
+  const all = [out, ...read()];
   const persisted = saveGallery(all);
   return { items: all, persisted };
 }
 
 export function toggleFavorite(id: string): GalleryItem[] {
-  const all = loadGallery().map(x => (x.id === id ? { ...x, favorite: !x.favorite } : x));
+  const all = read().map(x => (x.id === id ? { ...x, favorite: !x.favorite } : x));
   saveGallery(all);
   return all;
 }
 
 export function removeGalleryItem(id: string) {
-  saveGallery(loadGallery().filter(x => x.id !== id));
+  const cur = read();
+  const victim = cur.find(x => x.id === id);
+  saveGallery(cur.filter(x => x.id !== id));
+  if (victim?.assetKey) void deleteImage(victim.assetKey);
 }

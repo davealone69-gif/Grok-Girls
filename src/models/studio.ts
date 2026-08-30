@@ -19,6 +19,9 @@ export interface AvatarSpec {
   extra: string;
   thumbnailUrl?: string;
   previewUrl?: string;
+  /** IndexedDB keys for raster photos (keeps localStorage small) */
+  previewAssetKey?: string;
+  thumbnailAssetKey?: string;
 }
 
 export interface Room {

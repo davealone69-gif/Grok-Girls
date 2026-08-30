@@ -16,8 +16,14 @@ const isPoisonUrl = (u?: string) =>
 function sanitizeGirl(g: Girl): Girl {
   const seed = seedGirls.find(s => s.id === g.id);
   const out = { ...g };
-  if (isPoisonUrl(out.previewUrl)) out.previewUrl = seed?.previewUrl || undefined;
-  if (isPoisonUrl(out.thumbnailUrl)) out.thumbnailUrl = seed?.thumbnailUrl || undefined;
+  // blob:/svg data URLs are dead after reload UNLESS an IndexedDB asset key
+  // can restore the real photo (hydration resolves it on boot).
+  if (isPoisonUrl(out.previewUrl) && !out.previewAssetKey) {
+    out.previewUrl = seed?.previewUrl || undefined;
+  }
+  if (isPoisonUrl(out.thumbnailUrl) && !out.thumbnailAssetKey) {
+    out.thumbnailUrl = seed?.thumbnailUrl || undefined;
+  }
   return out;
 }
 
@@ -61,8 +67,15 @@ export function loadGirls(fallback: Girl[]): Girl[] {
 }
 
 export function saveGirls(girls: Girl[]): boolean {
+  // Image bytes live in IndexedDB under the asset keys — persist metadata
+  // only, so localStorage never fills up with renders again.
+  const slim = girls.map(g => ({
+    ...g,
+    previewUrl: g.previewAssetKey ? undefined : g.previewUrl,
+    thumbnailUrl: g.thumbnailAssetKey ? undefined : g.thumbnailUrl
+  }));
   try {
-    localStorage.setItem(KEY, JSON.stringify(girls));
+    localStorage.setItem(KEY, JSON.stringify(slim));
     return true;
   } catch (e) {
     console.warn('[memory] Could not persist personas (storage full?)', e);

@@ -6,6 +6,7 @@ import { AvatarState, interactionState, loadAvatarState, saveAvatarState, stateP
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
 import { getServerBase } from './services/selfHosted';
+import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
 import { isAgeConfirmed, confirmAdultAge } from './services/ageGate';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
 import { NSFW_NEGATIVE } from './services/adultActs';
@@ -288,8 +289,25 @@ export default function App() {
   const [chat, setChat] = useState<ChatMessage[]>(() => loadChat(girl.id));
   const [chatInput, setChatInput] = useState('');
   const [busy, setBusy] = useState(false);
+  // Sync guard: the `busy` state lags one render, so rapid double-taps could
+  // fire two generations (verified in stress tests). The ref closes the gap.
+  const busyRef = useRef(false);
+  const enterBusy = () => {
+    busyRef.current = true;
+    setBusy(true);
+  };
+  const exitBusy = () => {
+    busyRef.current = false;
+    setBusy(false);
+  };
   const [result, setResult] = useState('');
-  const [gallery, setGallery] = useState<GalleryItem[]>(() => loadGallery());
+  const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const refreshGallery = useCallback(async () => {
+    setGallery(await loadGallery());
+  }, []);
+  useEffect(() => {
+    void refreshGallery();
+  }, [refreshGallery]);
   const [galleryFilter, setGalleryFilter] = useState<'all' | 'local' | 'openrouter' | 'gemini' | 'custom' | 'selfhosted'>('all');
   const [deleteArmedId, setDeleteArmedId] = useState<string | null>(null);
   const personaImportRef = useRef<HTMLInputElement>(null);
@@ -399,6 +417,56 @@ export default function App() {
   const [roomId, setRoomId] = useState(rooms[0].id);
   const room: Room = useMemo(() => rooms.find(r => r.id === roomId) ?? rooms[0], [roomId]);
 
+  /* ------------------------------------- image hydration (IndexedDB) */
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const current = loadGirls(seedGirls);
+      const next: Girl[] = [];
+      let changed = false;
+      const migrate = async (url?: string) => {
+        if (!url) return { url: undefined as string | undefined, key: undefined as string | undefined, did: false };
+        if (isRasterDataUrl(url)) {
+          const k = await putImage(url);
+          if (k) {
+            const o = await getImageUrl(k);
+            return { url: o ?? url, key: k, did: true };
+          }
+          return { url, key: undefined, did: false };
+        }
+        return { url, key: undefined, did: false };
+      };
+      for (const g of current) {
+        const out = { ...g };
+        const p = await migrate(out.previewUrl);
+        if (p.did) {
+          out.previewUrl = p.url;
+          out.previewAssetKey = p.key;
+          changed = true;
+        } else if (out.previewAssetKey) {
+          const o = await getImageUrl(out.previewAssetKey);
+          if (o) out.previewUrl = o;
+        }
+        const t = await migrate(out.thumbnailUrl);
+        if (t.did) {
+          out.thumbnailUrl = t.url;
+          out.thumbnailAssetKey = t.key;
+          changed = true;
+        } else if (out.thumbnailAssetKey) {
+          const o = await getImageUrl(out.thumbnailAssetKey);
+          if (o) out.thumbnailUrl = o;
+        }
+        next.push(out);
+      }
+      if (!alive) return;
+      setGirls(next);
+      if (changed) saveGirls(next);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   /* -------------------------------------------------------- persistence */
   const updateGirl = (patch: Partial<Girl>) => {
     const next = girls.map(g => (g.id === girl.id ? { ...g, ...patch } : g));
@@ -408,7 +476,32 @@ export default function App() {
       storageWarnRef.current = true;
       showToast('⚠ Browser storage is full — changes are session-only. Export/clear gallery items to free space.');
     }
-    saveAvatar({ ...girl, ...patch });
+    try {
+      saveAvatar({ ...girl, ...patch });
+    } catch {}
+  };
+
+  /** Set a persona photo: raster data URLs move into IndexedDB (assetKey),
+   *  so the persona store in localStorage stays small. */
+  const applyPreviewPatch = async (patch: Partial<Girl>) => {
+    let final = { ...patch };
+    if (isRasterDataUrl(patch.previewUrl)) {
+      const key = await putImage(patch.previewUrl);
+      if (key) {
+        const url = await getImageUrl(key);
+        final = { ...final, previewUrl: url ?? patch.previewUrl, previewAssetKey: key };
+      }
+    }
+    const next = girls.map(g => (g.id === girl.id ? { ...g, ...final } : g));
+    setGirls(next);
+    const persisted = saveGirls(next);
+    if (!persisted && !storageWarnRef.current) {
+      storageWarnRef.current = true;
+      showToast('⚠ Browser storage is full — changes are session-only. Export/clear gallery items to free space.');
+    }
+    try {
+      saveAvatar({ ...girl, ...final });
+    } catch {}
   };
 
   const selectGirl = (id: string) => {
@@ -490,10 +583,17 @@ export default function App() {
     showToast('Persona removed');
   };
 
-  const exportPersona = (id: string) => {
+  const exportPersona = async (id: string) => {
     const g = girls.find(x => x.id === id);
     if (!g) return;
-    const blob = new Blob([JSON.stringify(g, null, 2)], { type: 'application/json' });
+    const out = { ...g };
+    if (g.previewAssetKey) {
+      const dataUrl = await getImageDataUrl(g.previewAssetKey);
+      if (dataUrl) out.previewUrl = dataUrl;
+    }
+    delete out.previewAssetKey;
+    delete out.thumbnailAssetKey;
+    const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `${g.id}_persona.json`;
@@ -508,6 +608,8 @@ export default function App() {
       try {
         const g = JSON.parse(String(r.result)) as Girl;
         if (!g || !g.id || !g.name) throw new Error('bad');
+        delete g.previewAssetKey;
+        delete g.thumbnailAssetKey;
         if (girls.some(x => x.id === g.id)) g.id = `import_${Date.now()}`;
         const next = [g, ...girls];
         setGirls(next);
@@ -626,7 +728,7 @@ export default function App() {
   });
 
   const handleGenerate = async () => {
-    if (busy) return;
+    if (busyRef.current) return;
     if (provider === 'selfhosted' && !getServerBase()) {
       showToast('Configure your self-hosted server in ⚙ Settings → Self-Hosted first');
       setResult(
@@ -635,7 +737,7 @@ export default function App() {
       window.setTimeout(() => setResult(''), 10000);
       return;
     }
-    setBusy(true);
+    enterBusy();
     setResult('Synthesizing high-detail avatar render…');
     try {
       const r = await generateWithFallback(genRequest(compiledPrompt), provider);
@@ -645,7 +747,7 @@ export default function App() {
           // Real AI render (cloud / self-hosted) -> show it in the viewport
           setLivePreview(false);
           setViewportOverride(null);
-          updateGirl({ previewUrl: r.assetUrl });
+          await applyPreviewPatch({ previewUrl: r.assetUrl });
           showToast(`Render complete · ${r.provider.toUpperCase()} engine · ${renderSize}px`);
           if (storageWarnRef.current) {
             showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
@@ -658,14 +760,14 @@ export default function App() {
               : 'Local preview render added to gallery — tap 🖥 on a gallery card to set it as the viewport image'
           );
         }
-        const added = addGalleryItem({
+        const added = await addGalleryItem({
           avatarId: girl.id,
           mode: 'image',
           prompt: buildFullPrompt(compiledPrompt),
           assetUrl: r.assetUrl,
           provider: r.provider
         });
-        setGallery(loadGallery());
+        void refreshGallery();
         if (!added.persisted && !storageWarnRef.current) {
           storageWarnRef.current = true;
           showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
@@ -681,7 +783,7 @@ export default function App() {
       showToast('Generation failed');
       window.setTimeout(() => setResult(''), 8000);
     } finally {
-      setBusy(false);
+      exitBusy();
     }
   };
 
@@ -697,7 +799,8 @@ export default function App() {
   };
 
   const handleBatchRender = async () => {
-    setBusy(true);
+    if (busyRef.current) return;
+    enterBusy();
     setVariationsOpen(true);
     setVariations([
       { provider: '…', prompt: '' },
@@ -726,7 +829,7 @@ export default function App() {
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Batch failed');
     } finally {
-      setBusy(false);
+      exitBusy();
     }
   };
 
@@ -747,7 +850,7 @@ export default function App() {
 
   const isProceduralUrl = (u: string) => u.startsWith('blob:') || u.startsWith('data:image/svg+xml');
 
-  const useVariation = (v: { url?: string; provider: string; prompt: string }) => {
+  const useVariation = async (v: { url?: string; provider: string; prompt: string }) => {
     if (!v.url) return;
     if (isProceduralUrl(v.url)) {
       // Procedural preview: show it this session only — never overwrite the saved photo.
@@ -755,14 +858,14 @@ export default function App() {
       showToast('Local variation shown in the viewport (session only) — your saved photo is untouched');
     } else {
       setViewportOverride(null);
-      updateGirl({ previewUrl: v.url });
+      await applyPreviewPatch({ previewUrl: v.url });
       showToast('Variation applied to viewport & saved');
       if (storageWarnRef.current) {
         showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
       }
     }
-    const added = addGalleryItem({ avatarId: girl.id, mode: 'image', prompt: v.prompt, assetUrl: v.url, provider: v.provider });
-    setGallery(loadGallery());
+    const added = await addGalleryItem({ avatarId: girl.id, mode: 'image', prompt: v.prompt, assetUrl: v.url, provider: v.provider });
+    void refreshGallery();
     if (!added.persisted && !storageWarnRef.current) {
       storageWarnRef.current = true;
       showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
@@ -867,14 +970,14 @@ export default function App() {
   /* ------------------------------------------------------------ chat */
   const sendChat = async (override?: string) => {
     const text = (override ?? chatInput).trim();
-    if (!text || busy) return;
+    if (!text || busyRef.current) return;
     const now = Date.now();
     const user: ChatMessage = { id: String(now), role: 'user', text, createdAt: now };
     const next = [...chat, user];
     setChat(next);
     saveChat(girl.id, next);
     setChatInput('');
-    setBusy(true);
+    enterBusy();
     try {
       const answer = await reply(girl, room, next, text, provider, adult);
       const out: ChatMessage[] = [
@@ -896,13 +999,14 @@ export default function App() {
     } catch (e) {
       setResult(e instanceof Error ? e.message : 'Chat error');
     } finally {
-      setBusy(false);
+      exitBusy();
     }
   };
 
   /* ------------------------------------------------------------ story */
   const renderStoryScene = async (interactionId: string) => {
-    setBusy(true);
+    if (busyRef.current) return;
+    enterBusy();
     setResult('Rendering story scene…');
     const prompt = buildGenerationPrompt(
       girl,
@@ -921,7 +1025,7 @@ export default function App() {
         if (r.provider !== 'local') {
           setLivePreview(false);
           setViewportOverride(null);
-          updateGirl({ previewUrl: r.assetUrl });
+          await applyPreviewPatch({ previewUrl: r.assetUrl });
           showToast(`Story scene rendered · ${r.provider.toUpperCase()}`);
           if (storageWarnRef.current) {
             showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
@@ -929,8 +1033,8 @@ export default function App() {
         } else {
           showToast('Story scene preview added to gallery');
         }
-        const added = addGalleryItem({ avatarId: girl.id, mode: 'image', prompt, assetUrl: r.assetUrl, provider: r.provider });
-        setGallery(loadGallery());
+        const added = await addGalleryItem({ avatarId: girl.id, mode: 'image', prompt, assetUrl: r.assetUrl, provider: r.provider });
+        void refreshGallery();
         if (!added.persisted && !storageWarnRef.current) {
           storageWarnRef.current = true;
           showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
@@ -943,7 +1047,7 @@ export default function App() {
     } catch (e) {
       setResult(e instanceof Error ? e.message : 'Scene render failed');
     } finally {
-      setBusy(false);
+      exitBusy();
     }
   };
 
@@ -980,21 +1084,21 @@ export default function App() {
       showToast('Local render shown in the viewport (session only) — your saved photo is untouched');
     } else {
       setViewportOverride(null);
-      updateGirl({ previewUrl: item.assetUrl });
+      void applyPreviewPatch({ previewUrl: item.assetUrl, previewAssetKey: item.assetKey });
       showToast('Gallery render set as viewport preview');
     }
   };
 
   const deleteGalleryItem = (id: string) => {
     removeGalleryItem(id);
-    setGallery(loadGallery());
+    void refreshGallery();
     showToast('Item removed');
   };
 
   const onImportGalleryFile = async (file: File) => {
     try {
       await importGallery(file);
-      setGallery(loadGallery());
+      await refreshGallery();
       showToast('Gallery imported');
     } catch {
       showToast('Import failed — file must be a gallery JSON array');
@@ -1007,7 +1111,7 @@ export default function App() {
       showToast('Please choose an image file');
       return;
     }
-    const finish = (url: string) => {
+    const finish = async (url: string) => {
       const id = `import_${Date.now()}`;
       const baseName = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').slice(0, 26) || 'Imported Persona';
       const newGirl: Girl = {
@@ -1016,6 +1120,8 @@ export default function App() {
         name: baseName,
         thumbnailUrl: url,
         previewUrl: url,
+        previewAssetKey: undefined,
+        thumbnailAssetKey: undefined,
         bio: 'Imported reference persona. Tune identity traits in the inspector.',
         traits: ['imported'],
         affinity: 50,
@@ -1023,6 +1129,17 @@ export default function App() {
         emotion: 'calm',
         memories: []
       };
+      // Move the photo into IndexedDB so the persona store stays small.
+      if (isRasterDataUrl(url)) {
+        const key = await putImage(url);
+        if (key) {
+          const o = await getImageUrl(key);
+          newGirl.previewUrl = o ?? url;
+          newGirl.thumbnailUrl = o ?? url;
+          newGirl.previewAssetKey = key;
+          newGirl.thumbnailAssetKey = key;
+        }
+      }
       const next = [newGirl, ...girls];
       setGirls(next);
       saveGirls(next);
@@ -1047,10 +1164,10 @@ export default function App() {
         const ctx = c.getContext('2d');
         if (!ctx) throw new Error('no canvas context');
         ctx.drawImage(im, 0, 0, w, h);
-        finish(c.toDataURL('image/jpeg', 0.88));
+        void finish(c.toDataURL('image/jpeg', 0.88));
       } catch {
         const fr = new FileReader();
-        fr.onload = () => finish(String(fr.result));
+        fr.onload = () => void finish(String(fr.result));
         fr.onerror = () => showToast('Could not read image file');
         fr.readAsDataURL(file);
       } finally {
@@ -2716,7 +2833,8 @@ export default function App() {
                     <div className="gallery-card-actions" onClick={e => e.stopPropagation()}>
                       <button
                         onClick={() => {
-                          setGallery(toggleFavorite(item.id));
+                          toggleFavorite(item.id);
+                          void refreshGallery();
                           if (!item.favorite) bumpAndCelebrate('favorites');
                         }}
                         title="Favorite"
@@ -3521,7 +3639,8 @@ export default function App() {
               <div className="lightbox-actions">
                 <button
                   onClick={() => {
-                    setGallery(toggleFavorite(lightboxItem.id));
+                    toggleFavorite(lightboxItem.id);
+                    void refreshGallery();
                     if (!lightboxItem.favorite) bumpAndCelebrate('favorites');
                   }}
                   title="Favorite"

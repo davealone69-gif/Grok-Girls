@@ -354,17 +354,13 @@ export function createLocalPlaceholderSvg(
           stroke="${pal.accent}" stroke-width="2" fill="none" opacity="0.8"/>`;
 
   const badges = `
-    <rect x="30" y="${H - 96}" width="${isVideo ? 226 : 188}" height="30" rx="6" fill="#0b0b14" stroke="${pal.accent}" stroke-opacity="0.6"/>
+    <rect x="30" y="${H - 96}" width="${isVideo ? 168 : 150}" height="30" rx="6" fill="#0b0b14" stroke="${pal.accent}" stroke-opacity="0.6"/>
     <text x="44" y="${H - 76}" fill="#ffffff" font-family="monospace" font-size="13" font-weight="700" letter-spacing="2">
-      ${isVideo ? 'NOIR RENDER · VIDEO 60FPS' : 'NOIR RENDER · 8K MASTER'}
+      ${isVideo ? 'NOIR VIDEO PREVIEW' : 'NOIR RENDER PREVIEW'}
     </text>
     <rect x="${W - 122}" y="${H - 96}" width="92" height="30" rx="6" fill="#0b0b14" stroke="#34344a"/>
     <text x="${W - 108}" y="${H - 76}" fill="${pal.accent}" font-family="monospace" font-size="13" font-weight="700" letter-spacing="1">
       SEED ${seedId}
-    </text>
-    <rect x="30" y="34" width="170" height="30" rx="6" fill="#0b0b14" stroke="#34344a"/>
-    <text x="44" y="54" fill="#a0a0b8" font-family="monospace" font-size="12" font-weight="700" letter-spacing="1.5">
-      GROK GIRLS STUDIO
     </text>`;
 
   const caption = `

@@ -576,8 +576,16 @@ export default function App() {
     setResult('Synthesizing high-detail avatar render…');
     try {
       const r = await generateWithFallback(genRequest(compiledPrompt), provider);
+      const isRealRenderer = r.provider !== 'local';
       if (r.assetUrl) {
-        updateGirl({ previewUrl: r.assetUrl });
+        if (isRealRenderer) {
+          // Real AI render (cloud / self-hosted) -> show it in the viewport
+          updateGirl({ previewUrl: r.assetUrl });
+          showToast(`Render complete · ${r.provider.toUpperCase()} engine · ${renderSize}px`);
+        } else {
+          // Local procedural preview -> gallery only, keep the HD photo in the viewport
+          showToast('Local preview render added to gallery — tap 🖥 on a gallery card to set it as the viewport image');
+        }
         addGalleryItem({
           avatarId: girl.id,
           mode: 'image',
@@ -587,14 +595,15 @@ export default function App() {
         });
         setGallery(loadGallery());
         bumpAndCelebrate('generations');
-        showToast(`Render complete · ${r.provider.toUpperCase()} engine · ${renderSize}px`);
       } else {
         showToast(r.warning || 'No media returned by provider');
       }
       setResult(r.text ?? r.warning ?? `Generation ready via ${r.provider}`);
+      window.setTimeout(() => setResult(''), 8000);
     } catch (e) {
       setResult(e instanceof Error ? e.message : 'Generation failed');
       showToast('Generation failed');
+      window.setTimeout(() => setResult(''), 8000);
     } finally {
       setBusy(false);
     }
@@ -632,7 +641,12 @@ export default function App() {
       );
       setVariations(results);
       bumpAndCelebrate('generations', results.filter(r => r.url).length);
-      showToast('4 variations rendered — pick your favorite');
+      setResult('');
+      showToast(
+        results.some(r => r.url && r.provider !== 'local')
+          ? '4 variations rendered — pick your favorite'
+          : '4 local preview variations ready — USE THIS to apply one'
+      );
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Batch failed');
     } finally {
@@ -807,14 +821,19 @@ export default function App() {
     try {
       const r = await generateWithFallback({ prompt, mode: 'image', width: 1024, height: 1024 }, provider);
       if (r.assetUrl) {
-        updateGirl({ previewUrl: r.assetUrl });
+        if (r.provider !== 'local') {
+          updateGirl({ previewUrl: r.assetUrl });
+          showToast(`Story scene rendered · ${r.provider.toUpperCase()}`);
+        } else {
+          showToast('Story scene preview added to gallery');
+        }
         addGalleryItem({ avatarId: girl.id, mode: 'image', prompt, assetUrl: r.assetUrl, provider: r.provider });
         setGallery(loadGallery());
-        showToast(`Story scene rendered · ${r.provider.toUpperCase()}`);
       } else {
         showToast(r.warning || 'No media returned');
       }
       setResult(r.text ?? r.warning ?? 'Scene ready');
+      window.setTimeout(() => setResult(''), 8000);
     } catch (e) {
       setResult(e instanceof Error ? e.message : 'Scene render failed');
     } finally {
@@ -1508,6 +1527,18 @@ export default function App() {
               alt={girl.name}
               draggable={false}
               className="character-image"
+              onError={e => {
+                const t = e.currentTarget;
+                if (!t.dataset.fallback) {
+                  t.dataset.fallback = '1';
+                  t.src =
+                    girl.id === 'ruby_noir'
+                      ? '/assets/ruby-noir.jpg'
+                      : girl.id === 'matrix_07'
+                      ? '/assets/matrix-07-center.jpg'
+                      : girl.thumbnailUrl || '/assets/ruby-noir-thumb.jpg';
+                }
+              }}
               style={{
                 transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel}) rotate(${rotationAngle}deg)`,
                 filter: viewportFilter

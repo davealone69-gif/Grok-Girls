@@ -122,6 +122,7 @@ export default function App() {
 
   // Sync draft when the selected persona changes
   useEffect(() => {
+    suppressHistoryRef.current = true;
     setDraft(loadDraft(girl.id, defaultDraft(girl)));
   }, [girl.id]);
 
@@ -129,6 +130,59 @@ export default function App() {
   useEffect(() => {
     saveDraft(draft);
   }, [draft]);
+
+  // Undo / redo history for the draft
+  const historyRef = useRef<AvatarDraft[]>([]);
+  const futureRef = useRef<AvatarDraft[]>([]);
+  const suppressHistoryRef = useRef(false);
+  const lastDraftRef = useRef<AvatarDraft>(draft);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  useEffect(() => {
+    const prev = lastDraftRef.current;
+    if (prev === draft) return;
+    if (suppressHistoryRef.current) {
+      suppressHistoryRef.current = false;
+      lastDraftRef.current = draft;
+      return;
+    }
+    if (prev.id === draft.id) {
+      historyRef.current.push(prev);
+      if (historyRef.current.length > 80) historyRef.current.shift();
+      futureRef.current = [];
+      setCanUndo(true);
+      setCanRedo(false);
+    } else {
+      historyRef.current = [];
+      futureRef.current = [];
+      setCanUndo(false);
+      setCanRedo(false);
+    }
+    lastDraftRef.current = draft;
+  }, [draft]);
+
+  const undoDraft = () => {
+    const prev = historyRef.current.pop();
+    if (!prev) return;
+    futureRef.current.push(draft);
+    suppressHistoryRef.current = true;
+    lastDraftRef.current = prev;
+    setDraft(prev);
+    setCanUndo(historyRef.current.length > 0);
+    setCanRedo(true);
+  };
+
+  const redoDraft = () => {
+    const next = futureRef.current.pop();
+    if (!next) return;
+    historyRef.current.push(draft);
+    suppressHistoryRef.current = true;
+    lastDraftRef.current = next;
+    setDraft(next);
+    setCanRedo(futureRef.current.length > 0);
+    setCanUndo(true);
+  };
 
   useEffect(() => {
     try {
@@ -499,17 +553,59 @@ export default function App() {
   /* ------------------------------------------------------- keyboard */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      setIsSettingsOpen(false);
-      setPremiumOpen(false);
-      setHelpOpen(false);
-      setOutfitOpen(false);
-      setPromptOpen(false);
-      setView('builder');
+      if (e.key === 'Escape') {
+        setIsSettingsOpen(false);
+        setPremiumOpen(false);
+        setHelpOpen(false);
+        setOutfitOpen(false);
+        setPromptOpen(false);
+        setView('builder');
+        return;
+      }
+      if (isSettingsOpen || premiumOpen || helpOpen || outfitOpen) return;
+      const t = e.target as HTMLElement | null;
+      if (t && ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(t.tagName)) return;
+      if (e.ctrlKey || e.metaKey) {
+        const k = e.key.toLowerCase();
+        if (k === 'z' && !e.shiftKey) {
+          e.preventDefault();
+          undoDraft();
+        } else if (k === 'z' && e.shiftKey) {
+          e.preventDefault();
+          redoDraft();
+        } else if (k === 'y') {
+          e.preventDefault();
+          redoDraft();
+        }
+        return;
+      }
+      switch (e.key.toLowerCase()) {
+        case 'r':
+          setRotationAngle(a => (a + 45) % 360);
+          break;
+        case 'z':
+          setZoomLevel(z => (z > 1.2 ? 1 : 1.4));
+          break;
+        case 'g':
+          handleGenerate();
+          break;
+        case 's':
+          handleSaveAvatar();
+          break;
+        case 'p':
+          setPromptOpen(v => !v);
+          break;
+        case 'v':
+          setView('video');
+          break;
+        case 'c':
+          setView('chat');
+          break;
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  });
 
   /* ------------------------------------------------------------- data */
   const hairStylePresets = [
@@ -915,10 +1011,16 @@ export default function App() {
           </div>
 
           <div className="viewport-tools-top">
+            <button className="icon-tool-btn" disabled={!canUndo} onClick={undoDraft} title="Undo (Ctrl+Z)">
+              ↶
+            </button>
+            <button className="icon-tool-btn" disabled={!canRedo} onClick={redoDraft} title="Redo (Ctrl+Y)">
+              ↷
+            </button>
             <button
               className="icon-tool-btn"
               onClick={() => setPromptOpen(v => !v)}
-              title="Scene Prompt Editor"
+              title="Scene Prompt Editor (P)"
             >
               ✎
             </button>
@@ -1594,7 +1696,14 @@ export default function App() {
               <button onClick={() => setView('builder')}>✕</button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-              <VideoExportPage girl={girl} room={room} latestAssetUrl={currentPreviewUrl} adult={adult} />
+              <VideoExportPage
+                girl={girl}
+                room={room}
+                latestAssetUrl={currentPreviewUrl}
+                adult={adult}
+                provider={provider}
+                videoPrompt={buildDraftPrompt(draft, adult)}
+              />
             </div>
           </div>
         )}
@@ -2308,7 +2417,8 @@ export default function App() {
                 browser only).
               </div>
               <div>
-                <b>Esc</b> — closes any overlay and returns to the builder.
+                <b>Shortcuts</b> — R rotate · Z zoom · P prompt editor · G generate · S save · V video
+                studio · C chat · Ctrl+Z / Ctrl+Y undo / redo · Esc closes any overlay.
               </div>
             </div>
             <div className="row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>

@@ -23,10 +23,10 @@ AAA-style cyberpunk / gothic-glamour **character creator & companion studio** �
 ### Companion features
 - **Chat** — in-character dialogue; keyword-based local engine by default, or OpenRouter / Gemini / Custom LLMs when keys are configured. Quick-reply chips, affection state machine, per-persona memory that feeds future generations.
 - **Story** — 4 chapters (First Meeting, Private Space, Nightlife, New Horizons), relationship-gated chapter jumps, per-room scene actions that render story images straight to the gallery.
-- **Video studio** — VideoExportPage render settings with the active persona.
+- **Video studio** — real video pipeline: cloud providers return actual clips; **Local mode records a genuine 5-second WebM in-browser** (Ken Burns camera motion, scanlines, film grain, HUD frame, progress) with quality/FPS/aspect/motion presets and one-click download.
 - **Gallery** — every render lands here; favorite, set-as-viewport, download PNG, delete, export/import JSON archives.
 - **Premium modal** — feature list + Stripe payment-link redirect (configure link in `src/services/keys.ts`).
-- **Help modal** — in-app guide (Esc closes any overlay).
+- **Help modal** — in-app guide (Esc closes any overlay) + keyboard shortcuts: `R` rotate · `Z` zoom · `P` prompt editor · `G` generate · `S` save · `V` video studio · `C` chat · `Ctrl+Z` / `Ctrl+Y` undo/redo.
 
 ## Quick start
 
@@ -57,6 +57,8 @@ VITE_CUSTOM_IMAGE_ENDPOINT=https://your-custom-image.example.com/v1/generate
 ```
 
 Image/video generation endpoints can also be set per-mode in the Settings modal pattern (`getSavedEndpoint(p, mode)`), or via `VITE_<PROVIDER>_IMAGE_ENDPOINT` / `VITE_<PROVIDER>_VIDEO_ENDPOINT`.
+
+**Cloud response formats supported** — the parser extracts media from: A1111/SD-WebUI (`images[]` base64), OpenAI-style image output (`choices[].message.images[]`), Gemini inline parts (`candidates[].content.parts[].inlineData` / `fileData`), Imagen (`mediaItems[]` base64 / `generatedImages[]` URIs), and generic `url`/`output[]`/`data[].b64_json` shapes. OpenRouter image mode sends `modalities: ["image","text"]` with the default model `google/gemini-2.5-flash-image-preview`; Gemini image mode defaults to `gemini-2.5-flash-image` with `responseModalities: ["IMAGE"]`. Override models via env keys above.
 
 The **Local engine needs no keys** — it always works offline and produces the stylized Noir render.
 

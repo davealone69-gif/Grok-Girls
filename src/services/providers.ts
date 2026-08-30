@@ -275,7 +275,12 @@ export function createLocalPlaceholderSvg(prompt: string, mode: Mode, width = 76
     <path d="M ${cx + headR * 0.62} ${headY + headR * 0.52} Q ${cx + headR * 0.3} ${headY + headR * 0.42} ${cx + headR * 0.08} ${headY + headR * 0.5}"
           stroke="${pal.accent}" stroke-width="${headR * 0.16}" stroke-linecap="round" fill="none" opacity="0.9"/>
     <path d="M ${cx - headR * 0.28} ${headY - headR * 0.42} Q ${cx - headR * 0.14} ${headY - headR * 0.52} ${cx} ${headY - headR * 0.44} Q ${cx + headR * 0.14} ${headY - headR * 0.52} ${cx + headR * 0.28} ${headY - headR * 0.42}"
-          stroke="#241a2e" stroke-width="2" fill="none" opacity="0.85"/>`;
+          stroke="#241a2e" stroke-width="2" fill="none" opacity="0.85"/>
+    <ellipse cx="${cx}" cy="${headY - headR * 0.55}" rx="${headR * 0.52}" ry="${headR * 0.16}" fill="#ffffff" opacity="0.10"/>
+    <ellipse cx="${cx - headR * 0.52}" cy="${headY + headR * 0.26}" rx="${headR * 0.2}" ry="${headR * 0.12}" fill="${pal.accent}" opacity="0.12" style="filter: url(#rimGlow)"/>
+    <ellipse cx="${cx + headR * 0.52}" cy="${headY + headR * 0.26}" rx="${headR * 0.2}" ry="${headR * 0.12}" fill="${pal.accent}" opacity="0.12" style="filter: url(#rimGlow)"/>
+    <path d="M ${cx - headR * 0.05} ${headY - headR * 0.18} L ${cx - headR * 0.02} ${headY + headR * 0.34}" stroke="#000000" stroke-width="2" opacity="0.10"/>
+    <path d="M ${cx - headR * 0.2} ${headY + headR * 0.6} Q ${cx} ${headY + headR * 0.68} ${cx + headR * 0.2} ${headY + headR * 0.6}" stroke="#ffd9de" stroke-width="1.6" fill="none" opacity="0.55"/>`;
 
   const choker = hasChoker
     ? `<path d="M ${cx - headR * 0.55} ${headY + headR * 1.18} Q ${cx} ${headY + headR * 1.42} ${cx + headR * 0.55} ${headY + headR * 1.18} L ${cx + headR * 0.5} ${headY + headR * 1.34} Q ${cx} ${headY + headR * 1.58} ${cx - headR * 0.5} ${headY + headR * 1.34} Z"
@@ -406,6 +411,8 @@ export function createLocalPlaceholderSvg(prompt: string, mode: Mode, width = 76
   <!-- legs -->
   ${legLeft}
   ${legRight}
+  <path d="M ${cx - 46} ${H * 0.56} C ${cx - 54} ${H * 0.66}, ${cx - 52} ${H * 0.78}, ${cx - 44} ${H * 0.88}" stroke="#ffffff" stroke-width="3" fill="none" opacity="0.16" stroke-linecap="round"/>
+  <path d="M ${cx + 32} ${H * 0.58} C ${cx + 38} ${H * 0.68}, ${cx + 44} ${H * 0.78}, ${cx + 46} ${H * 0.88}" stroke="#ffffff" stroke-width="3" fill="none" opacity="0.16" stroke-linecap="round"/>
 
   <!-- torso & arms -->
   ${torso}
@@ -439,30 +446,87 @@ async function parse(response: Response, p: ProviderName, m: Mode): Promise<Gene
   try {
     d = JSON.parse(raw);
   } catch {}
-  const url =
+  let asset: string | undefined =
     d.url ??
     d.assetUrl ??
     d.output?.url ??
-    d.output?.[0]?.url ??
+    (typeof d.output?.[0] === 'string' ? d.output[0] : d.output?.[0]?.url) ??
     d.data?.[0]?.url ??
-    d.data?.[0]?.b64_json ??
-    d.images?.[0]?.url ??
     d.video?.url;
-  const b64 = d.data?.[0]?.b64_json;
+  let b64: string | undefined = d.data?.[0]?.b64_json;
+
+  // A1111 / SD-WebUI: images: ["base64…"]
+  if (!asset && Array.isArray(d.images) && typeof d.images[0] === 'string') {
+    asset = d.images[0].startsWith('data:') ? d.images[0] : `data:image/png;base64,${d.images[0]}`;
+  }
+  // OpenAI-style image output: choices[0].message.images[0].image_url.url
+  if (!asset) {
+    const imgs = d.choices?.[0]?.message?.images;
+    if (Array.isArray(imgs) && imgs[0]?.image_url?.url) asset = imgs[0].image_url.url;
+  }
+  // Gemini: candidates[0].content.parts[].inlineData
+  if (!asset) {
+    const parts = d.candidates?.[0]?.content?.parts || [];
+    for (const part of parts) {
+      if (part?.inlineData?.data) {
+        asset = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+        break;
+      }
+      if (part?.fileData?.fileUri) {
+        asset = part.fileData.fileUri;
+        break;
+      }
+    }
+  }
+  // Imagen style: mediaItems[0].image.bytesBase64Encoded
+  if (!asset && d.mediaItems?.[0]?.image?.bytesBase64Encoded) {
+    asset = `data:image/png;base64,${d.mediaItems[0].image.bytesBase64Encoded}`;
+  }
+  if (!asset && d.images?.[0]?.bytesBase64Encoded) {
+    asset = `data:image/png;base64,${d.images[0].bytesBase64Encoded}`;
+  }
+  // outputFormat PNG from Gemini Imagen (gcsUri)
+  if (!asset && d.generatedImages?.[0]?.image?.uri) {
+    asset = d.generatedImages[0].image.uri;
+  }
+
   const job = d.id ?? d.jobId ?? d.task_id;
   return {
     provider: p,
-    status: m === 'video' && !url && !b64 ? 'queued' : 'ready',
-    assetUrl: url ?? (b64 ? `data:image/png;base64,${b64}` : undefined),
+    status: m === 'video' && !asset && !b64 ? 'queued' : 'ready',
+    assetUrl: asset ?? (b64 ? `data:image/png;base64,${b64}` : undefined),
     jobId: job,
     text: d.text ?? d.message,
-    warning: url || b64 || job ? undefined : 'Provider returned no media URL'
+    warning: asset || b64 || job ? undefined : 'Provider returned no media URL'
   };
+}
+
+function defaultModel(p: ProviderName, m: Mode): string {
+  if (p === 'openrouter') {
+    return m === 'image'
+      ? env()['VITE_OPENROUTER_IMAGE_MODEL'] ?? 'google/gemini-2.5-flash-image-preview'
+      : env()['VITE_OPENROUTER_VIDEO_MODEL'] ?? env()['VITE_OPENROUTER_CHAT_MODEL'] ?? 'openai/gpt-4o-mini';
+  }
+  if (p === 'gemini') {
+    return m === 'image'
+      ? env()['VITE_GEMINI_IMAGE_MODEL'] ?? 'gemini-2.5-flash-image'
+      : env()['VITE_GEMINI_VIDEO_MODEL'] ?? env()['VITE_GEMINI_CHAT_MODEL'] ?? 'gemini-2.5-flash';
+  }
+  return '';
+}
+
+function defaultEndpoint(p: ProviderName, m: Mode, model: string): string {
+  if (p === 'openrouter') return 'https://openrouter.ai/api/v1/chat/completions';
+  if (p === 'gemini') {
+    return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  }
+  return '';
 }
 
 async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationResult> {
   const key = getSavedApiKey(p);
-  const endpoint = getSavedEndpoint(p, r.mode);
+  const model = env()[`VITE_${p.toUpperCase()}_${r.mode.toUpperCase()}_MODEL`] ?? env()[`VITE_${p.toUpperCase()}_MODEL`] ?? defaultModel(p, r.mode);
+  const endpoint = getSavedEndpoint(p, r.mode) || (p === 'custom' ? '' : defaultEndpoint(p, r.mode, model));
   if (!key || !endpoint) {
     return {
       provider: p,
@@ -481,22 +545,42 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
     headers['X-Title'] = 'Grok Girls';
   }
   const url = p === 'gemini' ? `${endpoint}${endpoint.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}` : endpoint;
-  const model = env()[`VITE_${p.toUpperCase()}_${r.mode.toUpperCase()}_MODEL`] ?? env()[`VITE_${p.toUpperCase()}_MODEL`];
-  const body = {
-    prompt: r.prompt,
-    model,
-    width: r.width,
-    height: r.height,
-    steps: r.steps,
-    cfg: r.cfg,
-    seed: r.seed
-  };
+
+  let body: any;
+  if (p === 'openrouter' && r.mode === 'image') {
+    body = {
+      model,
+      modalities: ['image', 'text'],
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: `Create an image exactly matching this description: ${r.prompt}` }] }
+      ]
+    };
+  } else if (p === 'gemini') {
+    body = {
+      contents: [{ parts: [{ text: r.prompt }] }],
+      generationConfig: r.mode === 'image' ? { responseModalities: ['IMAGE'] } : undefined
+    };
+  } else {
+    body = {
+      prompt: r.prompt,
+      model: model || undefined,
+      width: r.width,
+      height: r.height,
+      steps: r.steps,
+      cfg: r.cfg,
+      cfg_scale: r.cfg,
+      seed: r.seed
+    };
+  }
   const response = await fetch(url, {
     method: 'POST',
     headers: p === 'gemini' ? { 'Content-Type': 'application/json' } : headers,
     body: JSON.stringify(body)
   });
-  if (!response.ok) throw new Error(`${p} HTTP ${response.status}`);
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    throw new Error(`${p} HTTP ${response.status}${errText ? ` — ${errText.slice(0, 160)}` : ''}`);
+  }
   return parse(response, p, r.mode);
 }
 
@@ -519,7 +603,10 @@ class Local {
 class Cloud {
   constructor(public readonly name: Exclude<ProviderName, 'local'>) {}
   available() {
-    return Boolean(getSavedApiKey(this.name) && (getSavedEndpoint(this.name, 'image') || getSavedEndpoint(this.name, 'video')));
+    if (this.name === 'custom') {
+      return Boolean(getSavedApiKey(this.name) && getSavedEndpoint(this.name));
+    }
+    return Boolean(getSavedApiKey(this.name));
   }
   async generate(r: GenerationRequest): Promise<GenerationResult> {
     return post(this.name, r);

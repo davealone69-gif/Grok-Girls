@@ -2197,3 +2197,44 @@ button:disabled {
   color: #fff;
   box-shadow: 0 0 12px rgba(230, 32, 64, 0.25);
 }
+
+/* ---- video export studio canvas ---- */
+.video-canvas-wrap {
+  position: relative;
+  background: #0a0a12;
+  border: 1px solid #232338;
+  border-radius: 12px;
+  padding: 10px;
+  min-height: 60px;
+}
+.video-canvas {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  background: #050508;
+  border-radius: 8px;
+}
+.video-canvas-overlay {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  background: rgba(10, 10, 18, 0.85);
+  border: 1px solid #e62040;
+  border-radius: 999px;
+  color: #ff8fa3;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+  padding: 6px 14px;
+  animation: blink 1s infinite;
+}
+a.btn-generate-media {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  cursor: pointer;
+}
+a.btn-generate-media:hover {
+  filter: brightness(1.12);
+}

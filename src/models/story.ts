@@ -1,10 +1,13 @@
 export interface StoryChapter { chapter:number; title:string; objective:string; roomId:string; minRelationship:number; actionPrompt:string; }
 export interface StoryState { chapter:number; title:string; objective:string; roomId:string; relationshipLevel:number; actionPrompt:string; completedObjectives:string[]; flags:string[]; }
 export const storyChapters:StoryChapter[]=[
- {chapter:1,title:'First Meeting',objective:'Break the ice',roomId:'studio',minRelationship:0,actionPrompt:'first encounter'},
- {chapter:2,title:'Private Space',objective:'Build trust',roomId:'penthouse',minRelationship:1,actionPrompt:'comfortable conversation'},
- {chapter:3,title:'Nightlife',objective:'Share a night out',roomId:'club',minRelationship:2,actionPrompt:'playful energy'},
- {chapter:4,title:'New Horizons',objective:'Plan the next scene',roomId:'outdoor',minRelationship:3,actionPrompt:'confident cinematic moment'}
+ {chapter:1,title:'First Meeting',objective:'Break the ice',roomId:'studio',minRelationship:0,actionPrompt:'first encounter, charged eye contact'},
+ {chapter:2,title:'Private Space',objective:'Build trust',roomId:'penthouse',minRelationship:1,actionPrompt:'comfortable conversation turning sensual'},
+ {chapter:3,title:'Nightlife',objective:'Share a night out',roomId:'club',minRelationship:2,actionPrompt:'playful energy, private booth teasing'},
+ {chapter:4,title:'New Horizons',objective:'Plan the next scene',roomId:'outdoor',minRelationship:3,actionPrompt:'confident cinematic moment, rising tension'},
+ {chapter:5,title:'First Touch',objective:'Physical intimacy',roomId:'leather_lounge',minRelationship:4,actionPrompt:'explicit first sexual encounter, hands exploring, oral, building to penetration'},
+ {chapter:6,title:'Deep Connection',objective:'Full submission',roomId:'penthouse',minRelationship:5,actionPrompt:'graphic sex on sofa, multiple positions, creampie, intense orgasm'},
+ {chapter:7,title:'Afterglow',objective:'Stay the night',roomId:'leather_lounge',minRelationship:6,actionPrompt:'post-sex intimacy, fluids, soft explicit cuddling, round two'}
 ];
 export function storyForLevel(level:number):StoryChapter{return [...storyChapters].reverse().find(c=>level>=c.minRelationship)??storyChapters[0]}
 export function initialStory(level:number):StoryState{const c=storyForLevel(level);return {...c,relationshipLevel:level,completedObjectives:[],flags:[]}}

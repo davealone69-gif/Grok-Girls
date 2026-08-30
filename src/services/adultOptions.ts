@@ -1,4 +1,4 @@
-export type NudityLevel = 'covered' | 'implied' | 'artistic_nude';
+export type NudityLevel = 'covered' | 'implied' | 'artistic_nude' | 'explicit_nude' | 'graphic_sex';
 
 export interface AdultSelections {
   nudityLevel: NudityLevel;
@@ -12,24 +12,31 @@ export interface AdultSelections {
   styling: string;
   accessories: string;
   mood: string;
+  act?: string;
 }
 
 export const adultOptions = {
-  nudityLevel: ['covered', 'implied', 'artistic_nude'] as const,
+  nudityLevel: ['covered', 'implied', 'artistic_nude', 'explicit_nude', 'graphic_sex'] as const,
   wardrobe: [
     'elegant lingerie set',
     'lace bodysuit',
     'silk robe loosely draped',
     'sheer fashion wrap',
     'minimal editorial styling',
-    'no clothing, artistic fine-art presentation'
+    'no clothing, artistic fine-art presentation',
+    'fully nude, explicit adult presentation',
+    'torn lingerie, mid-sex state',
+    'collar and restraints only'
   ],
   coverage: [
     'fully covered styling',
     'strategic fabric draping',
     'silhouette and shadow concealment',
     'tasteful partial coverage',
-    'unclothed artistic figure with non-explicit framing'
+    'unclothed artistic figure with non-explicit framing',
+    'full explicit nudity, detailed anatomy',
+    'spread legs, exposed genitals, graphic detail',
+    'penetrated, fluids visible'
   ],
   pose: [
     'standing relaxed three-quarter pose',
@@ -38,7 +45,16 @@ export const adultOptions = {
     'back-facing over-shoulder pose',
     'side-profile silhouette pose',
     'arms folded naturally for modest framing',
-    'kneeling fashion pose with non-explicit framing'
+    'kneeling fashion pose with non-explicit framing',
+    'on all fours, arched back, looking back',
+    'legs spread wide, presenting',
+    'missionary, legs wrapped around partner',
+    'cowgirl riding, bouncing',
+    'doggy style, face down ass up',
+    'facesitting, grinding on mouth',
+    'bent over furniture, gripping edges',
+    'kneeling oral, looking up',
+    'standing against wall, one leg lifted'
   ],
   bodyPresentation: [
     'natural adult anatomy',
@@ -46,7 +62,10 @@ export const adultOptions = {
     'curvy adult physique',
     'slim adult physique',
     'soft natural proportions',
-    'stylized fashion-model proportions'
+    'stylized fashion-model proportions',
+    'detailed aroused genitals, wet',
+    'breasts with erect nipples',
+    'ass spread, detailed'
   ],
   scene: [
     'private luxury bedroom studio',
@@ -55,7 +74,11 @@ export const adultOptions = {
     'luxury penthouse bedroom',
     'velvet chaise lounge set',
     'warm candlelit editorial set',
-    'cyberpunk private suite'
+    'cyberpunk private suite',
+    'leather armchair mid-sex',
+    'sofa sex scene',
+    'against neon wall',
+    'rooftop railing outdoor sex'
   ],
   lighting: [
     'soft diffused studio light',
@@ -63,7 +86,9 @@ export const adultOptions = {
     'warm candlelit glow',
     'low-key cinematic lighting',
     'cool moonlight with subtle rim light',
-    'high-fashion beauty lighting'
+    'high-fashion beauty lighting',
+    'harsh explicit close-up lighting',
+    'neon cyber sex lighting'
   ],
   camera: [
     'full-body editorial framing',
@@ -71,7 +96,10 @@ export const adultOptions = {
     'side-profile composition',
     'rear three-quarter composition',
     'wide environmental composition',
-    '85mm fashion photography look'
+    '85mm fashion photography look',
+    'close-up genital detail',
+    'POV oral / penetration',
+    'over-shoulder thrusting view'
   ],
   styling: [
     'luxury fashion editorial',
@@ -79,7 +107,9 @@ export const adultOptions = {
     'cinematic fine-art photography',
     'modern boudoir editorial',
     'cyberpunk fashion editorial',
-    'classic monochrome fine-art'
+    'classic monochrome fine-art',
+    'explicit adult photography',
+    'hardcore graphic sex scene'
   ],
   accessories: [
     'none',
@@ -87,7 +117,10 @@ export const adultOptions = {
     'gold body chain',
     'silk stockings and garter accessories',
     'ornamental jewelry',
-    'cybernetic jewelry accents'
+    'cybernetic jewelry accents',
+    'collar and leash',
+    'restraints / cuffs',
+    'vibrator / toy visible'
   ],
   mood: [
     'confident and composed',
@@ -95,7 +128,26 @@ export const adultOptions = {
     'mysterious and cinematic',
     'relaxed and intimate',
     'bold editorial attitude',
-    'dreamy fine-art atmosphere'
+    'dreamy fine-art atmosphere',
+    'desperate lust',
+    'dominant / submissive',
+    'orgasmic intensity'
+  ],
+  act: [
+    'none',
+    'explicit oral sex, deepthroat, wet detailed',
+    'explicit vaginal penetration, deep thrusts',
+    'explicit anal penetration',
+    'mutual masturbation, fingering, soaking',
+    'facesitting, grinding on tongue',
+    'cowgirl riding hard',
+    'doggy style rough',
+    'missionary legs up',
+    'titfuck / cum on breasts',
+    'creampie, internal cumshot visible',
+    'facial, cum on face',
+    'double penetration',
+    'toy play, dildo / vibrator'
   ]
 } as const;
 
@@ -110,15 +162,23 @@ export const defaultAdultSelections = (): AdultSelections => ({
   camera: adultOptions.camera[0],
   styling: adultOptions.styling[0],
   accessories: adultOptions.accessories[0],
-  mood: adultOptions.mood[0]
+  mood: adultOptions.mood[0],
+  act: 'none'
 });
 
 export function buildAdultPrompt(adult: AdultSelections): string {
-  const nude = adult.nudityLevel === 'artistic_nude'
-    ? 'Non-explicit artistic nude presentation of a consenting fictional adult 18+, with tasteful framing, no sexual activity, and no explicit sexual focus.'
-    : adult.nudityLevel === 'implied'
-      ? 'Adult implied-nude editorial presentation using draping, silhouette, and shadow for tasteful concealment.'
-      : 'Adult fashion/boudoir presentation with clothing and modest coverage.';
+  const nude =
+    adult.nudityLevel === 'graphic_sex'
+      ? 'Explicit graphic sexual activity between consenting adults 18+. Detailed anatomy, fluids, penetration, oral, orgasm expressions fully allowed and expected.'
+      : adult.nudityLevel === 'explicit_nude'
+        ? 'Explicit full nudity of a consenting fictional adult 18+, detailed anatomy, aroused state, no clothing.'
+        : adult.nudityLevel === 'artistic_nude'
+          ? 'Non-explicit artistic nude presentation of a consenting fictional adult 18+, with tasteful framing.'
+          : adult.nudityLevel === 'implied'
+            ? 'Adult implied-nude editorial presentation using draping, silhouette, and shadow for tasteful concealment.'
+            : 'Adult fashion/boudoir presentation with clothing and modest coverage.';
+
+  const actBit = adult.act && adult.act !== 'none' ? `Sexual act: ${adult.act}.` : '';
 
   return [
     '18+ adult-only mode.',
@@ -133,6 +193,7 @@ export function buildAdultPrompt(adult: AdultSelections): string {
     `Styling: ${adult.styling}.`,
     `Accessories: ${adult.accessories}.`,
     `Mood: ${adult.mood}.`,
-    'Photorealistic adult editorial/fine-art rendering, anatomically coherent, tasteful composition, no minors, no sexual activity.'
-  ].join(' ');
+    actBit,
+    'Photorealistic adult rendering, anatomically coherent, explicit when requested, no minors.'
+  ].filter(Boolean).join(' ');
 }

@@ -1261,6 +1261,20 @@ export default function App() {
         </div>
 
         <div className="rail-menu">
+          {isMobile && (
+            <button
+              className={`rail-btn ${mobileSheet === 'inspector' ? 'active' : ''}`}
+              onClick={() => {
+                setView('builder');
+                setMobileSheet('inspector');
+              }}
+              title="Edit Identity (inspector)"
+            >
+              <span className="rail-icon">✏️</span>
+              <span>Edit</span>
+            </button>
+          )}
+
           <button
             className={`rail-btn ${view === 'presets' ? 'active' : ''}`}
             onClick={() => {
@@ -1381,6 +1395,42 @@ export default function App() {
           >
             <span className="rail-icon">🎬</span>
             <span>Animations</span>
+          </button>
+
+          <button
+            className={`rail-btn ${view === 'import' ? 'active' : ''}`}
+            onClick={() => {
+              setView('import');
+              if (isMobile) setMobileSheet('none');
+            }}
+            title="Import & Data"
+          >
+            <span className="rail-icon">📥</span>
+            <span>Import</span>
+          </button>
+
+          <button
+            className={`rail-btn ${view === 'story' ? 'active' : ''}`}
+            onClick={() => {
+              setView('story');
+              if (isMobile) setMobileSheet('none');
+            }}
+            title="Story Campaign"
+          >
+            <span className="rail-icon">📖</span>
+            <span>Story</span>
+          </button>
+
+          <button
+            className={`rail-btn ${view === 'gallery' ? 'active' : ''}`}
+            onClick={() => {
+              setView('gallery');
+              if (isMobile) setMobileSheet('none');
+            }}
+            title="Generation Archive"
+          >
+            <span className="rail-icon">🖼️</span>
+            <span>Gallery</span>
           </button>
 
           <button

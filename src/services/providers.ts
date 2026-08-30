@@ -351,21 +351,21 @@ export function createLocalPlaceholderSvg(
   const HUD = `
     <path d="M 26 26 L 26 64 M 26 26 L 64 26 M ${W - 64} 26 L ${W - 26} 26 M ${W - 26} 26 L ${W - 26} 64
              M 26 ${H - 64} L 26 ${H - 26} M 26 ${H - 26} L 64 ${H - 26} M ${W - 26} ${H - 64} L ${W - 26} ${H - 26} M ${W - 64} ${H - 26} L ${W - 26} ${H - 26}"
-          stroke="${pal.accent}" stroke-width="2" fill="none" opacity="0.8"/>`;
+          stroke="${pal.accent}" stroke-width="2" fill="none" opacity="0.4"/>`;
 
   const badges = `
-    <rect x="30" y="${H - 96}" width="${isVideo ? 168 : 150}" height="30" rx="6" fill="#0b0b14" stroke="${pal.accent}" stroke-opacity="0.6"/>
-    <text x="44" y="${H - 76}" fill="#ffffff" font-family="monospace" font-size="13" font-weight="700" letter-spacing="2">
+    <rect x="18" y="${H - 62}" width="${isVideo ? 132 : 120}" height="21" rx="5" fill="#0b0b14" fill-opacity="0.55" stroke="${pal.accent}" stroke-opacity="0.35"/>
+    <text x="30" y="${H - 48}" fill="#ffffff" fill-opacity="0.85" font-family="monospace" font-size="10.5" font-weight="700" letter-spacing="1.2">
       ${isVideo ? 'NOIR VIDEO PREVIEW' : 'NOIR RENDER PREVIEW'}
     </text>
-    <rect x="${W - 122}" y="${H - 96}" width="92" height="30" rx="6" fill="#0b0b14" stroke="#34344a"/>
-    <text x="${W - 108}" y="${H - 76}" fill="${pal.accent}" font-family="monospace" font-size="13" font-weight="700" letter-spacing="1">
+    <rect x="${W - 88}" y="${H - 62}" width="70" height="21" rx="5" fill="#0b0b14" fill-opacity="0.55" stroke="#34344a"/>
+    <text x="${W - 76}" y="${H - 48}" fill="${pal.accent}" fill-opacity="0.8" font-family="monospace" font-size="10" font-weight="700" letter-spacing="0.6">
       SEED ${seedId}
     </text>`;
 
   const caption = `
-    <rect x="${W * 0.5 - 150}" y="${H - 40}" width="300" height="26" rx="13" fill="#0b0b14" fill-opacity="0.82" stroke="${pal.accent}" stroke-opacity="0.35"/>
-    <text x="${W * 0.5}" y="${H - 22}" fill="#fff" text-anchor="middle" font-family="Inter, sans-serif" font-size="13" font-weight="700" letter-spacing="1">
+    <rect x="${W * 0.5 - 150}" y="${H - 30}" width="300" height="22" rx="11" fill="#0b0b14" fill-opacity="0.7" stroke="${pal.accent}" stroke-opacity="0.3"/>
+    <text x="${W * 0.5}" y="${H - 15}" fill="#fff" fill-opacity="0.9" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" font-weight="700" letter-spacing="1">
       ${name.replace(/[<>&"]/g, '').slice(0, 26).toUpperCase()}
     </text>`;
 

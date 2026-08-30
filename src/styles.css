@@ -2115,3 +2115,85 @@ button:disabled {
     display: none;
   }
 }
+
+/* ---- MAKEUP dock tab (replaces facial hair) ---- */
+.makeup-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.makeup-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+.makeup-card {
+  background: #14141f;
+  border: 1px solid #262638;
+  border-radius: 10px;
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.makeup-card span {
+  font-size: 22px;
+}
+.makeup-card em {
+  font-style: normal;
+  font-size: 9px;
+  color: #8b8ba6;
+  letter-spacing: 0.4px;
+  text-align: center;
+  text-transform: uppercase;
+}
+.makeup-card:hover {
+  border-color: #4a4a68;
+}
+.makeup-card.active {
+  border-color: var(--border-active);
+  background: #221a3d;
+  box-shadow: 0 0 14px rgba(144, 78, 221, 0.25);
+}
+.makeup-card.active em {
+  color: #fff;
+}
+.lipstick-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lipstick-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.lipstick-chip {
+  background: #14141f;
+  border: 1px solid #262638;
+  border-radius: 8px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #a8a8c0;
+}
+.lipstick-chip em {
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+.lipstick-chip:hover {
+  border-color: #4a4a68;
+  color: #fff;
+}
+.lipstick-chip.active {
+  border-color: var(--neon-crimson);
+  background: #3a1220;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(230, 32, 64, 0.25);
+}

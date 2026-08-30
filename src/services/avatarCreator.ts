@@ -2,7 +2,7 @@ export interface AvatarDraft {
   id: string;
   name: string;
   age: number;
-  gender?: 'female' | 'male' | 'nonbinary' | 'android';
+  gender?: 'female' | 'nonbinary' | 'android';
   ethnicity: string;
   bodyType: string;
   eyeColor: string;
@@ -29,13 +29,12 @@ export interface AvatarDraft {
   facePaintStyle?: string;
   browShape?: string;
   browThickness?: number;
-  facialHair?: string;
   piercingsCount?: number;
   tattoosCount?: number;
 }
 
 export const avatarOptions = {
-  gender: ['female', 'male', 'nonbinary', 'android'] as const,
+  gender: ['female', 'nonbinary', 'android'] as const,
   ethnicity: [
     'caucasian',
     'mixed',
@@ -157,13 +156,6 @@ export const avatarOptions = {
   scarStyle: ['none', 'tiny brow scar', 'faint cheek scar', 'hero scar on shoulder'],
   facePaintStyle: ['none', 'tribal cheek mark', 'neon accent line across eyes', 'gothic tear mark'],
   browShape: ['arched', 'straight', 'soft rounded', 'bold angled', 'thin feathered', 'natural full'],
-  facialHair: [
-    'none',
-    'clean shaven with light stubble shadow',
-    'cyber beard implant lines',
-    'gothic goatee',
-    'precisely lined beard'
-  ],
   chairSetting: [
     'vintage tufted dark leather armchair, moody boudoir with crimson edge lighting',
     'black velvet chaise lounge, candlelit gothic boudoir',
@@ -202,7 +194,6 @@ export function randomizeAvatar(current: AvatarDraft): AvatarDraft {
     facePaintStyle: getRandomOption(avatarOptions.facePaintStyle),
     browShape: getRandomOption(avatarOptions.browShape),
     browThickness: 1 + Math.floor(Math.random() * 5),
-    facialHair: Math.random() > 0.85 ? getRandomOption(avatarOptions.facialHair) : 'none',
     piercingsCount: Math.random() > 0.5 ? 1 + Math.floor(Math.random() * 4) : 0,
     colorAccent: isGothGlam ? '#E62040' : '#904EDD'
   };
@@ -255,12 +246,10 @@ export function buildDraftPrompt(draft: AvatarDraft, adult = true): string {
   const brows = draft.browShape
     ? `Eyebrows: ${draft.browShape} shape, ${draft.browThickness || 3}/5 thickness.`
     : '';
-  const facial =
-    draft.facialHair && draft.facialHair !== 'none' ? `Facial hair: ${draft.facialHair}.` : '';
   const setting =
     draft.chairSetting ||
     'Setting: seated/reclining in a vintage tufted dark leather armchair, dark moody atmosphere with crimson edge lighting.';
   const accent = draft.colorAccent ? `Color accent: ${draft.colorAccent}.` : '';
 
-  return `${draft.name}, adult fictional character (18+), ${draft.ethnicity}, ${draft.bodyType} build, ${draft.eyeColor} ${draft.eyeShape} eyes, ${draft.faceShape} face, ${draft.hairColor} ${draft.hairStyle} hair, ${draft.skinTone} skin. Wearing ${draft.outfit}. ${choker} ${hosiery} ${makeup} ${lips} ${brows} ${facial} ${tattoo} ${augment} ${scar} ${facePaint} ${piercings} Pose: ${draft.pose}, ${draft.expression}. ${setting} ${accent} ${draft.extra || ''}. Highly detailed 8k photography, realistic fabric textures, lace detail, cinematic lighting, masterpiece. ${adultBit}`;
+  return `${draft.name}, adult fictional character (18+), ${draft.ethnicity}, ${draft.bodyType} build, ${draft.eyeColor} ${draft.eyeShape} eyes, ${draft.faceShape} face, ${draft.hairColor} ${draft.hairStyle} hair, ${draft.skinTone} skin. Wearing ${draft.outfit}. ${choker} ${hosiery} ${makeup} ${lips} ${brows} ${tattoo} ${augment} ${scar} ${facePaint} ${piercings} Pose: ${draft.pose}, ${draft.expression}. ${setting} ${accent} ${draft.extra || ''}. Ultra-HD photorealistic 3D character render, DAZ Studio Genesis 8 HD model style, Iray global illumination, 8K pore-level skin micro-detail, realistic subsurface scattering, intricate fabric textures, lace detail, cinematic studio lighting, masterpiece. ${adultBit}`;
 }

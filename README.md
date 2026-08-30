@@ -8,16 +8,17 @@ AAA-style cyberpunk / gothic-glamour **character creator & companion studio** �
 
 ### Avatar Studio (Builder)
 - **Left nav rail** — Appearance, Body, Clothing, Hair, Face, Eyes, Accessories, Augments, Tattoos, Animations, Premium, Help + Randomize, Settings, 18+ toggle, Chat.
-- **Presets drawer** — Ruby Noir, Matrix_07, Shadow Synth, Crazzers AI, Silver Valkyrie, Sugarlab AI, Flirty Rouge + custom/imported personas. Create new presets anytime.
+- **Presets drawer** — Ruby Noir plus **ultra-HD female models** (Kira HD, Nova HD, Aria HD — DAZ Genesis-8 style renders), Matrix_07, Shadow Synth, Crazzers AI, Silver Valkyrie, Sugarlab AI, Flirty Rouge + custom/imported personas. Create new presets anytime.
 - **PRESETS browser** — full-grid identity browser with LOAD buttons.
 - **IMPORT tab** — import an image as a new preset, restore a gallery JSON archive, or reset all local data.
 - **Viewport** — drag to pan, ROTATE / ZOOM / PAN / RANDOM / PNG export, lighting modes (Noir armchair mood, Studio, Full, Bust, Wireframe), camera status chip, multi-angle preview circles.
 - **Scene prompt editor** (✎ in header) — the prompt compiles live from your builder choices; edit, copy, or rebuild it.
-- **Lower dock** — HAIR STYLE grid, HAIR COLOR wheel (canvas HSV wheel + sliders + hex + swatches + named color chips), FACIAL HAIR presets, EYEBROWS shapes + thickness.
+- **Lower dock** — HAIR STYLE grid, HAIR COLOR wheel (canvas HSV wheel + sliders + hex + swatches + named color chips), MAKEUP presets (eye looks + lipstick chips), EYEBROWS shapes + thickness.
 - **Details & add-ons** — click to cycle: Choker, Corset, Fishnets, Piercings, Scars, Makeup, Face Paint, Cyberware.
-- **Right inspector** — Appearance (gender, 8 skin tones, head shape slider, age slider, skin details, color accent), Hair, Eyes, Face, Body, Clothing & Lingerie (corset, choker, hosiery, scene backdrop, room), Tattoos, Augments.
+- **Right inspector** — Appearance (gender: female / non-binary / android, 8 skin tones, head shape slider, age slider, skin details, color accent), Hair, Eyes, Face, Body, Clothing & Lingerie (corset, choker, hosiery, scene backdrop, room), Tattoos, Augments.
 - **Footer** — Avatar ID + copy, LOAD OUTFIT wardrobe drawer, generation ENGINE selector (Local / OpenRouter / Gemini / Custom), CANCEL, GENERATE RENDER, SAVE AVATAR.
 - **Local Noir render engine** — zero-config procedural SVG renderer that draws a stylized boudoir portrait reflecting your actual choices (hair colour, corset, fishnets, choker, accent light, cyber scene). Cloud providers render via their APIs when configured.
+- **HD-model prompt engine** — all compiled prompts target ultra-HD photorealistic 3D character renders (DAZ Studio Genesis 8 HD style, Iray GI, 8K pore-level skin, SSS), so cloud generations match the HD model look.
 
 ### Companion features
 - **Chat** — in-character dialogue; keyword-based local engine by default, or OpenRouter / Gemini / Custom LLMs when keys are configured. Quick-reply chips, affection state machine, per-persona memory that feeds future generations.

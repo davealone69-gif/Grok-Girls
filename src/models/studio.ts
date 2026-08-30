@@ -160,6 +160,84 @@ export const seedGirls: Girl[] = [
     memories: []
   },
   {
+    id: 'kira_hd',
+    name: 'Kira HD',
+    age: 26,
+    ethnicity: 'caucasian',
+    bodyType: 'slim',
+    eyeColor: 'dark brown',
+    eyeShape: 'almond',
+    faceShape: 'oval',
+    hairColor: 'rich dark brown',
+    hairStyle: 'long silky waves',
+    skinTone: 'warm light',
+    outfit: 'sleek dark studio fashion outfit with elegant neckline',
+    pose: 'three-quarter studio portrait, relaxed shoulders',
+    expression: 'confident soft gaze',
+    extra: 'ultra-HD skin micro-detail, DAZ Genesis 8 HD style render, soft studio key light',
+    thumbnailUrl: '/assets/kira-hd-thumb.jpg',
+    previewUrl: '/assets/kira-hd.jpg',
+    bio: 'Ultra-HD Genesis-8 style female model with silky dark waves and cinematic studio presence.',
+    traits: ['photoreal', 'elegant', 'HD model', 'cinematic'],
+    room: 'Photo Studio',
+    affinity: 60,
+    trust: 60,
+    emotion: 'calm',
+    memories: []
+  },
+  {
+    id: 'nova_hd',
+    name: 'Nova HD',
+    age: 25,
+    ethnicity: 'mixed',
+    bodyType: 'hourglass',
+    eyeColor: 'deep brown',
+    eyeShape: 'hooded',
+    faceShape: 'heart',
+    hairColor: 'jet black',
+    hairStyle: 'long dark waves',
+    skinTone: 'deep bronze',
+    outfit: 'dark glamour evening outfit with sculpted silhouette',
+    pose: 'dramatic low-key portrait',
+    expression: 'sultry intense gaze',
+    extra: 'moody low-key studio lighting, ultra-HD 3D character render, glossy highlights',
+    thumbnailUrl: '/assets/nova-hd-thumb.jpg',
+    previewUrl: '/assets/nova-hd.jpg',
+    bio: 'Ultra-HD model with deep bronze glow, jet-black waves, and dramatic low-key lighting.',
+    traits: ['moody', 'glamour', 'HD model', 'dramatic'],
+    room: 'Photo Studio',
+    affinity: 55,
+    trust: 55,
+    emotion: 'thoughtful',
+    memories: []
+  },
+  {
+    id: 'aria_hd',
+    name: 'Aria HD',
+    age: 24,
+    ethnicity: 'mixed',
+    bodyType: 'curvy',
+    eyeColor: 'warm brown',
+    eyeShape: 'round',
+    faceShape: 'oval',
+    hairColor: 'chestnut brown',
+    hairStyle: 'soft bouncy waves',
+    skinTone: 'golden tan',
+    outfit: 'warm-toned fashion outfit with soft fabric drape',
+    pose: 'relaxed studio portrait',
+    expression: 'warm approachable smile',
+    extra: 'warm golden studio lighting, ultra-HD skin detail, soft bokeh backdrop',
+    thumbnailUrl: '/assets/aria-hd-thumb.jpg',
+    previewUrl: '/assets/aria-hd.webp',
+    bio: 'Ultra-HD model with golden-tan glow, chestnut waves, and warm editorial charm.',
+    traits: ['warm', 'cheerful', 'HD model', 'editorial'],
+    room: 'Penthouse',
+    affinity: 58,
+    trust: 58,
+    emotion: 'happy',
+    memories: []
+  },
+  {
     id: 'matrix_07',
     name: 'Matrix_07',
     age: 22,
@@ -325,9 +403,9 @@ export function buildAvatarPrompt(
   const motion =
     mode === 'video'
       ? 'subtle breathing and eye contact, coherent identity, cinematic slow pan'
-      : 'photorealistic 8k masterpiece, high-detail portrait photography, intricate fabric texture';
+      : 'ultra-HD photorealistic 3D character render, DAZ Studio Genesis 8 HD model style, Iray global illumination, 8K pore-level skin micro-detail, realistic subsurface scattering, intricate fabric texture, masterpiece';
   const polish = enhanced
-    ? 'hyper-detailed skin pores, realistic subsurface scattering, raytraced lighting, 85mm portrait lens, f/1.4, cinematic film grain'
+    ? 'smooth flawless HD skin shader, filmic tone mapping, raytraced studio lighting, 85mm portrait lens, f/1.4, shallow depth of field, cinematic film grain'
     : 'clean composition, sharp focus';
   const overlay = adult ? ADULT_OVERLAY : SAFE_OVERLAY;
   return `${a.name}, adult character (18+), ${a.ethnicity}, ${a.bodyType} build, ${a.eyeColor} ${a.eyeShape} eyes, ${a.faceShape} face, ${a.hairColor} ${a.hairStyle} hair, ${a.skinTone} skin, wearing ${a.outfit}, ${a.pose}, ${a.expression}. ${a.extra}. ${scene}. ${action}. ${motion}, ${polish}. ${overlay}`;

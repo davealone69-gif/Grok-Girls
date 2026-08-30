@@ -32,7 +32,7 @@ type InspectorSection =
   | 'clothing'
   | 'tattoos'
   | 'augments';
-type DockTab = 'style' | 'color' | 'facial' | 'eyebrows';
+type DockTab = 'style' | 'color' | 'makeup' | 'eyebrows';
 
 const ADULT_KEY = 'grok-girls-adult-v1';
 
@@ -71,7 +71,6 @@ function defaultDraft(g: Girl): AvatarDraft {
     facePaintStyle: 'none',
     browShape: 'arched',
     browThickness: 3,
-    facialHair: 'none',
     piercingsCount: 0,
     tattoosCount: 0
   };
@@ -535,13 +534,22 @@ export default function App() {
     { name: 'Cyber Pale', color: '#d8e2eb', tone: 'cybernetic pale' }
   ];
 
-  const facialHairOptions = [
-    { label: 'Clean', icon: '🧼', style: 'none' },
-    { label: 'Stubble', icon: '🌫️', style: 'clean shaven with light stubble shadow' },
-    { label: 'Cyber Lines', icon: '⚡', style: 'cyber beard implant lines' },
-    { label: 'Goatee', icon: '🖤', style: 'gothic goatee' },
-    { label: 'Lined Beard', icon: '🧔', style: 'precisely lined beard' }
-  ];
+  const makeupIcons: Record<string, string> = {
+    'dark smokey eyeshadow with winged eyeliner': '🖤',
+    'glitter cut-crease glam eyes': '✨',
+    'natural soft glam': '🌿',
+    'cyberpunk graphic liner with neon accents': '⚡',
+    'gothic heavy kohl liner': '💀',
+    'bronzed editorial glow': '🌇'
+  };
+  const lipstickIcons: Record<string, string> = {
+    'bold ruby red satin': '💋',
+    'deep crimson velvet': '🍷',
+    'dark plum gothic': '🖤',
+    'blood red gloss': '❤️',
+    'nude velvet matte': '🍑',
+    'electric neon magenta': '🩷'
+  };
 
   const browOptions = [
     { label: 'Arched', style: 'arched' },
@@ -832,6 +840,12 @@ export default function App() {
                 <div className="preset-sub">
                   {g.id === 'ruby_noir'
                     ? 'Crimson Hair · Lace Corset'
+                    : g.id === 'kira_hd'
+                    ? 'HD Model · Studio Render'
+                    : g.id === 'nova_hd'
+                    ? 'HD Model · Low-Key Noir'
+                    : g.id === 'aria_hd'
+                    ? 'HD Model · Warm Editorial'
                     : g.id === 'matrix_07'
                     ? 'Cyber Undercut · Techwear'
                     : g.outfit.slice(0, 24) + '…'}
@@ -1103,10 +1117,10 @@ export default function App() {
                 HAIR COLOR
               </button>
               <button
-                className={`dock-tab ${dockTab === 'facial' ? 'active' : ''}`}
-                onClick={() => setDockTab('facial')}
+                className={`dock-tab ${dockTab === 'makeup' ? 'active' : ''}`}
+                onClick={() => setDockTab('makeup')}
               >
-                FACIAL HAIR
+                MAKEUP
               </button>
               <button
                 className={`dock-tab ${dockTab === 'eyebrows' ? 'active' : ''}`}
@@ -1169,18 +1183,36 @@ export default function App() {
                 </div>
               )}
 
-              {dockTab === 'facial' && (
-                <div className="facial-grid">
-                  {facialHairOptions.map(f => (
-                    <button
-                      key={f.style}
-                      className={`facial-card ${(draft.facialHair || 'none') === f.style ? 'active' : ''}`}
-                      onClick={() => setDraft(d => ({ ...d, facialHair: f.style }))}
-                    >
-                      <span>{f.icon}</span>
-                      <em>{f.label}</em>
-                    </button>
-                  ))}
+              {dockTab === 'makeup' && (
+                <div className="makeup-tab">
+                  <div className="makeup-grid">
+                    {avatarOptions.makeupStyle.map(m => (
+                      <button
+                        key={m}
+                        className={`makeup-card ${draft.makeupStyle === m ? 'active' : ''}`}
+                        onClick={() => setDraft(d => ({ ...d, makeupStyle: m }))}
+                      >
+                        <span>{makeupIcons[m] || '💄'}</span>
+                        <em>{m.split(' ').slice(0, 2).join(' ')}</em>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="lipstick-row">
+                    <span className="dock-section-title">LIPSTICK</span>
+                    <div className="lipstick-chips">
+                      {avatarOptions.lipstickShade.map(ls => (
+                        <button
+                          key={ls}
+                          className={`lipstick-chip ${draft.lipstickShade === ls ? 'active' : ''}`}
+                          onClick={() => setDraft(d => ({ ...d, lipstickShade: ls }))}
+                          title={ls}
+                        >
+                          {lipstickIcons[ls] || '💄'}
+                          <em>{ls.split(' ')[0]}</em>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1666,13 +1698,6 @@ export default function App() {
                 <div className="inspector-label">
                   <span>Gender</span>
                   <div className="gender-selector">
-                    <button
-                      className={`gender-btn ${draft.gender === 'male' ? 'active' : ''}`}
-                      onClick={() => setDraft(d => ({ ...d, gender: 'male' }))}
-                      title="Male"
-                    >
-                      ♂
-                    </button>
                     <button
                       className={`gender-btn ${draft.gender === 'female' ? 'active' : ''}`}
                       onClick={() => setDraft(d => ({ ...d, gender: 'female' }))}

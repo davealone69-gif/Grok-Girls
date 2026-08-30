@@ -17,7 +17,7 @@ public class MainActivity extends BridgeActivity {
     // navigation buttons. Padding the WebView keeps 100vh inside the safe
     // area on every Android version, including enforced edge-to-edge.
     ViewCompat.setOnApplyWindowInsetsListener(getBridge().getWebView(), (v, insets) -> {
-      WindowInsetsCompat bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+      androidx.core.graphics.Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
       v.setPadding(0, bars.top, 0, bars.bottom);
       return insets;
     });

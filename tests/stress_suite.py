@@ -1,4 +1,6 @@
 from playwright.sync_api import sync_playwright
+import os
+AXE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'node_modules', 'axe-core', 'axe.min.js')
 import json, time
 
 out = {}
@@ -244,7 +246,7 @@ with sync_playwright() as p:
         pg = b.new_page(viewport={"width": vp[0], "height": vp[1]})
         pg.goto("http://localhost:8080/", wait_until="networkidle")
         pg.wait_for_timeout(500)
-        pg.add_script_tag(path="/home/user/Grok-Girls/node_modules/axe-core/axe.min.js")
+        pg.add_script_tag(path=AXE)
         r = pg.evaluate("""async () => {
           const res = await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a','wcag2aa','wcag21aa'] } });
           return res.violations.map(v => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, help: v.help }));
@@ -257,7 +259,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
     pg.locator(".rail-btn[title='Interactive Dialogue']").click()
     pg.wait_for_timeout(300)
-    pg.add_script_tag(path="/home/user/Grok-Girls/node_modules/axe-core/axe.min.js")
+    pg.add_script_tag(path=AXE)
     r = pg.evaluate("""async () => {
       const res = await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a','wcag2aa','wcag21aa'] } });
       return res.violations.map(v => ({ id: v.id, impact: v.impact, nodes: v.nodes.length }));

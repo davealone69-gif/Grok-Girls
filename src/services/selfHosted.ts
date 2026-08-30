@@ -287,6 +287,15 @@ export function buildComfyPayload(req: SelfHostRequest, clientId: string) {
 /* ------------------------------ generation ---------------------------- */
 const sleep = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
 
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result));
+    fr.onerror = () => reject(fr.error ?? new Error('Could not read render data'));
+    fr.readAsDataURL(blob);
+  });
+}
+
 export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHostResult> {
   const base = getServerBase();
   if (!base) {
@@ -359,7 +368,10 @@ export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHost
           const imgRes = await fetch(`${base}/view?${params}`);
           if (!imgRes.ok) return { status: 'error', warning: 'ComfyUI image fetch failed.' };
           const blob = await imgRes.blob();
-          return { status: 'ready', assetUrl: URL.createObjectURL(blob), jobId: prompt_id };
+          // Persist as a data URL so the render survives reloads and stays in
+          // the gallery (blob: URLs die when the page unloads).
+          const dataUrl = await blobToDataUrl(blob);
+          return { status: 'ready', assetUrl: dataUrl, jobId: prompt_id };
         }
       }
       return {

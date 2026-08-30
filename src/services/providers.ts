@@ -572,6 +572,11 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
       cfg: r.cfg,
       seed: r.seed
     });
+    if (out.status === 'error') {
+      // Surface server-side failures instead of silently falling back to the
+      // procedural engine — the user asked for their own server.
+      throw new Error(out.warning || 'Self-hosted render failed.');
+    }
     return {
       provider: p,
       status: out.status,
@@ -584,19 +589,21 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
   const key = getSavedApiKey(p);
   const model = env()[`VITE_${p.toUpperCase()}_${r.mode.toUpperCase()}_MODEL`] ?? env()[`VITE_${p.toUpperCase()}_MODEL`] ?? defaultModel(p, r.mode);
   const endpoint = getSavedEndpoint(p, r.mode) || (p === 'custom' ? '' : defaultEndpoint(p, r.mode, model));
-  if (!key || !endpoint) {
+  // Custom endpoints may be keyless; OpenRouter and Gemini always need a key.
+  const missingKey = p !== 'custom' && !key;
+  if (missingKey || !endpoint) {
     return {
       provider: p,
       status: 'error',
-      warning: `${p} ${r.mode} endpoint or API key is not configured. (Local procedural engine available)`,
+      warning: `${p} ${r.mode} ${missingKey ? 'API key' : 'endpoint'} is not configured. (Local procedural engine available)`,
       assetUrl: undefined,
       text: undefined
     };
   }
   const headers: any = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${key}`
+    'Content-Type': 'application/json'
   };
+  if (key) headers.Authorization = `Bearer ${key}`;
   if (p === 'openrouter') {
     headers['HTTP-Referer'] = typeof location !== 'undefined' ? location.origin : 'http://localhost';
     headers['X-Title'] = 'Grok Girls';
@@ -665,7 +672,9 @@ class Cloud {
       return Boolean(getServerBase());
     }
     if (this.name === 'custom') {
-      return Boolean(getSavedApiKey(this.name) && getSavedEndpoint(this.name));
+      // Custom endpoints may be keyless — an endpoint is all we require.
+      // (getSavedEndpoint already falls back from the mode-specific to the generic key.)
+      return Boolean(getSavedEndpoint(this.name, 'image') || getSavedEndpoint(this.name));
     }
     return Boolean(getSavedApiKey(this.name));
   }
@@ -675,7 +684,13 @@ class Cloud {
 }
 
 export function providers() {
-  return [new Local(), new Cloud('openrouter'), new Cloud('gemini'), new Cloud('custom')];
+  return [
+    new Local(),
+    new Cloud('openrouter'),
+    new Cloud('gemini'),
+    new Cloud('custom'),
+    new Cloud('selfhosted')
+  ];
 }
 
 export async function generateWithFallback(

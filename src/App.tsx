@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { Girl, rooms, seedGirls, Room } from './models/studio';
 import { advanceStory, initialStory, StoryState, storyChapters, storyPrompt } from './models/story';
-import { addMemory, buildGenerationPrompt, loadGirls, saveGirls } from './services/memory';
+import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDeleted } from './services/memory';
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName } from './services/providers';
@@ -245,6 +245,9 @@ export default function App() {
   );
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [panning, setPanning] = useState(false);
+  // Session-only viewport override: used when the user explicitly shows a
+  // procedural/local render in the viewport without replacing the saved photo.
+  const [viewportOverride, setViewportOverride] = useState<string | null>(null);
   const panStart = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
 
   const onStagePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -400,6 +403,7 @@ export default function App() {
     setAvatarState(loadAvatarState(id, g));
     setStory(initialStory(g.affinity / 25));
     setResult('');
+    setViewportOverride(null);
   };
 
   /* ------------------------------------------------------------ actions */
@@ -465,6 +469,7 @@ export default function App() {
     const next = girls.filter(g => g.id !== id);
     setGirls(next);
     saveGirls(next);
+    markPersonaDeleted(id);
     setDeleteArmedId(null);
     if (id === selectedId) selectGirl(next[0].id);
     showToast('Persona removed');
@@ -565,11 +570,13 @@ export default function App() {
   });
 
   const handleGenerate = async () => {
+    if (busy) return;
     if (provider === 'selfhosted' && !getServerBase()) {
       showToast('Configure your self-hosted server in ⚙ Settings → Self-Hosted first');
       setResult(
         'SELF-HOSTED engine selected but no server URL is configured. Open ⚙ Settings and enter your A1111 (port 7860) or ComfyUI (port 8188) address.'
       );
+      window.setTimeout(() => setResult(''), 10000);
       return;
     }
     setBusy(true);
@@ -584,7 +591,11 @@ export default function App() {
           showToast(`Render complete · ${r.provider.toUpperCase()} engine · ${renderSize}px`);
         } else {
           // Local procedural preview -> gallery only, keep the HD photo in the viewport
-          showToast('Local preview render added to gallery — tap 🖥 on a gallery card to set it as the viewport image');
+          showToast(
+            provider !== 'local'
+              ? `LOCAL engine used (${provider.toUpperCase()} is not configured) — render saved to gallery`
+              : 'Local preview render added to gallery — tap 🖥 on a gallery card to set it as the viewport image'
+          );
         }
         addGalleryItem({
           avatarId: girl.id,
@@ -669,13 +680,22 @@ export default function App() {
     }
   };
 
+  const isProceduralUrl = (u: string) => u.startsWith('blob:') || u.startsWith('data:image/svg+xml');
+
   const useVariation = (v: { url?: string; provider: string; prompt: string }) => {
     if (!v.url) return;
-    updateGirl({ previewUrl: v.url });
+    if (isProceduralUrl(v.url)) {
+      // Procedural preview: show it this session only — never overwrite the saved photo.
+      setViewportOverride(v.url);
+      showToast('Local variation shown in the viewport (session only) — your saved photo is untouched');
+    } else {
+      setViewportOverride(null);
+      updateGirl({ previewUrl: v.url });
+      showToast('Variation applied to viewport & saved');
+    }
     addGalleryItem({ avatarId: girl.id, mode: 'image', prompt: v.prompt, assetUrl: v.url, provider: v.provider });
     setGallery(loadGallery());
     setVariationsOpen(false);
-    showToast('Variation applied to viewport & saved to gallery');
   };
 
   /* ------- STYLE PRESETS ------- */
@@ -868,8 +888,15 @@ export default function App() {
   /* ----------------------------------------------------------- gallery */
   const useAsViewport = (item: GalleryItem) => {
     if (!item.assetUrl) return;
-    updateGirl({ previewUrl: item.assetUrl });
-    showToast('Gallery render set as viewport preview');
+    if (isProceduralUrl(item.assetUrl)) {
+      // Procedural/local render: session-only viewport override, never persisted.
+      setViewportOverride(item.assetUrl);
+      showToast('Local render shown in the viewport (session only) — your saved photo is untouched');
+    } else {
+      setViewportOverride(null);
+      updateGirl({ previewUrl: item.assetUrl });
+      showToast('Gallery render set as viewport preview');
+    }
   };
 
   const deleteGalleryItem = (id: string) => {
@@ -894,28 +921,61 @@ export default function App() {
       showToast('Please choose an image file');
       return;
     }
-    const url = URL.createObjectURL(file);
-    const id = `import_${Date.now()}`;
-    const baseName = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').slice(0, 26) || 'Imported Persona';
-    const newGirl: Girl = {
-      ...girl,
-      id,
-      name: baseName,
-      thumbnailUrl: url,
-      previewUrl: url,
-      bio: 'Imported reference persona. Tune identity traits in the inspector.',
-      traits: ['imported'],
-      affinity: 50,
-      trust: 50,
-      emotion: 'calm',
-      memories: []
+    const finish = (url: string) => {
+      const id = `import_${Date.now()}`;
+      const baseName = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').slice(0, 26) || 'Imported Persona';
+      const newGirl: Girl = {
+        ...girl,
+        id,
+        name: baseName,
+        thumbnailUrl: url,
+        previewUrl: url,
+        bio: 'Imported reference persona. Tune identity traits in the inspector.',
+        traits: ['imported'],
+        affinity: 50,
+        trust: 50,
+        emotion: 'calm',
+        memories: []
+      };
+      const next = [newGirl, ...girls];
+      setGirls(next);
+      saveGirls(next);
+      selectGirl(id);
+      bumpAndCelebrate('imports');
+      showToast('Image imported as new preset');
     };
-    const next = [newGirl, ...girls];
-    setGirls(next);
-    saveGirls(next);
-    selectGirl(id);
-    bumpAndCelebrate('imports');
-    showToast('Image imported as new preset');
+    // Rasterize to a bounded JPEG data URL so the persona photo survives
+    // reloads (blob: URLs die when the page unloads).
+    const objUrl = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => {
+      try {
+        if (!im.naturalWidth || !im.naturalHeight) throw new Error('no intrinsic size');
+        const MAX = 1280;
+        const sc = Math.min(1, MAX / Math.max(im.naturalWidth, im.naturalHeight));
+        const w = Math.max(1, Math.round(im.naturalWidth * sc));
+        const h = Math.max(1, Math.round(im.naturalHeight * sc));
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext('2d');
+        if (!ctx) throw new Error('no canvas context');
+        ctx.drawImage(im, 0, 0, w, h);
+        finish(c.toDataURL('image/jpeg', 0.88));
+      } catch {
+        const fr = new FileReader();
+        fr.onload = () => finish(String(fr.result));
+        fr.onerror = () => showToast('Could not read image file');
+        fr.readAsDataURL(file);
+      } finally {
+        URL.revokeObjectURL(objUrl);
+      }
+    };
+    im.onerror = () => {
+      URL.revokeObjectURL(objUrl);
+      showToast('Could not load image file');
+    };
+    im.src = objUrl;
   };
 
   const resetAllData = () => {
@@ -941,6 +1001,7 @@ export default function App() {
         setStatsOpen(false);
         setVariationsOpen(false);
         setLightboxIndex(null);
+        setMobileSheet('none');
         setView('builder');
         return;
       }
@@ -1132,6 +1193,7 @@ export default function App() {
   ];
 
   const currentPreviewUrl =
+    viewportOverride ||
     girl.previewUrl ||
     (girl.id === 'ruby_noir'
       ? '/assets/ruby-noir.jpg'
@@ -1149,6 +1211,19 @@ export default function App() {
 
   const filteredGallery = galleryFilter === 'all' ? gallery : gallery.filter(g => g.provider === galleryFilter);
   const lightboxItem = lightboxIndex !== null ? filteredGallery[lightboxIndex] || null : null;
+
+  const presetThumbFallback = (id: string) =>
+    id === 'ruby_noir'
+      ? '/assets/ruby-noir-thumb.jpg'
+      : id === 'matrix_07'
+      ? '/assets/preset-1.jpg'
+      : id === 'kira_hd'
+      ? '/assets/kira-hd-thumb.jpg'
+      : id === 'nova_hd'
+      ? '/assets/nova-hd-thumb.jpg'
+      : id === 'aria_hd'
+      ? '/assets/aria-hd-thumb.jpg'
+      : '/assets/ruby-noir-thumb.jpg';
 
   const avatarIdTag =
     girl.id === 'ruby_noir'
@@ -1361,16 +1436,16 @@ export default function App() {
               onClick={() => selectGirl(g.id)}
             >
               <img
-                src={
-                  g.thumbnailUrl ||
-                  (g.id === 'ruby_noir'
-                    ? '/assets/ruby-noir-thumb.jpg'
-                    : g.id === 'matrix_07'
-                    ? '/assets/preset-1.jpg'
-                    : '/assets/ruby-noir-thumb.jpg')
-                }
+                src={g.thumbnailUrl || presetThumbFallback(g.id)}
                 alt={g.name}
                 className="preset-thumb"
+                onError={e => {
+                  const t = e.currentTarget;
+                  if (!t.dataset.fb) {
+                    t.dataset.fb = '1';
+                    t.src = presetThumbFallback(g.id);
+                  }
+                }}
               />
               <div className="preset-info">
                 <div className="preset-name">{g.name}</div>
@@ -2051,11 +2126,15 @@ export default function App() {
               {girls.map(g => (
                 <div key={g.id} className={`preset-browser-card ${g.id === selectedId ? 'selected' : ''}`}>
                   <img
-                    src={
-                      g.thumbnailUrl ||
-                      (g.id === 'ruby_noir' ? '/assets/ruby-noir-thumb.jpg' : '/assets/ruby-noir-thumb.jpg')
-                    }
+                    src={g.thumbnailUrl || presetThumbFallback(g.id)}
                     alt={g.name}
+                    onError={e => {
+                      const t = e.currentTarget;
+                      if (!t.dataset.fb) {
+                        t.dataset.fb = '1';
+                        t.src = presetThumbFallback(g.id);
+                      }
+                    }}
                   />
                   <div className="preset-browser-info">
                     <b>{g.name}</b>

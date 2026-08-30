@@ -23,6 +23,7 @@ export interface AvatarDraft {
   hosieryStyle?: string;
   lingerieLace?: string;
   chairSetting?: string;
+  styleTag?: string;
   tattooStyle?: string;
   augmentStyle?: string;
   scarStyle?: string;
@@ -250,6 +251,7 @@ export function buildDraftPrompt(draft: AvatarDraft, adult = true): string {
     draft.chairSetting ||
     'Setting: seated/reclining in a vintage tufted dark leather armchair, dark moody atmosphere with crimson edge lighting.';
   const accent = draft.colorAccent ? `Color accent: ${draft.colorAccent}.` : '';
+  const style = draft.styleTag ? `Scene style: ${draft.styleTag}.` : '';
 
-  return `${draft.name}, adult fictional character (18+), ${draft.ethnicity}, ${draft.bodyType} build, ${draft.eyeColor} ${draft.eyeShape} eyes, ${draft.faceShape} face, ${draft.hairColor} ${draft.hairStyle} hair, ${draft.skinTone} skin. Wearing ${draft.outfit}. ${choker} ${hosiery} ${makeup} ${lips} ${brows} ${tattoo} ${augment} ${scar} ${facePaint} ${piercings} Pose: ${draft.pose}, ${draft.expression}. ${setting} ${accent} ${draft.extra || ''}. Ultra-HD photorealistic 3D character render, DAZ Studio Genesis 8 HD model style, Iray global illumination, 8K pore-level skin micro-detail, realistic subsurface scattering, intricate fabric textures, lace detail, cinematic studio lighting, masterpiece. ${adultBit}`;
+  return `${draft.name}, adult fictional character (18+), ${draft.ethnicity}, ${draft.bodyType} build, ${draft.eyeColor} ${draft.eyeShape} eyes, ${draft.faceShape} face, ${draft.hairColor} ${draft.hairStyle} hair, ${draft.skinTone} skin. Wearing ${draft.outfit}. ${choker} ${hosiery} ${makeup} ${lips} ${brows} ${tattoo} ${augment} ${scar} ${facePaint} ${piercings} Pose: ${draft.pose}, ${draft.expression}. ${setting} ${style} ${accent} ${draft.extra || ''}. Ultra-HD photorealistic 3D character render, DAZ Studio Genesis 8 HD model style, Iray global illumination, 8K pore-level skin micro-detail, realistic subsurface scattering, intricate fabric textures, lace detail, cinematic studio lighting, masterpiece. ${adultBit}`;
 }

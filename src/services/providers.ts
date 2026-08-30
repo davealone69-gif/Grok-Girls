@@ -9,6 +9,7 @@ export interface GenerationRequest {
   steps?: number;
   cfg?: number;
   seed?: number;
+  negative?: string;
 }
 
 export interface GenerationResult {
@@ -569,7 +570,8 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
       steps: r.steps,
       cfg: r.cfg,
       cfg_scale: r.cfg,
-      seed: r.seed
+      seed: r.seed,
+      negative_prompt: r.negative
     };
   }
   const response = await fetch(url, {

@@ -7,7 +7,12 @@ AAA-style cyberpunk / gothic-glamour **character creator & companion studio** �
 ## Features
 
 ### Avatar Studio (Builder)
-- **Left nav rail** — Appearance, Body, Clothing, Hair, Face, Eyes, Accessories, Augments, Tattoos, Animations, Premium, Help + Randomize, Settings, 18+ toggle, Chat.
+- **Left nav rail** — Appearance, Body, Clothing, Hair, Face, Eyes, Accessories, Augments, Tattoos, Animations, Premium, Help + Randomize, Stats & Achievements, Settings, 18+ toggle, Chat.
+- **Scene Style presets** — one-click mood library (Noir Boudoir, Cyber Neon, Golden Hour, Candlelight, Pastel Dream, B&W Noir, Blue Hour, Red Room): each sets the viewport filter, backdrop, accent color, and prompt style together.
+- **⧉ x4 Variations** — batch-render four alternate poses/angles at once, re-roll any single card, and apply the winner to the viewport + gallery.
+- **Advanced render controls** — negative prompt, seed, steps, CFG, and resolution (1024/1536/2048) in the prompt editor; all forwarded to cloud providers (A1111-style `negative_prompt`, `steps`, `cfg_scale`, `seed`) and used by the local engine.
+- **Drag & drop / paste import** — drop any image onto the viewport or press Ctrl+V to turn it into a new preset instantly.
+- **Immersive fullscreen** — `F` hides all panels for a clean studio view.
 - **Presets drawer** — Ruby Noir plus **ultra-HD female models** (Kira HD, Nova HD, Aria HD — DAZ Genesis-8 style renders), Matrix_07, Shadow Synth, Crazzers AI, Silver Valkyrie, Sugarlab AI, Flirty Rouge + custom/imported personas. Create new presets anytime.
 - **PRESETS browser** — full-grid identity browser with LOAD buttons.
 - **IMPORT tab** — import an image as a new preset, restore a gallery JSON archive, or reset all local data.
@@ -24,9 +29,10 @@ AAA-style cyberpunk / gothic-glamour **character creator & companion studio** �
 - **Chat** — in-character dialogue; keyword-based local engine by default, or OpenRouter / Gemini / Custom LLMs when keys are configured. Quick-reply chips, affection state machine, per-persona memory that feeds future generations.
 - **Story** — 4 chapters (First Meeting, Private Space, Nightlife, New Horizons), relationship-gated chapter jumps, per-room scene actions that render story images straight to the gallery.
 - **Video studio** — real video pipeline: cloud providers return actual clips; **Local mode records a genuine 5-second WebM in-browser** (Ken Burns camera motion, scanlines, film grain, HUD frame, progress) with quality/FPS/aspect/motion presets and one-click download.
-- **Gallery** — every render lands here; favorite, set-as-viewport, download PNG, delete, export/import JSON archives.
+- **Gallery** — every render lands here; click any card for a **fullscreen lightbox** (←/→ arrows, favorite, set-as-viewport, download, delete, prompt caption); export/import JSON archives; **CONTACT SHEET** downloads a PNG grid of your renders; copy the viewport image straight to the clipboard.
+- **Stats & achievements** — renders, favorites, messages, chapters, imports, clips are tracked with 8 unlockable achievement badges.
 - **Premium modal** — feature list + Stripe payment-link redirect (configure link in `src/services/keys.ts`).
-- **Help modal** — in-app guide (Esc closes any overlay) + keyboard shortcuts: `R` rotate · `Z` zoom · `P` prompt editor · `G` generate · `S` save · `V` video studio · `C` chat · `Ctrl+Z` / `Ctrl+Y` undo/redo.
+- **Help modal** — in-app guide (Esc closes any overlay) + keyboard shortcuts: `R` rotate · `Z` zoom · `P` prompt editor · `G` generate · `S` save · `V` video studio · `C` chat · `F` fullscreen · `Ctrl+Z` / `Ctrl+Y` undo/redo · `←`/`→` lightbox navigation.
 
 ## Quick start
 

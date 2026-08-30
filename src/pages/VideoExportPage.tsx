@@ -9,6 +9,7 @@ export interface VideoExportPageProps {
   adult?: boolean;
   provider?: ProviderName;
   videoPrompt?: string;
+  onRendered?: () => void;
 }
 
 const CLIP_SECONDS = 5;
@@ -19,7 +20,8 @@ export default function VideoExportPage({
   latestAssetUrl,
   adult = false,
   provider = 'local',
-  videoPrompt
+  videoPrompt,
+  onRendered
 }: VideoExportPageProps) {
   const [format, setFormat] = useState('mp4');
   const [fps, setFps] = useState(30);
@@ -139,6 +141,7 @@ export default function VideoExportPage({
       setPhase('done');
       setProgress(100);
       setNote('Local cinematic preview recorded (Ken Burns camera + film grain).');
+      onRendered?.();
     };
 
     const noise = makeNoiseCanvas();
@@ -264,6 +267,7 @@ export default function VideoExportPage({
           setProgress(100);
           setPhase('done');
           setNote(`Cloud clip ready via ${r.provider.toUpperCase()}.`);
+          onRendered?.();
           return;
         }
         setNote(r.warning || 'No cloud clip returned — recording local cinematic preview instead.');

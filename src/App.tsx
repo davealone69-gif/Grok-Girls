@@ -17,6 +17,8 @@ import {
   saveDraft
 } from './services/avatarCreator';
 import { redirectToPaymentLink } from './services/stripe';
+import { StylePreset, applyStylePreset, stylePresets } from './services/styles';
+import { StudioStats, achievements, bumpStat, loadStats } from './services/stats';
 import ColorWheel from './components/ColorWheel';
 import SettingsModal from './components/SettingsModal';
 import VideoExportPage from './pages/VideoExportPage';
@@ -32,7 +34,7 @@ type InspectorSection =
   | 'clothing'
   | 'tattoos'
   | 'augments';
-type DockTab = 'style' | 'color' | 'makeup' | 'eyebrows';
+type DockTab = 'style' | 'color' | 'makeup' | 'eyebrows' | 'scene';
 
 const ADULT_KEY = 'grok-girls-adult-v1';
 
@@ -254,6 +256,19 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
+  const [styleFilter, setStyleFilter] = useState<string | null>(null);
+  const [variations, setVariations] = useState<{ url?: string; provider: string; prompt: string }[]>([]);
+  const [variationsOpen, setVariationsOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [immersive, setImmersive] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [negativePrompt, setNegativePrompt] = useState('');
+  const [seedInput, setSeedInput] = useState('');
+  const [stepsInput, setStepsInput] = useState(28);
+  const [cfgInput, setCfgInput] = useState(7);
+  const [renderSize, setRenderSize] = useState(1024);
+  const [stats, setStats] = useState<StudioStats>(() => loadStats());
+  const [statsOpen, setStatsOpen] = useState(false);
   const [premiumOpen, setPremiumOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [outfitOpen, setOutfitOpen] = useState(false);
@@ -350,6 +365,9 @@ export default function App() {
     setPromptOverride('');
     setPromptOpen(false);
     setOutfitOpen(false);
+    setStyleFilter(null);
+    setNegativePrompt('');
+    setSeedInput('');
     showToast('Changes discarded');
   };
 
@@ -361,25 +379,39 @@ export default function App() {
 
   const compiledPrompt = promptOverride.trim() ? promptOverride.trim() : buildDraftPrompt(draft, adult);
 
+  const buildFullPrompt = (base: string) => {
+    const neg = negativePrompt.trim();
+    return neg ? `${base} Avoid: ${neg}.` : base;
+  };
+
+  const genRequest = (prompt: string, seed?: number) => ({
+    prompt: buildFullPrompt(prompt),
+    mode: 'image' as const,
+    width: renderSize,
+    height: renderSize,
+    steps: stepsInput || undefined,
+    cfg: cfgInput || undefined,
+    seed: seed || (seedInput ? Number(seedInput) : undefined),
+    negative: negativePrompt.trim() || undefined
+  });
+
   const handleGenerate = async () => {
     setBusy(true);
     setResult('Synthesizing high-detail avatar render…');
     try {
-      const r = await generateWithFallback(
-        { prompt: compiledPrompt, mode: 'image', width: 1024, height: 1024 },
-        provider
-      );
+      const r = await generateWithFallback(genRequest(compiledPrompt), provider);
       if (r.assetUrl) {
         updateGirl({ previewUrl: r.assetUrl });
         addGalleryItem({
           avatarId: girl.id,
           mode: 'image',
-          prompt: compiledPrompt,
+          prompt: buildFullPrompt(compiledPrompt),
           assetUrl: r.assetUrl,
           provider: r.provider
         });
         setGallery(loadGallery());
-        showToast(`Render complete · ${r.provider.toUpperCase()} engine`);
+        setStats(bumpStat('generations'));
+        showToast(`Render complete · ${r.provider.toUpperCase()} engine · ${renderSize}px`);
       } else {
         showToast(r.warning || 'No media returned by provider');
       }
@@ -391,6 +423,153 @@ export default function App() {
       setBusy(false);
     }
   };
+
+  /* ------- BATCH VARIATIONS (x4) ------- */
+  const variationPrompt = (i: number) => {
+    const extras = [
+      '',
+      ' Variation: alternate camera angle, three-quarter turn.',
+      ' Variation: direct gaze toward camera, subtle confident smile.',
+      ' Variation: looking away thoughtfully, softer dreamy lighting.'
+    ];
+    return compiledPrompt + extras[i % 4];
+  };
+
+  const handleBatchRender = async () => {
+    setBusy(true);
+    setVariationsOpen(true);
+    setVariations([
+      { provider: '…', prompt: '' },
+      { provider: '…', prompt: '' },
+      { provider: '…', prompt: '' },
+      { provider: '…', prompt: '' }
+    ]);
+    try {
+      const results = await Promise.all(
+        [0, 1, 2, 3].map(async i => {
+          const r = await generateWithFallback(
+            genRequest(variationPrompt(i), (seedInput ? Number(seedInput) : Date.now() % 100000) + i * 7),
+            provider
+          );
+          return { url: r.assetUrl, provider: r.provider, prompt: buildFullPrompt(variationPrompt(i)) };
+        })
+      );
+      setVariations(results);
+      setStats(bumpStat('generations', results.filter(r => r.url).length));
+      showToast('4 variations rendered — pick your favorite');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Batch failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const rerollVariation = async (i: number) => {
+    try {
+      const r = await generateWithFallback(
+        genRequest(variationPrompt(i), (Date.now() % 100000) + i * 13),
+        provider
+      );
+      setVariations(vs =>
+        vs.map((v, j) => (j === i ? { url: r.assetUrl, provider: r.provider, prompt: buildFullPrompt(variationPrompt(i)) } : v))
+      );
+      if (r.assetUrl) setStats(bumpStat('generations'));
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Re-roll failed');
+    }
+  };
+
+  const useVariation = (v: { url?: string; provider: string; prompt: string }) => {
+    if (!v.url) return;
+    updateGirl({ previewUrl: v.url });
+    addGalleryItem({ avatarId: girl.id, mode: 'image', prompt: v.prompt, assetUrl: v.url, provider: v.provider });
+    setGallery(loadGallery());
+    setVariationsOpen(false);
+    showToast('Variation applied to viewport & saved to gallery');
+  };
+
+  /* ------- STYLE PRESETS ------- */
+  const applyStyle = (st: StylePreset) => {
+    setStyleFilter(st.filter);
+    setLightingMode(st.lighting);
+    setDraft(d => applyStylePreset(d, st));
+    showToast(`${st.name} style applied`);
+  };
+
+  /* ------- CLIPBOARD & CONTACT SHEET ------- */
+  const copyPreviewToClipboard = async () => {
+    try {
+      const blob = await (await fetch(currentPreviewUrl)).blob();
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
+      showToast('Image copied to clipboard');
+    } catch {
+      showToast('Clipboard blocked — downloading instead');
+      handleSavePng();
+    }
+  };
+
+  const exportContactSheet = async () => {
+    const items = gallery.filter(g => g.assetUrl).slice(0, 8);
+    if (!items.length) {
+      showToast('No renders available for a contact sheet');
+      return;
+    }
+    try {
+      const cols = Math.min(4, items.length);
+      const rows = Math.ceil(items.length / cols);
+      const cell = 512;
+      const pad = 24;
+      const canvas = document.createElement('canvas');
+      canvas.width = cols * cell + (cols + 1) * pad;
+      canvas.height = rows * cell + (rows + 1) * pad + 96;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('no ctx');
+      ctx.fillStyle = '#0a0a12';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#fff';
+      ctx.font = '700 34px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('GROK GIRLS · CONTACT SHEET', canvas.width / 2, 58);
+      const imgs = await Promise.all(
+        items.map(
+          item =>
+            new Promise<HTMLImageElement | null>(res => {
+              const im = new Image();
+              im.onload = () => res(im);
+              im.onerror = () => res(null);
+              im.src = item.assetUrl!;
+            })
+        )
+      );
+      imgs.forEach((im, idx) => {
+        if (!im) return;
+        const x = pad + (idx % cols) * (cell + pad);
+        const y = 84 + Math.floor(idx / cols) * (cell + pad);
+        const sc = Math.min(cell / im.width, cell / im.height);
+        const dw = im.width * sc;
+        const dh = im.height * sc;
+        ctx.fillStyle = '#101018';
+        ctx.fillRect(x, y, cell, cell);
+        ctx.drawImage(im, x + (cell - dw) / 2, y + (cell - dh) / 2, dw, dh);
+        ctx.strokeStyle = 'rgba(144,78,221,0.55)';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, cell, cell);
+      });
+      const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/png'));
+      if (!blob) throw new Error('no blob');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `grok-girls-contact-sheet-${new Date().toISOString().slice(0, 10)}.png`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      showToast('Contact sheet downloaded');
+    } catch {
+      showToast('Contact sheet failed — some images are CORS-restricted');
+    }
+  };
+
+  const lightboxPrev = () => setLightboxIndex(i => (i === null ? null : (i - 1 + gallery.length) % gallery.length));
+  const lightboxNext = () => setLightboxIndex(i => (i === null ? null : (i + 1) % gallery.length));
 
   const handleSavePng = async () => {
     try {
@@ -421,6 +600,7 @@ export default function App() {
       setChat(out);
       saveChat(girl.id, out);
       addMemory(girls, girl.id, 'Conversation', text, room.id);
+      setStats(bumpStat('chats'));
       const nextAvatar = interactionState(avatarState);
       setAvatarState(nextAvatar);
       saveAvatarState(girl.id, nextAvatar);
@@ -467,6 +647,7 @@ export default function App() {
   const advanceChapter = () => {
     const next = advanceStory(story, story.relationshipLevel + 1);
     setStory(next);
+    setStats(bumpStat('stories'));
     const targetRoom = storyChapters.find(c => c.chapter === next.chapter)?.roomId;
     if (targetRoom) setRoomId(targetRoom);
     showToast(`Chapter ${next.chapter}: ${next.title}`);
@@ -536,6 +717,7 @@ export default function App() {
     setGirls(next);
     saveGirls(next);
     selectGirl(id);
+    setStats(bumpStat('imports'));
     showToast('Image imported as new preset');
   };
 
@@ -559,7 +741,15 @@ export default function App() {
         setHelpOpen(false);
         setOutfitOpen(false);
         setPromptOpen(false);
+        setStatsOpen(false);
+        setVariationsOpen(false);
+        setLightboxIndex(null);
         setView('builder');
+        return;
+      }
+      if (lightboxIndex !== null) {
+        if (e.key === 'ArrowLeft') lightboxPrev();
+        if (e.key === 'ArrowRight') lightboxNext();
         return;
       }
       if (isSettingsOpen || premiumOpen || helpOpen || outfitOpen) return;
@@ -580,6 +770,9 @@ export default function App() {
         return;
       }
       switch (e.key.toLowerCase()) {
+        case 'f':
+          setImmersive(v => !v);
+          break;
         case 'r':
           setRotationAngle(a => (a + 45) % 360);
           break;
@@ -605,6 +798,26 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  });
+
+  // Paste an image from clipboard -> new preset
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const it of Array.from(items)) {
+        if (it.type.startsWith('image/')) {
+          const f = it.getAsFile();
+          if (f) {
+            e.preventDefault();
+            onImportImage(f);
+            return;
+          }
+        }
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
   });
 
   /* ------------------------------------------------------------- data */
@@ -729,6 +942,14 @@ export default function App() {
       ? '/assets/matrix-07-center.jpg'
       : '/assets/ruby-noir.jpg');
 
+  const viewportFilter =
+    styleFilter ??
+    (lightingMode === 'noir'
+      ? 'contrast(1.15) brightness(1.02) drop-shadow(0 0 35px rgba(230, 32, 64, 0.35))'
+      : lightingMode === 'wireframe'
+      ? 'invert(1) hue-rotate(180deg)'
+      : 'drop-shadow(0 20px 40px rgba(0,0,0,0.85))');
+
   const avatarIdTag =
     girl.id === 'ruby_noir'
       ? 'RUBY_NOIR_9X4C'
@@ -738,7 +959,7 @@ export default function App() {
 
   /* -------------------------------------------------------------- view */
   return (
-    <div className="app-container">
+    <div className={`app-container ${immersive ? 'immersive' : ''}`}>
       {/* 1. LEFT VERTICAL NAVIGATION RAIL */}
       <aside className="nav-rail">
         <div className="brand-logo" title="Grok Girls Studio">
@@ -884,6 +1105,14 @@ export default function App() {
             <span className="rail-icon">🎲</span>
           </button>
 
+          <button
+            className={`rail-btn ${statsOpen ? 'active' : ''}`}
+            onClick={() => setStatsOpen(true)}
+            title="Stats & Achievements"
+          >
+            <span className="rail-icon">📊</span>
+          </button>
+
           <button className="rail-btn" onClick={() => setIsSettingsOpen(true)} title="AI Provider Settings">
             <span className="rail-icon">⚙️</span>
           </button>
@@ -1024,6 +1253,13 @@ export default function App() {
             >
               ✎
             </button>
+            <button
+              className="icon-tool-btn"
+              onClick={() => setImmersive(v => !v)}
+              title="Immersive Fullscreen (F)"
+            >
+              ⛶
+            </button>
             <button className="icon-tool-btn" onClick={resetCamera} title="Reset View">
               ↺
             </button>
@@ -1054,7 +1290,25 @@ export default function App() {
           onPointerMove={onStagePointerMove}
           onPointerUp={onStagePointerEnd}
           onPointerLeave={onStagePointerEnd}
+          onDragOver={e => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={e => {
+            if (e.currentTarget === e.target) setDragging(false);
+          }}
+          onDrop={e => {
+            e.preventDefault();
+            setDragging(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f) onImportImage(f);
+          }}
         >
+          {dragging && (
+            <div className="drop-overlay">
+              <div className="drop-overlay-inner">🖼️ DROP IMAGE TO IMPORT AS PRESET</div>
+            </div>
+          )}
           <div className="character-render-wrap">
             <img
               src={currentPreviewUrl}
@@ -1063,12 +1317,7 @@ export default function App() {
               className="character-image"
               style={{
                 transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel}) rotate(${rotationAngle}deg)`,
-                filter:
-                  lightingMode === 'noir'
-                    ? 'contrast(1.15) brightness(1.02) drop-shadow(0 0 35px rgba(230, 32, 64, 0.35))'
-                    : lightingMode === 'wireframe'
-                    ? 'invert(1) hue-rotate(180deg)'
-                    : 'drop-shadow(0 20px 40px rgba(0,0,0,0.85))'
+                filter: viewportFilter
               }}
             />
 
@@ -1112,20 +1361,29 @@ export default function App() {
             <button className="hud-btn" onClick={handleSavePng} title="Download current render as PNG">
               <span>⬇</span> PNG
             </button>
+            <button className="hud-btn" onClick={copyPreviewToClipboard} title="Copy image to clipboard">
+              <span>⎘</span> COPY
+            </button>
           </div>
 
           {/* Viewport Bottom Lighting / Camera Bar */}
           <div className="viewport-lighting-bar">
             <button
               className={`lighting-btn ${lightingMode === 'studio' ? 'active' : ''}`}
-              onClick={() => setLightingMode('studio')}
+              onClick={() => {
+                setLightingMode('studio');
+                setStyleFilter(null);
+              }}
               title="Studio Softbox Keylight"
             >
               ☀️
             </button>
             <button
               className={`lighting-btn ${lightingMode === 'noir' ? 'active' : ''}`}
-              onClick={() => setLightingMode('noir')}
+              onClick={() => {
+                setLightingMode('noir');
+                setStyleFilter(null);
+              }}
               title="Gothic Noir Armchair Shadows (Picture 1 Mood)"
             >
               💀
@@ -1134,6 +1392,7 @@ export default function App() {
               className={`lighting-btn ${lightingMode === 'full' ? 'active' : ''}`}
               onClick={() => {
                 setLightingMode('full');
+                setStyleFilter(null);
                 setZoomLevel(0.85);
               }}
               title="Full-Length Framing"
@@ -1144,6 +1403,7 @@ export default function App() {
               className={`lighting-btn ${lightingMode === 'bust' ? 'active' : ''}`}
               onClick={() => {
                 setLightingMode('bust');
+                setStyleFilter(null);
                 setZoomLevel(1.35);
               }}
               title="Bust & Face Portrait"
@@ -1152,7 +1412,10 @@ export default function App() {
             </button>
             <button
               className={`lighting-btn ${lightingMode === 'wireframe' ? 'active' : ''}`}
-              onClick={() => setLightingMode(m => (m === 'wireframe' ? 'noir' : 'wireframe'))}
+              onClick={() => {
+                setStyleFilter(null);
+                setLightingMode(m => (m === 'wireframe' ? 'noir' : 'wireframe'));
+              }}
               title="3D Depth Wireframe"
             >
               🧊
@@ -1194,12 +1457,68 @@ export default function App() {
                 onChange={e => setPromptOverride(e.target.value)}
                 spellCheck={false}
               />
+              <div className="advanced-grid">
+                <label>
+                  NEGATIVE PROMPT
+                  <input
+                    type="text"
+                    value={negativePrompt}
+                    onChange={e => setNegativePrompt(e.target.value)}
+                    placeholder="blurry, low quality, extra fingers…"
+                  />
+                </label>
+                <label>
+                  SEED
+                  <input
+                    type="number"
+                    value={seedInput}
+                    onChange={e => setSeedInput(e.target.value)}
+                    placeholder="random"
+                  />
+                </label>
+                <label>
+                  STEPS
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={stepsInput}
+                    onChange={e => setStepsInput(Number(e.target.value))}
+                  />
+                </label>
+                <label>
+                  CFG
+                  <input
+                    type="number"
+                    step={0.5}
+                    min={1}
+                    max={20}
+                    value={cfgInput}
+                    onChange={e => setCfgInput(Number(e.target.value))}
+                  />
+                </label>
+                <label>
+                  RESOLUTION
+                  <select value={renderSize} onChange={e => setRenderSize(Number(e.target.value))}>
+                    <option value={1024}>1024 · FAST</option>
+                    <option value={1536}>1536 · HD</option>
+                    <option value={2048}>2048 · ULTRA</option>
+                  </select>
+                </label>
+              </div>
               <div className="prompt-editor-foot">
-                The prompt is compiled live from your builder choices. Edit it, then hit GENERATE RENDER.
+                The prompt compiles live from your builder choices. Negative/seed/steps/CFG are sent to
+                cloud providers; the local engine uses them for seed & resolution.
               </div>
             </div>
           )}
         </div>
+
+        {immersive && (
+          <button className="immersive-exit" onClick={() => setImmersive(false)}>
+            ⛶ EXIT FULLSCREEN (F)
+          </button>
+        )}
 
         {/* Lower Tool Dock (Hair, Color Wheel, Add-ons, Angle Previews) */}
         <div className="lower-dock">
@@ -1229,6 +1548,12 @@ export default function App() {
                 onClick={() => setDockTab('eyebrows')}
               >
                 EYEBROWS
+              </button>
+              <button
+                className={`dock-tab ${dockTab === 'scene' ? 'active' : ''}`}
+                onClick={() => setDockTab('scene')}
+              >
+                SCENE STYLE
               </button>
             </div>
 
@@ -1342,6 +1667,38 @@ export default function App() {
                     />
                     <b>{draft.browThickness || 3} / 5</b>
                   </label>
+                </div>
+              )}
+
+              {dockTab === 'scene' && (
+                <div className="scene-style-panel">
+                  <div className="scene-style-grid">
+                    {stylePresets.map(st => (
+                      <button
+                        key={st.id}
+                        className={`scene-style-card ${draft.styleTag === st.prompt ? 'active' : ''}`}
+                        onClick={() => applyStyle(st)}
+                        title={st.description}
+                      >
+                        <span>{st.icon}</span>
+                        <em>{st.name}</em>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="scene-style-note">
+                    One-click scene direction: lighting filter, backdrop, accent color and prompt style.
+                    {styleFilter && (
+                      <button
+                        className="prompt-mini-btn"
+                        onClick={() => {
+                          setStyleFilter(null);
+                          showToast('Style reset to manual lighting');
+                        }}
+                      >
+                        RESET
+                      </button>
+                    )}
+                  </p>
                 </div>
               )}
             </div>
@@ -1703,6 +2060,7 @@ export default function App() {
                 adult={adult}
                 provider={provider}
                 videoPrompt={buildDraftPrompt(draft, adult)}
+                onRendered={() => setStats(bumpStat('videos'))}
               />
             </div>
           </div>
@@ -1716,6 +2074,9 @@ export default function App() {
                 Generation Archive ({gallery.length})
               </h3>
               <div style={{ display: 'flex', gap: 8 }}>
+                <button className="prompt-mini-btn" onClick={exportContactSheet} title="Download a PNG grid of your renders">
+                  CONTACT SHEET
+                </button>
                 <button className="prompt-mini-btn" onClick={() => exportGallery(gallery)}>
                   EXPORT JSON
                 </button>
@@ -1751,8 +2112,8 @@ export default function App() {
               </div>
             ) : (
               <div className="gallery-grid">
-                {gallery.map(item => (
-                  <div key={item.id} className="gallery-card">
+                {gallery.map((item, idx) => (
+                  <div key={item.id} className="gallery-card" onClick={() => setLightboxIndex(idx)}>
                     {item.assetUrl ? (
                       <img src={item.assetUrl} alt="Generation" />
                     ) : (
@@ -1762,9 +2123,12 @@ export default function App() {
                       <span className="gallery-provider">{item.provider.toUpperCase()}</span>
                       <span className="gallery-mode">{item.mode.toUpperCase()}</span>
                     </div>
-                    <div className="gallery-card-actions">
+                    <div className="gallery-card-actions" onClick={e => e.stopPropagation()}>
                       <button
-                        onClick={() => setGallery(toggleFavorite(item.id))}
+                        onClick={() => {
+                          setGallery(toggleFavorite(item.id));
+                          if (!item.favorite) setStats(bumpStat('favorites'));
+                        }}
                         title="Favorite"
                       >
                         {item.favorite ? '★' : '☆'}
@@ -2294,6 +2658,15 @@ export default function App() {
             CANCEL
           </button>
 
+          <button
+            className="btn-batch"
+            disabled={busy}
+            onClick={handleBatchRender}
+            title="Generate 4 variations at once"
+          >
+            ⧉ x4
+          </button>
+
           <button className="btn-generate-media" disabled={busy} onClick={handleGenerate}>
             {busy ? 'RENDERING…' : '✨ GENERATE RENDER'}
           </button>
@@ -2418,13 +2791,194 @@ export default function App() {
               </div>
               <div>
                 <b>Shortcuts</b> — R rotate · Z zoom · P prompt editor · G generate · S save · V video
-                studio · C chat · Ctrl+Z / Ctrl+Y undo / redo · Esc closes any overlay.
+                studio · C chat · F fullscreen · Ctrl+Z / Ctrl+Y undo / redo · ←/→ navigate lightbox ·
+                Esc closes any overlay.
+              </div>
+              <div>
+                <b>Pro moves</b> — drag & drop (or Ctrl+V paste) any image onto the viewport to import
+                it as a preset · click gallery items for the fullscreen lightbox · SCENE STYLE tab for
+                one-click moods · ⧉ x4 renders four variations at once.
               </div>
             </div>
             <div className="row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
               <button type="button" className="generate" onClick={() => setHelpOpen(false)}>
                 GOT IT
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VARIATIONS OVERLAY */}
+      {variationsOpen && (
+        <div className="modal-backdrop" onClick={() => setVariationsOpen(false)}>
+          <div className="modal-card variations-card" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>⧉ 4 Variations — {girl.name}</h3>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="prompt-mini-btn" disabled={busy} onClick={handleBatchRender}>
+                  ↻ RE-ROLL ALL
+                </button>
+                <button className="modal-close" onClick={() => setVariationsOpen(false)}>
+                  ✕
+                </button>
+              </div>
+            </div>
+            {busy ? (
+              <div className="variations-grid">
+                {[0, 1, 2, 3].map(i => (
+                  <div key={i} className="variation-card loading">
+                    <div className="variation-shimmer" />
+                    <span>RENDERING…</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="variations-grid">
+                {variations.map((v, i) => (
+                  <div key={i} className="variation-card">
+                    {v.url ? (
+                      <img src={v.url} alt={`Variation ${i + 1}`} />
+                    ) : (
+                      <div className="variation-placeholder">FAILED</div>
+                    )}
+                    <span className="gallery-provider">#{i + 1} · {v.provider.toUpperCase()}</span>
+                    <div className="variation-actions">
+                      <button onClick={() => useVariation(v)} disabled={!v.url}>
+                        USE THIS
+                      </button>
+                      <button onClick={() => rerollVariation(i)} disabled={busy}>
+                        ↻
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p style={{ margin: '10px 0 0', fontSize: 11, color: '#8b8ba6' }}>
+              USE THIS loads the render into the viewport and saves it to the gallery.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* LIGHTBOX OVERLAY */}
+      {lightboxIndex !== null && gallery[lightboxIndex] && (
+        <div className="lightbox-backdrop" onClick={() => setLightboxIndex(null)}>
+          <button className="lightbox-arrow left" onClick={e => { e.stopPropagation(); lightboxPrev(); }}>
+            ‹
+          </button>
+          <div className="lightbox-frame" onClick={e => e.stopPropagation()}>
+            <div className="lightbox-imgwrap">
+              {gallery[lightboxIndex].assetUrl ? (
+                <img src={gallery[lightboxIndex].assetUrl} alt="Render" />
+              ) : (
+                <div className="variation-placeholder">QUEUED</div>
+              )}
+            </div>
+            <div className="lightbox-bar">
+              <div className="lightbox-meta">
+                <span className="gallery-provider">{gallery[lightboxIndex].provider.toUpperCase()}</span>
+                <span className="gallery-mode">
+                  {gallery[lightboxIndex].mode.toUpperCase()} · {lightboxIndex + 1} / {gallery.length}
+                </span>
+              </div>
+              <div className="lightbox-actions">
+                <button
+                  onClick={() => {
+                    setGallery(toggleFavorite(gallery[lightboxIndex].id));
+                    if (!gallery[lightboxIndex].favorite) setStats(bumpStat('favorites'));
+                  }}
+                  title="Favorite"
+                >
+                  {gallery[lightboxIndex].favorite ? '★' : '☆'}
+                </button>
+                <button
+                  onClick={() => useAsViewport(gallery[lightboxIndex])}
+                  title="Set as viewport preview"
+                >
+                  🖥
+                </button>
+                {gallery[lightboxIndex].assetUrl && (
+                  <button
+                    onClick={() => downloadMedia(gallery[lightboxIndex].assetUrl!, `${gallery[lightboxIndex].id}.png`)}
+                    title="Download"
+                  >
+                    ⬇
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    deleteGalleryItem(gallery[lightboxIndex].id);
+                    setLightboxIndex(null);
+                  }}
+                  title="Delete"
+                >
+                  🗑
+                </button>
+                <button className="modal-close" onClick={() => setLightboxIndex(null)}>
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div className="lightbox-prompt">{gallery[lightboxIndex].prompt}</div>
+          </div>
+          <button className="lightbox-arrow right" onClick={e => { e.stopPropagation(); lightboxNext(); }}>
+            ›
+          </button>
+        </div>
+      )}
+
+      {/* STATS & ACHIEVEMENTS MODAL */}
+      {statsOpen && (
+        <div className="modal-backdrop" onClick={() => setStatsOpen(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>📊 Studio Stats & Achievements</h3>
+              <button className="modal-close" onClick={() => setStatsOpen(false)}>
+                ✕
+              </button>
+            </div>
+            <div className="stats-grid">
+              <div className="stat-cell">
+                <b>{stats.generations}</b>
+                <span>RENDERS</span>
+              </div>
+              <div className="stat-cell">
+                <b>{stats.favorites}</b>
+                <span>FAVORITES</span>
+              </div>
+              <div className="stat-cell">
+                <b>{stats.chats}</b>
+                <span>MESSAGES</span>
+              </div>
+              <div className="stat-cell">
+                <b>{stats.stories}</b>
+                <span>CHAPTERS</span>
+              </div>
+              <div className="stat-cell">
+                <b>{stats.imports}</b>
+                <span>IMPORTS</span>
+              </div>
+              <div className="stat-cell">
+                <b>{stats.videos}</b>
+                <span>CLIPS</span>
+              </div>
+            </div>
+            <div className="dock-section-title" style={{ margin: '16px 0 10px' }}>
+              ACHIEVEMENTS
+            </div>
+            <div className="achievement-grid">
+              {achievements.map(a => {
+                const unlocked = a.test(stats);
+                return (
+                  <div key={a.id} className={`achievement-card ${unlocked ? 'unlocked' : 'locked'}`}>
+                    <span className="achievement-icon">{unlocked ? a.icon : '🔒'}</span>
+                    <b>{a.name}</b>
+                    <p>{a.desc}</p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

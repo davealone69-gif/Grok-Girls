@@ -1,12 +1,14 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { Girl, rooms, seedGirls, Room } from './models/studio';
 import { advanceStory, initialStory, StoryState, storyChapters, storyPrompt } from './models/story';
-import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDeleted } from './services/memory';
+import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDeleted, addActMemory } from './services/memory';
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName } from './services/providers';
 import { getServerBase } from './services/selfHosted';
-import { ChatMessage, loadChat, reply, saveChat } from './services/chat';
+import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
+import { NSFW_NEGATIVE } from './services/adultActs';
+import { adultOptions, defaultAdultSelections } from './services/adultOptions';
 import { saveAvatar } from './services/avatarEditor';
 import { downloadMedia, exportGallery, importGallery } from './services/media';
 import {
@@ -553,8 +555,16 @@ export default function App() {
 
   const compiledPrompt = promptOverride.trim() ? promptOverride.trim() : buildDraftPrompt(draft, adult);
 
+  // Negative prompt: user's own field + the safety NSFW negatives in 18+ mode
+  // (keeps renders to consenting adults only — no minors, no non-consent).
+  const combinedNegative = () => {
+    const parts = [negativePrompt.trim()];
+    if (adult) parts.push(NSFW_NEGATIVE);
+    return parts.filter(Boolean).join(', ');
+  };
+
   const buildFullPrompt = (base: string) => {
-    const neg = negativePrompt.trim();
+    const neg = combinedNegative();
     return neg ? `${base} Avoid: ${neg}.` : base;
   };
 
@@ -566,7 +576,7 @@ export default function App() {
     steps: stepsInput || undefined,
     cfg: cfgInput || undefined,
     seed: seed || (seedInput ? Number(seedInput) : undefined),
-    negative: negativePrompt.trim() || undefined
+    negative: combinedNegative() || undefined
   });
 
   const handleGenerate = async () => {
@@ -811,7 +821,12 @@ export default function App() {
       ];
       setChat(out);
       saveChat(girl.id, out);
-      addMemory(girls, girl.id, 'Conversation', text, room.id);
+      // Record the memory — and auto-log explicit acts as high-importance
+      // memories when 18+ mode is on — then persist the persona state.
+      let nextGirls = addMemory(girls, girl.id, 'Conversation', text, room.id);
+      if (adult) nextGirls = addActMemory(nextGirls, girl.id, text, room.id);
+      setGirls(nextGirls);
+      saveGirls(nextGirls);
       bumpAndCelebrate('chats');
       const nextAvatar = interactionState(avatarState);
       setAvatarState(nextAvatar);
@@ -2305,6 +2320,21 @@ export default function App() {
               )}
             </div>
 
+            {adult && (
+              <div className="chat-quick-chips adult-acts">
+                {QUICK_ACT_CHIPS.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => sendChat(c.label)}
+                    disabled={busy}
+                    title={`18+ act — sends "${c.label}"`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="companion-input-row">
               <input
                 className="companion-input"
@@ -2940,6 +2970,56 @@ export default function App() {
                     ))}
                   </select>
                 </label>
+
+                {adult && (
+                  <>
+                    <label className="inspector-label">
+                      <span>18+ Presentation Level</span>
+                      <select
+                        className="inspector-select"
+                        value={draft.adultSelections?.nudityLevel || 'covered'}
+                        onChange={e =>
+                          setDraft(d => ({
+                            ...d,
+                            adultSelections: {
+                              ...(d.adultSelections || defaultAdultSelections()),
+                              nudityLevel: e.target.value as any
+                            }
+                          }))
+                        }
+                      >
+                        {adultOptions.nudityLevel.map(n => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="inspector-label">
+                      <span>18+ Scene Act</span>
+                      <select
+                        className="inspector-select"
+                        value={draft.adultSelections?.act || 'none'}
+                        onChange={e =>
+                          setDraft(d => ({
+                            ...d,
+                            adultSelections: {
+                              ...(d.adultSelections || defaultAdultSelections()),
+                              act: e.target.value
+                            }
+                          }))
+                        }
+                      >
+                        {adultOptions.act.map(a => (
+                          <option key={a} value={a}>
+                            {a}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
+                )}
               </div>
             )}
           </div>

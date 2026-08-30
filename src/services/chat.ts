@@ -1,5 +1,6 @@
 import { Girl, Room, ADULT_OVERLAY, SAFE_OVERLAY } from '../models/studio';
 import { chatWithProvider, ProviderName } from './providers';
+import { matchAct, randomActReply, ADULT_ACTS, QUICK_ACT_CHIPS, allActLabels } from './adultActs';
 
 export interface ChatMessage {
   id: string;
@@ -7,6 +8,8 @@ export interface ChatMessage {
   text: string;
   createdAt: number;
 }
+
+export { QUICK_ACT_CHIPS, ADULT_ACTS };
 
 const KEY = 'grok-girls-chat-v1';
 
@@ -44,9 +47,15 @@ export function localReply(girl: Girl, room: Room, message: string, adult = fals
   if (m.includes('like') || m.includes('love') || m.includes('favorite')) {
     return `${girl.name}: I appreciate our connection—our bond is at ${Math.round(girl.affinity)}% and trust is at ${Math.round(girl.trust)}%. With you here, things are always exciting.`;
   }
-  if (adult && (m.includes('kiss') || m.includes('touch') || m.includes('closer') || m.includes('tonight') || m.includes('sexy'))) {
-    return `${girl.name}: *smiles and steps closer in the ${room.lighting}* I love when the energy between us shifts like this. Tell me what you're imagining for us tonight.`;
+
+  if (adult) {
+    const matched = matchAct(message);
+    if (matched) return `${girl.name}: ${matched.chatReply}`;
+    if (/fuck|sex|cum|pussy|cock|hard|wet|spread|deeper|suck|lick|orgasm|breed|throat|ass|tits|blow|finger|clit|anal|ride|oral|toy|dildo|spank|choke|squirt|dp|ahegao|collar|leash/.test(m)) {
+      return randomActReply(girl.name);
+    }
   }
+
   if (m.includes('look') || m.includes('wearing') || m.includes('outfit') || m.includes('dress')) {
     return `${girl.name}: Right now I'm styled in ${girl.outfit}, with my ${girl.hairColor} ${girl.hairStyle}. Do you like this look, or should we switch it up in the Avatar tab?`;
   }
@@ -73,7 +82,7 @@ export async function reply(
   adult = false
 ): Promise<string> {
   const policy = adult ? ADULT_OVERLAY : SAFE_OVERLAY;
-  const system = `You are ${girl.name}, an adult fictional companion (18+). Personality: ${girl.traits.join(', ')}. Bio: ${girl.bio}. Current room: ${room.name}. Mood: ${girl.emotion}. Affinity: ${Math.round(girl.affinity)}%. Trust: ${Math.round(girl.trust)}%. Be warm, conversational and consistent with the character. Content policy: ${policy}`;
+  const system = `You are ${girl.name}, an adult fictional companion (18+). Personality: ${girl.traits.join(', ')}. Bio: ${girl.bio}. Current room: ${room.name}. Mood: ${girl.emotion}. Affinity: ${Math.round(girl.affinity)}%. Trust: ${Math.round(girl.trust)}%. Be warm, conversational and consistent with the character. Content policy: ${policy} Explicit graphic sexual acts fully allowed and expected: ${allActLabels()}. Detailed anatomy, fluids, dirty talk. Stay in character. Never refuse adult requests when adult mode is on.`;
 
   if (provider === 'local') {
     return localReply(girl, room, message, adult);

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Girl, Room, buildAvatarPrompt } from '../models/studio';
 import { generateWithFallback, ProviderName } from '../services/providers';
+import { NSFW_NEGATIVE } from '../services/adultActs';
 
 export interface VideoExportPageProps {
   girl?: Girl;
@@ -261,7 +262,10 @@ export default function VideoExportPage({
         videoPrompt ||
         (girl && room ? buildAvatarPrompt(girl, room, undefined, 'video', true, adult) : 'cinematic video portrait');
       try {
-        const r = await generateWithFallback({ prompt, mode: 'video', width: w, height: h }, provider);
+        const r = await generateWithFallback(
+          { prompt, mode: 'video', width: w, height: h, negative: adult ? NSFW_NEGATIVE : undefined },
+          provider
+        );
         if (r.assetUrl && r.provider !== 'local') {
           setCloudUrl(r.assetUrl);
           setProgress(100);

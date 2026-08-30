@@ -1730,6 +1730,22 @@ button:disabled {
   border-color: var(--border-active);
   color: #fff;
 }
+/* 18+ quick-act chips — crimson accent so adult acts read distinctly */
+.chat-quick-chips.adult-acts {
+  border-top: 1px dashed #2e2430;
+  padding-top: 8px;
+  margin-top: 2px;
+}
+.chat-quick-chips.adult-acts button {
+  background: #231018;
+  border: 1px solid #5a1f33;
+  color: #e8a3b8;
+}
+.chat-quick-chips.adult-acts button:hover:not(:disabled) {
+  border-color: #e62040;
+  color: #ffd7e0;
+  background: #2f1220;
+}
 .mini-provider-select,
 .footer-provider-select {
   background: #14141f;

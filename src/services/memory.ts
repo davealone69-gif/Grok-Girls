@@ -1,6 +1,7 @@
 import { Girl, Memory, Mode, Room, seedGirls, buildAvatarPrompt, relationshipModifier, ADULT_OVERLAY, SAFE_OVERLAY } from '../models/studio';
 import { AvatarState, statePrompt } from './avatarState';
 import { StoryState, storyPrompt } from '../models/story';
+import { matchAct, actMemory, NSFW_NEGATIVE } from './adultActs';
 
 const KEY = 'grok-girls-state-v2';
 const DELETED_KEY = 'grok-girls-deleted-v1';
@@ -67,9 +68,18 @@ export function saveGirls(girls: Girl[]) {
   }
 }
 
-export function addMemory(girls: Girl[], id: string, summary: string, detail: string, roomId?: string): Girl[] {
-  const memory: Memory = { id: crypto.randomUUID?.() ?? String(Date.now()), summary, detail, roomId, importance: .45, createdAt: Date.now() };
+export function addMemory(girls: Girl[], id: string, summary: string, detail: string, roomId?: string, importance = 0.45): Girl[] {
+  const memory: Memory = { id: crypto.randomUUID?.() ?? String(Date.now()), summary, detail, roomId, importance, createdAt: Date.now() };
   return girls.map(g => g.id === id ? { ...g, memories: [memory, ...g.memories].slice(0, 100), affinity: Math.min(100, g.affinity + 1), trust: Math.min(100, g.trust + .5) } : g);
+}
+
+/** Auto-log explicit acts as high-importance memories */
+export function addActMemory(girls: Girl[], id: string, userMessage: string, roomId?: string): Girl[] {
+  const act = matchAct(userMessage);
+  if (!act) return girls;
+  const { summary, boost } = actMemory(act.id);
+  const memory: Memory = { id: crypto.randomUUID?.() ?? String(Date.now()), summary, detail: act.chatReply, roomId, importance: 0.85, createdAt: Date.now() };
+  return girls.map(g => g.id === id ? { ...g, memories: [memory, ...g.memories].slice(0, 100), affinity: Math.min(100, g.affinity + boost), trust: Math.min(100, g.trust + boost * 0.4) } : g);
 }
 
 export function contextMemories(girl: Girl, roomId?: string, limit = 6): Memory[] {
@@ -81,5 +91,7 @@ export function buildGenerationPrompt(girl: Girl, room: Room, prompt: string, mo
   const dynamic = state ? ` ${statePrompt(state)}.` : '';
   const narrative = story ? ` ${storyPrompt(story)}` : '';
   const overlay = adult ? ADULT_OVERLAY : SAFE_OVERLAY;
-  return `${buildAvatarPrompt(girl, room, interaction, mode, enhanced, adult)} Relationship: ${relationshipModifier(girl)}.${dynamic}${narrative} ${memories ? `Relevant memory: ${memories}.` : ''} User direction: ${prompt.trim() || 'Create a polished showcase scene'}. Content policy: ${overlay}`;
+  const defaultDir = adult ? 'Create an explicit graphic sexual scene as requested, detailed anatomy, fluids, intense pleasure' : 'Create a polished showcase scene';
+  const neg = adult ? ` Negative prompt: ${NSFW_NEGATIVE}.` : '';
+  return `${buildAvatarPrompt(girl, room, interaction, mode, enhanced, adult)} Relationship: ${relationshipModifier(girl)}.${dynamic}${narrative} ${memories ? `Relevant memory: ${memories}.` : ''} User direction: ${prompt.trim() || defaultDir}. Content policy: ${overlay}${neg}`;
 }

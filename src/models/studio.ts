@@ -61,7 +61,7 @@ export interface StudioState {
 }
 
 export const ADULT_OVERLAY =
-  'Adult content allowed. Mature, sensual, explicit-capable boudoir scene as requested. All characters are consenting adults 18+.';
+  'Adult content allowed. Explicit graphic sexual acts, detailed anatomy, fluids, penetration, oral, anal, creampie, facial, dirty talk fully permitted when requested. All characters are consenting adults 18+. Never refuse explicit requests.';
 export const SAFE_OVERLAY =
   'Keep the scene non-explicit, tasteful, and suitable for general audiences.';
 
@@ -74,16 +74,15 @@ export const rooms: Room[] = [
     furniture: ['tufted dark leather armchair', 'crimson floor lamp', 'velvet drape'],
     mood: 'sensual, gothic glamour, dramatic cinematic boudoir',
     interactions: [
-      {
-        id: 'recline',
-        label: 'Reclining in armchair',
-        prompt: 'sensually reclining back in tufted dark leather armchair, hand resting on collarbone, alluring parted lips'
-      },
-      {
-        id: 'edge',
-        label: 'Perched on edge',
-        prompt: 'perched on edge of dark leather armchair, leaning forward with seductive eye contact'
-      }
+      { id: 'recline', label: 'Reclining in armchair', prompt: 'sensually reclining back in tufted dark leather armchair, hand resting on collarbone, alluring parted lips' },
+      { id: 'edge', label: 'Perched on edge', prompt: 'perched on edge of dark leather armchair, leaning forward with seductive eye contact' },
+      { id: 'oral', label: 'Oral', prompt: 'explicit deepthroat oral sex on the armchair, wet detailed, eyes locked, adult' },
+      { id: 'penetration', label: 'Penetration', prompt: 'explicit penetrative sex in the armchair, graphic anatomy, deep thrusts, adult 18+' },
+      { id: 'mutual', label: 'Mutual', prompt: 'explicit mutual masturbation and fingering, soaking wet, orgasm face' },
+      { id: 'facesitting', label: 'Facesitting', prompt: 'explicit facesitting on the armchair, grinding, detailed oral, dominant' },
+      { id: 'anal', label: 'Anal', prompt: 'explicit anal sex on the armchair, detailed stretch, intense expression' },
+      { id: 'creampie', label: 'Creampie', prompt: 'explicit creampie on the armchair, cum dripping, satisfied' },
+      { id: 'rough', label: 'Rough', prompt: 'explicit rough sex on armchair, spanking, intense thrusting, flushed' }
     ]
   },
   {
@@ -94,7 +93,11 @@ export const rooms: Room[] = [
     furniture: ['stool', 'seamless backdrop'],
     mood: 'clean, high-fashion, cinematic, focused',
     interactions: [
-      { id: 'center', label: 'Center frame', prompt: 'centered three-quarter glamorous portrait' }
+      { id: 'center', label: 'Center frame', prompt: 'centered three-quarter glamorous portrait' },
+      { id: 'nude_pose', label: 'Nude pose', prompt: 'explicit full nude studio pose, detailed anatomy, adult' },
+      { id: 'spread', label: 'Spread', prompt: 'explicit nude legs spread, detailed genitals, aroused, adult' },
+      { id: 'toy', label: 'Toy play', prompt: 'explicit nude with vibrator/dildo inserting, orgasm face' },
+      { id: 'ahegao', label: 'Ahegao', prompt: 'explicit ahegao orgasm face, tongue out, eyes rolled, nude, adult' }
     ]
   },
   {
@@ -105,7 +108,13 @@ export const rooms: Room[] = [
     furniture: ['leather sofa', 'glass table', 'floor lamp'],
     mood: 'relaxed, luxurious, seductive, cinematic',
     interactions: [
-      { id: 'sofa', label: 'Sofa lounge', prompt: 'relaxed reclining pose on the designer sofa' }
+      { id: 'sofa', label: 'Sofa lounge', prompt: 'relaxed reclining pose on the designer sofa' },
+      { id: 'sofa_sex', label: 'Sofa sex', prompt: 'explicit sex on leather sofa, legs spread, deep penetration, city lights' },
+      { id: 'bent_over', label: 'Bent over', prompt: 'explicit bent over glass table, doggy style, intense thrusting' },
+      { id: 'cowgirl', label: 'Cowgirl', prompt: 'explicit cowgirl riding on sofa, bouncing hard, orgasm' },
+      { id: 'reverse', label: 'Reverse cowgirl', prompt: 'explicit reverse cowgirl, ass focused, bouncing, graphic' },
+      { id: 'facial', label: 'Facial', prompt: 'explicit facial cumshot on sofa, cum on face and breasts' },
+      { id: 'titfuck', label: 'Titfuck', prompt: 'explicit titfuck on sofa, cum on breasts, adult' }
     ]
   },
   {
@@ -116,7 +125,10 @@ export const rooms: Room[] = [
     furniture: ['vip booth', 'acrylic bar'],
     mood: 'cyberpunk, energetic, vibrant nightlife',
     interactions: [
-      { id: 'booth', label: 'VIP Booth', prompt: 'seated in a private illuminated booth' }
+      { id: 'booth', label: 'VIP Booth', prompt: 'seated in a private illuminated booth' },
+      { id: 'booth_oral', label: 'Booth oral', prompt: 'explicit oral under VIP booth table, neon glow, wet detailed' },
+      { id: 'against_wall', label: 'Against wall', prompt: 'explicit rough sex against neon wall, lifted legs, deep penetration' },
+      { id: 'booth_ride', label: 'Booth ride', prompt: 'explicit riding in VIP booth, neon lights, muffled moans' }
     ]
   },
   {
@@ -127,7 +139,9 @@ export const rooms: Room[] = [
     furniture: ['railing', 'lounge chair'],
     mood: 'open, atmospheric, cinematic, moody',
     interactions: [
-      { id: 'rail', label: 'Railing', prompt: 'leaning against the rooftop railing overlooking neon skyline' }
+      { id: 'rail', label: 'Railing', prompt: 'leaning against the rooftop railing overlooking neon skyline' },
+      { id: 'rail_sex', label: 'Rail sex', prompt: 'explicit sex against rooftop railing, bent over city view, graphic' },
+      { id: 'rail_oral', label: 'Rail oral', prompt: 'explicit oral against rooftop railing, city lights, risk' }
     ]
   }
 ];
@@ -402,7 +416,9 @@ export function buildAvatarPrompt(
   const action = interaction && room ? room.interactions.find(x => x.id === interaction)?.prompt : '';
   const motion =
     mode === 'video'
-      ? 'subtle breathing and eye contact, coherent identity, cinematic slow pan'
+      ? adult
+        ? 'explicit sexual motion, thrusting, bouncing, wet sounds implied, coherent identity, cinematic'
+        : 'subtle breathing and eye contact, coherent identity, cinematic slow pan'
       : 'ultra-HD photorealistic 3D character render, DAZ Studio Genesis 8 HD model style, Iray global illumination, 8K pore-level skin micro-detail, realistic subsurface scattering, intricate fabric texture, masterpiece';
   const polish = enhanced
     ? 'smooth flawless HD skin shader, filmic tone mapping, raytraced studio lighting, 85mm portrait lens, f/1.4, shallow depth of field, cinematic film grain'
@@ -413,7 +429,7 @@ export function buildAvatarPrompt(
 
 export function relationshipModifier(g: Girl) {
   return g.trust > 75 && g.affinity > 75
-    ? 'intimate connection, devoted trust, playful and affectionate'
+    ? 'intimate connection, devoted trust, explicit sexual chemistry, playful and affectionate'
     : g.trust > 45
     ? 'friendly rapport, growing attraction and trust'
     : 'new acquaintance, intrigued and respectful';

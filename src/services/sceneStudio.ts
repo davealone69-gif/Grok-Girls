@@ -1,8 +1,8 @@
 export interface SceneConfig { id: string; name: string; prompt: string; negative: string; lighting: string; camera: string; motion: string; }
 
-export const LIGHTING_PRESETS = ['softbox', 'three-point', 'golden-hour', 'neon-rim', 'moonlight', 'dramatic'] as const;
-export const CAMERA_PRESETS = ['portrait-85mm', 'cinematic-35mm', 'wide-24mm', 'telephoto-135mm', 'low-angle', 'high-angle'] as const;
-export const MOTION_PRESETS = ['static', 'slow-pan', 'orbit', 'push-in', 'pull-out', 'handheld'] as const;
+export const LIGHTING_PRESETS = ['softbox', 'three-point', 'golden-hour', 'neon-rim', 'moonlight', 'dramatic', 'explicit-closeup', 'sex-scene-key'] as const;
+export const CAMERA_PRESETS = ['portrait-85mm', 'cinematic-35mm', 'wide-24mm', 'telephoto-135mm', 'low-angle', 'high-angle', 'pov-penetration', 'closeup-genital', 'over-shoulder-thrust'] as const;
+export const MOTION_PRESETS = ['static', 'slow-pan', 'orbit', 'push-in', 'pull-out', 'handheld', 'thrusting', 'bouncing-ride', 'grinding', 'oral-bobbing'] as const;
 
 export function createScene(name = 'New Scene'): SceneConfig {
   return { id: `scene-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name, prompt: '', negative: '', lighting: 'three-point', camera: 'portrait-85mm', motion: 'static' };

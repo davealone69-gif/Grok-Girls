@@ -25,6 +25,8 @@ STDLIB="$(dirname "$(dirname "$KOTLINC")")/lib/kotlin-stdlib.jar"
   "$ROOT"/native/app/src/main/java/com/aura/avatarstudio/renderer/*.kt \
   "$ROOT"/native/app/src/main/java/com/aura/avatarstudio/GltfAvatarView.kt \
   "$ROOT"/native/app/src/main/java/com/aura/avatarstudio/MainActivity.kt \
+  "$ROOT"/android/app/src/main/java/ai/grokgirls/studio/NativeAvatarActivity.kt \
+  "$ROOT"/android/app/src/main/java/ai/grokgirls/studio/AvatarStudioPlugin.kt \
   "$HERE/TestMain.kt"
 
 java -cp "$OUT:$JSON_JAR:$STDLIB" TestMainKt

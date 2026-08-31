@@ -11,6 +11,26 @@ at startup).
 > engine in TypeScript/WebGL2 (`HdAvatarRenderer.ts` ↔ `HdAvatarRenderer.kt`).
 > Keep the two in sync when changing the shader pipeline or mesh layout.
 
+## Wired into the Capacitor app
+
+The engine is compiled directly into the app (`android/` module) via
+`sourceSets` — **no file copies**, the renderer package lives here only:
+
+- `android/app/build.gradle` pulls `native/app/src/main/java/.../renderer`
+  into the app build (Kotlin plugin 1.9.24, jvmTarget 17)
+- `ai.grokgirls.studio.NativeAvatarActivity` — fullscreen GL viewport:
+  drag to orbit, pinch to zoom, loads `avatars/my_avatar.glb` from assets
+  (override via the `avatar` intent extra)
+- `ai.grokgirls.studio.AvatarStudioPlugin` — Capacitor bridge so the web
+  app can launch the native viewport:
+
+```js
+await Capacitor.Plugins.AvatarStudio.openViewport({ avatar: 'avatars/my_avatar.glb' });
+```
+
+- `android/app/src/main/assets/avatars/my_avatar.glb` — the test avatar
+  (regenerate with `tools/make_test_glb.py`, copy into both asset dirs)
+
 ```
 app/src/main/assets/avatars/my_avatar.glb   test avatar (generated, 28 KB)
 ```

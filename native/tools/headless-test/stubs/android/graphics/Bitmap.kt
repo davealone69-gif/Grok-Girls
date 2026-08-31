@@ -18,6 +18,10 @@ class Bitmap(
     fun copyPixelsToBuffer(dst: java.nio.Buffer): java.nio.Buffer = dst
 
     companion object {
+        fun createBitmap(source: Bitmap, x: Int, y: Int, width: Int, height: Int,
+                       matrix: android.graphics.Matrix?, filter: Boolean): Bitmap =
+            Bitmap(width, height, source.config)
+
         fun createBitmap(width: Int, height: Int, config: Config): Bitmap =
             Bitmap(width, height, config)
     }

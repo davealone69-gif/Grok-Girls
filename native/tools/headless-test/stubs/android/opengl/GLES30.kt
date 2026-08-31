@@ -23,6 +23,8 @@ object GLES30 {
     const val GL_RGBA8 = 0x8058
     const val GL_SRGB8_ALPHA8 = 0x8C43
     const val GL_REPEAT = 0x2901
+    const val GL_EXTENSIONS = 0x1F03
+    const val GL_NO_ERROR = 0
     const val GL_LEQUAL = 0x0203
     const val GL_LESS = 0x0201
     const val GL_LINEAR = 0x2601
@@ -104,6 +106,9 @@ object GLES30 {
     fun glTexImage2D(target: Int, level: Int, internalformat: Int, width: Int, height: Int,
                      border: Int, format: Int, type: Int, pixels: java.nio.Buffer?) {}
     fun glTexParameteri(target: Int, pname: Int, param: Int) {}
+    fun glTexParameterf(target: Int, pname: Int, param: Float) {}
+    fun glGetString(name: Int): String? = null
+    fun glGetError(): Int = 0
     fun glTexStorage2D(target: Int, levels: Int, internalformat: Int, width: Int, height: Int) {}
     fun glUniform1f(location: Int, v0: Float) {}
     fun glUniform1fv(location: Int, count: Int, value: FloatArray?, offset: Int) {}

@@ -1,14 +1,17 @@
 package com.aura.avatarstudio.renderer
 
 import android.opengl.GLES30
+import com.aura.avatarstudio.renderer.hd.HdPbrTextures
 
 /**
  * Single-program PBR shader with uniform-flag texture handling
  * (uHas*Map flags instead of compile-time specialization).
  *
- * This is the reference implementation for simple-light setups — one
- * directional light, optional 5-map texture set, skinning via weighted
- * joint-matrix combination. The default pipeline ([PbrPipeline] +
+ * Reference implementation for simple-light setups — one point light
+ * (position + color + intensity), optional 5-map texture set bound either
+ * from an [HdPbrMaterial] or from an [HdPbrTextures] bundle, factor
+ * uniforms (base color / metallic / roughness / emissive), skinning via
+ * weighted joint-matrix combination. The default pipeline ([PbrPipeline] +
  * [AvatarShaders]) specializes per material variant and adds IBL; keep
  * this class for "fast mode" / very simple lighting scenarios.
  *
@@ -24,8 +27,10 @@ class HdPbrShader {
     private var uView = -1
     private var uProjection = -1
     private var uCamera = -1
-    private var uLightDirection = -1
+    private var uLightPosition = -1
     private var uLightColor = -1
+    private var uLightIntensity = -1
+    private var uEmissiveFactor = -1
     private var uBaseColor = -1
     private var uMetallic = -1
     private var uRoughness = -1
@@ -149,11 +154,17 @@ class HdPbrShader {
         uCamera =
             uniform("uCameraPosition")
 
-        uLightDirection =
-            uniform("uLightDirection")
+        uLightPosition =
+            uniform("uLightPosition")
 
         uLightColor =
             uniform("uLightColor")
+
+        uLightIntensity =
+            uniform("uLightIntensity")
+
+        uEmissiveFactor =
+            uniform("uEmissiveFactor")
 
         uBaseColor =
             uniform("uBaseColor")
@@ -256,14 +267,15 @@ class HdPbrShader {
     }
 
     fun light(
-        direction: FloatArray,
-        color: FloatArray
+        position: FloatArray,
+        color: FloatArray,
+        intensity: Float = 1f
     ) {
 
         GLES30.glUniform3fv(
-            uLightDirection,
+            uLightPosition,
             1,
-            direction,
+            position,
             0
         )
 
@@ -272,6 +284,11 @@ class HdPbrShader {
             1,
             color,
             0
+        )
+
+        GLES30.glUniform1f(
+            uLightIntensity,
+            intensity
         )
     }
 
@@ -298,6 +315,13 @@ class HdPbrShader {
                     0.04f,
                     1f
                 )
+        )
+
+        GLES30.glUniform3fv(
+            uEmissiveFactor,
+            1,
+            material.emissive,
+            0
         )
 
         bindTexture(
@@ -360,6 +384,51 @@ class HdPbrShader {
         GLES30.glUniform1i(
             hasLocation,
             if (texture != 0) 1 else 0
+        )
+    }
+
+    /**
+     * Binds a [HdPbrTextures] slot bundle (manager-loaded textures) onto
+     * the standard units 0..4 with the uHas*Map flags, mirroring
+     * [material]'s per-material binding path. Slots may be null.
+     */
+    fun bindTextures(
+        textures: HdPbrTextures
+    ) {
+
+        bindTexture(
+            unit = 0,
+            texture = textures.baseColor?.id ?: 0,
+            location = uBaseColorMap,
+            hasLocation = uHasBaseColorMap
+        )
+
+        bindTexture(
+            unit = 1,
+            texture = textures.normal?.id ?: 0,
+            location = uNormalMap,
+            hasLocation = uHasNormalMap
+        )
+
+        bindTexture(
+            unit = 2,
+            texture = textures.metallicRoughness?.id ?: 0,
+            location = uMetallicRoughnessMap,
+            hasLocation = uHasMetallicRoughnessMap
+        )
+
+        bindTexture(
+            unit = 3,
+            texture = textures.occlusion?.id ?: 0,
+            location = uOcclusionMap,
+            hasLocation = uHasOcclusionMap
+        )
+
+        bindTexture(
+            unit = 4,
+            texture = textures.emissive?.id ?: 0,
+            location = uEmissiveMap,
+            hasLocation = uHasEmissiveMap
         )
     }
 
@@ -525,8 +594,10 @@ in vec4 vTangent;
 
 uniform vec3 uCameraPosition;
 
-uniform vec3 uLightDirection;
+uniform vec3 uLightPosition;
 uniform vec3 uLightColor;
+uniform float uLightIntensity;
+uniform vec3 uEmissiveFactor;
 
 uniform vec4 uBaseColor;
 
@@ -736,7 +807,22 @@ void main() {
 
     vec3 L =
         normalize(
-            -uLightDirection
+            uLightPosition -
+            vWorldPosition
+        );
+
+    float distanceToLight =
+        length(
+            uLightPosition -
+            vWorldPosition
+        );
+
+    float attenuation =
+        1.0 /
+        max(
+            distanceToLight *
+            distanceToLight,
+            0.01
         );
 
     vec3 H =
@@ -809,12 +895,17 @@ void main() {
         albedo /
         PI;
 
+    vec3 radiance =
+        uLightColor *
+        uLightIntensity *
+        attenuation;
+
     vec3 direct =
         (
             diffuse +
             specular
         ) *
-        uLightColor *
+        radiance *
         NdotL;
 
     float ao = 1.0;
@@ -828,7 +919,7 @@ void main() {
     }
 
     vec3 emissive =
-        vec3(0.0);
+        uEmissiveFactor;
 
     if (uHasEmissiveMap != 0) {
 

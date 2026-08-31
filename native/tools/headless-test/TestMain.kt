@@ -1,4 +1,5 @@
 import com.aura.avatarstudio.renderer.*
+import com.aura.avatarstudio.renderer.hd.*
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.sqrt
@@ -219,13 +220,48 @@ fun main() {
             shader.bind()
             shader.matrices(Mat4.identity(), Mat4.identity(), Mat4.identity())
             shader.camera(floatArrayOf(0f, 0f, 3f))
-            shader.light(floatArrayOf(0f, 1f, 0f), floatArrayOf(1f, 1f, 1f))
+            shader.light(floatArrayOf(0f, 1f, 0f), floatArrayOf(1f, 1f, 1f), 25f)
             shader.material(avatar.meshes[0].material)
+            shader.bindTextures(HdPbrTextures())
             shader.joints(FloatArray(16) { i -> if (i % 5 == 0) 1f else 0f })
             shader.destroy()
             check("HdPbrShader API smoke test", true)
         } catch (e: Throwable) {
             check("HdPbrShader API smoke test", false, e.toString())
+        }
+
+        // HdTextureManager / HdTexture / HdPbrTextures — texture manager
+        // layer (stub decode returns null -> clean null paths; missing
+        // assets throw FileNotFoundException like real Android)
+        try {
+            val manager = HdTextureManager(android.content.Context())
+            var threw = false
+            try {
+                manager.load("avatars/missing.png")
+            } catch (e: java.io.FileNotFoundException) {
+                threw = true
+            }
+            check("HdTextureManager.load missing asset throws FileNotFound", threw)
+            check("HdTextureManager.loadResource missing returns null",
+                manager.loadResource(0x7f010001) == null)
+            manager.clear()
+            check("HdTextureManager.clear after empty", true)
+            manager.close()
+            check("HdTextureManager.close", true)
+
+            HdTexture(0, 512, 512, false).close()
+            check("HdTexture id=0 close is a no-op", true)
+
+            val slots = HdPbrTextures(
+                baseColor = null,
+                normal = null,
+                metallicRoughness = null,
+                occlusion = null,
+                emissive = null
+            )
+            check("HdPbrTextures defaults", slots.baseColor == null && slots.emissive == null)
+        } catch (e: Throwable) {
+            check("HdTextureManager layer smoke test", false, e.toString())
         }
 
         // PbrTexture — asset texture utility (stub GL)

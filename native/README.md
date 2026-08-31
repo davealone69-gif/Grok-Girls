@@ -11,9 +11,11 @@ at startup).
 > engine in TypeScript/WebGL2 (`HdAvatarRenderer.ts` ↔ `HdAvatarRenderer.kt`).
 > Keep the two in sync when changing the shader pipeline or mesh layout.
 > Texture-side mirror: `src/renderer/ProceduralTextures.ts` ↔
-> `PbrTexture.kt`/`GltfTextures.kt` (upload semantics, units 0..4,
-> `uHas*Map` flags), and the avatar fragment shader mirrors `HdPbrShader.kt`
-> sampling (pow-2.2 base color, MR G=roughness/B=metallic, TBN normals).
+> `PbrTexture.kt`/`GltfTextures.kt`/`HdTextureManager.kt` (upload semantics,
+> units 0..4, `uHas*Map` flags), and the avatar fragment shader mirrors
+> `HdPbrShader.kt` sampling (pow-2.2 base color, MR G=roughness/B=metallic,
+> TBN normals, factor uniforms + point-light intensity). `HdPbrTextures` is
+> the five-slot binding bundle (`renderer/hd/` package).
 > Web textures are procedural until GLB/texture parity lands.
 
 ## Wired into the Capacitor app

@@ -23,6 +23,7 @@ STDLIB="$(dirname "$(dirname "$KOTLINC")")/lib/kotlin-stdlib.jar"
   -d "$OUT" \
   "$HERE/stubs" \
   "$ROOT"/native/app/src/main/java/com/aura/avatarstudio/renderer/*.kt \
+  "$ROOT"/native/app/src/main/java/com/aura/avatarstudio/renderer/hd/*.kt \
   "$ROOT"/native/app/src/main/java/com/aura/avatarstudio/GltfAvatarView.kt \
   "$ROOT"/native/app/src/main/java/com/aura/avatarstudio/MainActivity.kt \
   "$ROOT"/android/app/src/main/java/ai/grokgirls/studio/NativeAvatarActivity.kt \

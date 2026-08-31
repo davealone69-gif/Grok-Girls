@@ -9,6 +9,7 @@ export interface GltfGpuPrimitive {
   indexType: number;
   mode: number;
   materialIndex: number;
+  skinOffset: number;
   morphTargets: GltfMorphTarget[];
 }
 
@@ -80,7 +81,7 @@ export function uploadGltfPrimitive(gl: WebGL2RenderingContext, asset: GltfAsset
     indexCount = asset.json.accessors?.[positionAccessor]?.count ?? 0;
   }
   gl.bindVertexArray(null);
-  return { vao, vertexBuffers: buffers, indexBuffer, indexCount, indexType, mode: primitive.mode ?? gl.TRIANGLES, materialIndex: primitive.material ?? 0, morphTargets: morphData(asset, primitive) };
+  return { vao, vertexBuffers: buffers, indexBuffer, indexCount, indexType, mode: primitive.mode ?? gl.TRIANGLES, materialIndex: primitive.material ?? 0, skinOffset: 0, morphTargets: morphData(asset, primitive) };
 }
 
 export function destroyGltfPrimitive(gl: WebGL2RenderingContext, primitive: GltfGpuPrimitive): void {

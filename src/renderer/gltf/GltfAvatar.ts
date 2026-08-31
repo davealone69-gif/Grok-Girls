@@ -24,9 +24,7 @@ export interface GltfAvatar {
   destroy(): void;
 }
 
-function identity16(): Float32Array {
-  const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; return m;
-}
+function identity16(): Float32Array { const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; return m; }
 
 function quatToMatrix(q: number[]): Float32Array {
   const x = q[0] ?? 0, y = q[1] ?? 0, z = q[2] ?? 0, w = q[3] ?? 1;
@@ -72,7 +70,11 @@ export function updateGltfJointMatrices(avatar: GltfAvatar): void {
   let cursor = 0;
   for (const skin of avatar.skins) {
     const ibm = skin.inverseBindMatrices === undefined ? null : readAccessor(avatar.asset, skin.inverseBindMatrices) as Float32Array;
-    for (let i = 0; i < skin.joints.length; i++) avatar.jointMatrices.set(multiply(world[skin.joints[i]] ?? identity16(), ibm ? ibm.subarray(i * 16, i * 16 + 16) : identity16()), cursor), cursor += 16;
+    for (let i = 0; i < skin.joints.length; i++) {
+      const bind = ibm ? ibm.subarray(i * 16, i * 16 + 16) : identity16();
+      avatar.jointMatrices.set(multiply(world[skin.joints[i]] ?? identity16(), bind), cursor);
+      cursor += 16;
+    }
   }
 }
 
@@ -80,21 +82,29 @@ export async function loadGltfAvatar(gl: WebGL2RenderingContext, data: ArrayBuff
   const asset = parseGlb(data), nodes = asset.json.nodes ?? [], skins = asset.json.skins ?? [];
   const materials = (asset.json.materials ?? []).map(materialFromGltf), textures = new Map<number, WebGLTexture>();
   const primitives: GltfAvatarPrimitive[] = [];
+  const skinOffsets: number[] = [];
+  let skinCursor = 0;
+  for (let i = 0; i < skins.length; i++) { skinOffsets[i] = skinCursor; skinCursor += skins[i].joints.length; }
+  if (skinCursor > 128) throw new Error(`GLB requires ${skinCursor} joints; HD shader limit is 128`);
   try {
     for (let i = 0; i < (asset.json.textures ?? []).length; i++) textures.set(i, await uploadGltfTexture(gl, asset, i));
     for (let ni = 0; ni < nodes.length; ni++) {
       const node = nodes[ni]; if (node.mesh === undefined) continue;
       const mesh = asset.json.meshes?.[node.mesh]; if (!mesh) throw new Error(`Node ${ni} references missing mesh ${node.mesh}`);
+      const skinIndex = node.skin ?? null;
+      if (skinIndex !== null && !skins[skinIndex]) throw new Error(`Node ${ni} references missing skin ${skinIndex}`);
       for (let pi = 0; pi < mesh.primitives.length; pi++) {
         const source = mesh.primitives[pi];
         if ((source.mode ?? 4) !== 4) throw new Error('Only TRIANGLES primitives are supported by the HD avatar path');
-        primitives.push({ nodeIndex: ni, meshIndex: node.mesh, primitiveIndex: pi, skinIndex: node.skin ?? null, primitive: uploadGltfPrimitive(gl, asset, source) });
+        const primitive = uploadGltfPrimitive(gl, asset, source);
+        primitive.skinOffset = skinIndex === null ? 0 : skinOffsets[skinIndex];
+        primitives.push({ nodeIndex: ni, meshIndex: node.mesh, primitiveIndex: pi, skinIndex, primitive });
       }
     }
     const avatar: GltfAvatar = {
       asset, nodes, skins, primitives, materials, textures,
       morphWeights: (asset.json.meshes ?? []).map(mesh => new Float32Array(mesh.weights ?? [])),
-      jointMatrices: new Float32Array(Math.max(16, skins.reduce((n, skin) => n + skin.joints.length, 0) * 16)),
+      jointMatrices: new Float32Array(Math.max(16, skinCursor * 16)),
       destroy() { for (const item of this.primitives) destroyGltfPrimitive(gl, item.primitive); for (const texture of this.textures.values()) gl.deleteTexture(texture); this.textures.clear(); },
     };
     updateGltfJointMatrices(avatar);

@@ -1,5 +1,6 @@
 import { getRenderTargetCapabilities, createRenderTarget } from './RenderTargetFactory';
 import { loadGltfAvatar } from './gltf/GltfAvatar';
+import { GltfHdPbrRenderer } from './gltf/GltfHdPbrRenderer';
 
 export function installRendererDiagnostics(): void {
   if (typeof window === 'undefined') return;
@@ -10,5 +11,6 @@ export function installRendererDiagnostics(): void {
     getRenderTargetCapabilities: (gl: WebGL2RenderingContext) => getRenderTargetCapabilities(gl),
     createRenderTarget: (gl: WebGL2RenderingContext, request: Parameters<typeof createRenderTarget>[1]) => createRenderTarget(gl, request),
     loadGltfAvatar,
+    GltfHdPbrRenderer,
   };
 }

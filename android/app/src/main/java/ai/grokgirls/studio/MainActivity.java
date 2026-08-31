@@ -11,6 +11,9 @@ public class MainActivity extends BridgeActivity {
   @Override
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+    // Native 3D avatar viewport (Kotlin/GLES3 engine, see NativeAvatarActivity).
+    // JS: await Capacitor.Plugins.AvatarStudio.openViewport({...})
+    registerPlugin(AvatarStudioPlugin.class);
     // Keep the studio UI out from under the phone's system bars (status bar
     // and navigation buttons). Without this, Android draws the WebView
     // edge-to-edge and the GENERATE / SAVE footer ends up hidden behind the

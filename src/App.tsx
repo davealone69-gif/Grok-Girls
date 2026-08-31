@@ -24,6 +24,28 @@ import { AvatarParameters, DEFAULT_AVATAR_PARAMETERS } from './renderer/avatar/A
 import { Skeleton, Bone } from './renderer/avatar/Skeleton';
 import { MorphController } from './renderer/avatar/MorphTarget';
 import { DEFAULT_AVATAR_MATERIAL } from './renderer/avatar/AvatarMaterial';
+import { createProceduralSkinTextures, destroyProceduralSkinTextures, createThicknessTexture, destroyThicknessTexture } from './renderer/ProceduralSkinTextures';
+import { DEFAULT_ADVANCED_SKIN_MATERIAL } from './renderer/AdvancedSkinMaterial';
+import { createSpecularTexture, destroySpecularTexture, createPoreTexture, destroyPoreTexture, createWrinkleTexture, destroyWrinkleTexture } from './renderer/ProceduralSkinTextures';
+import { MorphShader } from './renderer/MorphShader';
+import { createFaceControls, applyFaceControls, FaceExpressionController, BlinkController } from './renderer/avatar/FaceControls';
+import { correctiveRules, evaluateCorrectives } from './renderer/avatar/Correctives';
+import { uploadMorphWeights } from './renderer/avatar/MorphTargets';
+import { createEyeTextures, destroyEyeTextures } from './renderer/EyeTextures';
+import { EyeShader } from './renderer/EyeShader';
+import { DEFAULT_EYE_PARAMETERS, DEFAULT_IRIS_COLOR } from './renderer/EyeMaterial';
+import { createHairTextures, destroyHairTextures } from './renderer/HairTextures';
+import { HairShader } from './renderer/HairShader';
+import { DEFAULT_HAIR_PARAMETERS } from './renderer/HairMaterial';
+import { createShadowMap, destroyShadowMap } from './renderer/ShadowMap';
+import { ShadowShader } from './renderer/ShadowShader';
+import { createIblPipeline, destroyIblPipeline, generateStudioEnvironment, DEFAULT_IBL_SETTINGS } from './renderer/IblPipeline';
+import { CinematicPipeline, CinematicRenderer, createFullscreenTriangle } from './renderer/CinematicPipeline';
+import { probeCapabilities, createRenderTarget, checkFramebufferComplete } from './renderer/RenderTarget';
+import { parseGlb } from './renderer/avatar/GlbLoader';
+import { readAccessor } from './renderer/avatar/GltfAccessor';
+import { loadAvatarGlb, disposeAvatarAsset, updateSkeleton } from './renderer/avatar/GltfAvatar';
+import { computeGlobalTransforms, evaluateSkins } from './renderer/avatar/GltfSkeleton';
 import { HDFrameRenderer } from './renderer/HDFrameRenderer';
 import { RenderResolution, RENDER_RESOLUTIONS } from './renderer/RenderResolution';
 import { HDRenderTarget } from './renderer/HDRenderTarget';
@@ -41,7 +63,55 @@ if (typeof window !== 'undefined') {
     Bone,
     MorphController,
     DEFAULT_AVATAR_PARAMETERS,
-    DEFAULT_AVATAR_MATERIAL
+    DEFAULT_AVATAR_MATERIAL,
+    createProceduralSkinTextures,
+    destroyProceduralSkinTextures,
+    createThicknessTexture,
+    destroyThicknessTexture,
+    DEFAULT_ADVANCED_SKIN_MATERIAL,
+    createSpecularTexture,
+    destroySpecularTexture,
+    createPoreTexture,
+    destroyPoreTexture,
+    createWrinkleTexture,
+    destroyWrinkleTexture,
+    MorphShader,
+    createFaceControls,
+    applyFaceControls,
+    FaceExpressionController,
+    BlinkController,
+    correctiveRules,
+    evaluateCorrectives,
+    uploadMorphWeights,
+    createEyeTextures,
+    destroyEyeTextures,
+    EyeShader,
+    DEFAULT_EYE_PARAMETERS,
+    DEFAULT_IRIS_COLOR,
+    createHairTextures,
+    destroyHairTextures,
+    HairShader,
+    DEFAULT_HAIR_PARAMETERS,
+    createShadowMap,
+    destroyShadowMap,
+    ShadowShader,
+    createIblPipeline,
+    destroyIblPipeline,
+    generateStudioEnvironment,
+    DEFAULT_IBL_SETTINGS,
+    CinematicPipeline,
+    CinematicRenderer,
+    createFullscreenTriangle,
+    probeCapabilities,
+    createRenderTarget,
+    checkFramebufferComplete,
+    parseGlb,
+    readAccessor,
+    loadAvatarGlb,
+    disposeAvatarAsset,
+    updateSkeleton,
+    computeGlobalTransforms,
+    evaluateSkins
   };
 }
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
@@ -445,6 +515,9 @@ export default function App() {
       setRotation: (x: number, y: number) => avatar3dRef.current?.setRotation(x, y),
       setMaterial: (m: number, r: number) => avatar3dRef.current?.setMaterial(m, r),
       setExposure: (v: number) => avatar3dRef.current?.setExposure(v),
+      setExpressionIntensity: (v: number) => avatar3dRef.current?.setExpressionIntensity(v),
+      setWrinkleStrength: (v: number) => avatar3dRef.current?.setWrinkleStrength(v),
+      loadGlb: (data: ArrayBuffer) => avatar3dRef.current?.loadGlb(data),
       setKeyLight: (x: number, y: number, z: number) => avatar3dRef.current?.setKeyLight(x, y, z),
       setParameters: (p: AvatarParameters) => avatar3dRef.current?.setParameters(p),
       setAutoRotate: (v: boolean) => avatar3dRef.current?.setAutoRotate(v),

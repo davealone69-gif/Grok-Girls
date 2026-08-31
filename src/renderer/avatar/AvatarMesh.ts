@@ -1,7 +1,9 @@
-/* AvatarMesh — mirror of AvatarMesh.kt: packed 16-float vertex layout
- * [pos3, normal3, uv2, boneIndices4 (uint8), boneWeights4] with upload /
- * draw / destroy. Bone indices use UNSIGNED_BYTE integer attribs exactly
- * like the native glVertexAttribIPointer. */
+/* AvatarMesh — mirror of AvatarMesh.kt: packed 17-float vertex layout
+ * [pos3, normal3, uv2, tangent4 (xyz + handedness w), boneIndices4
+ * (uint8), boneWeights4] with upload / draw / destroy. Attribute layout
+ * matches the native engine (POSITION=0 .. WEIGHTS=5); bone indices use
+ * UNSIGNED_BYTE integer attribs exactly like the native
+ * glVertexAttribIPointer. */
 
 export interface AvatarMesh {
   vao: WebGLVertexArrayObject | null;
@@ -13,7 +15,7 @@ export interface AvatarMesh {
   destroy(gl: WebGL2RenderingContext): void;
 }
 
-const STRIDE_SKIN = 16 * 4; // pos3+normal3+uv2+boneIdx4+boneW4
+const STRIDE_SKIN = 17 * 4; // pos3+normal3+uv2+tangent4+boneIdx4(u8)+boneW4
 const STRIDE_BASE = 8 * 4; // pos3+normal3+uv2 (no skinning attribs)
 
 export function createAvatarMesh(vertices: Float32Array, indices: Uint16Array, skinned = true): AvatarMesh {
@@ -52,13 +54,16 @@ export function createAvatarMesh(vertices: Float32Array, indices: Uint16Array, s
       // uv (2f)
       gl.enableVertexAttribArray(2);
       gl.vertexAttribPointer(2, 2, gl.FLOAT, false, stride, 6 * 4);
+      // tangent (4f, w = handedness) — native layout location 3
+      gl.enableVertexAttribArray(3);
+      gl.vertexAttribPointer(3, 4, gl.FLOAT, false, stride, 8 * 4);
       if (skinned) {
-        // bone indices (4 x uint8, integer attrib)
-        gl.enableVertexAttribArray(3);
-        gl.vertexAttribIPointer(3, 4, gl.UNSIGNED_BYTE, stride, 8 * 4);
-        // bone weights (4f)
+        // bone indices (4 x uint8, integer attrib) — native location 4
         gl.enableVertexAttribArray(4);
-        gl.vertexAttribPointer(4, 4, gl.FLOAT, false, stride, 12 * 4);
+        gl.vertexAttribIPointer(4, 4, gl.UNSIGNED_BYTE, stride, 12 * 4);
+        // bone weights (4f) — native location 5
+        gl.enableVertexAttribArray(5);
+        gl.vertexAttribPointer(5, 4, gl.FLOAT, false, stride, 13 * 4);
       }
       gl.bindVertexArray(null);
     },

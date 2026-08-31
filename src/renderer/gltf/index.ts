@@ -4,3 +4,4 @@ export * from './GltfTexture';
 export * from './GltfMaterial';
 export * from './GltfMesh';
 export * from './GltfAvatar';
+export * from './GltfHdPbrRenderer';

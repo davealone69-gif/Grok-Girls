@@ -71,13 +71,13 @@ button:disabled {
   height: 100vh;
   width: 100vw;
   overflow: hidden;
-  background: radial-gradient(circle at 50% 30%, #151329 0%, #080811 85%);
+  background: radial-gradient(circle at 50% 30%, #1a1c26 0%, #101217 85%);
 }
 
 /* 1. Left Nav Rail */
 .nav-rail {
   width: 76px;
-  background: #090912;
+  background: #171A21;
   border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
@@ -112,6 +112,89 @@ button:disabled {
   overflow-y: auto;
   scrollbar-width: none;
 }
+/* BUILD header (menu XML) */
+.rail-build-label {
+  margin: 0 0 6px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  color: #6a7080;
+  text-align: center;
+}
+.rail-spacer {
+  flex: 1;
+  min-height: 10px;
+}
+
+/* menu-driven header actions (native style, wide screens) */
+.native-action-row {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  align-items: center;
+  flex-shrink: 0;
+}
+.native-action {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #cfd3dd;
+  background: #1c1f28;
+  border: 1px solid #2a2e3a;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.native-action:hover {
+  background: #242834;
+  color: #fff;
+}
+.native-action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.native-generate {
+  background: linear-gradient(135deg, #e62040, #904edd);
+  color: #fff;
+  border: none;
+  box-shadow: 0 0 14px rgba(144, 78, 221, 0.35);
+}
+.native-generate:hover {
+  background: linear-gradient(135deg, #ff2b4d, #a35be8);
+}
+
+/* camera angle strip (menu XML) */
+.angle-strip {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  scrollbar-width: none;
+}
+.angle-strip::-webkit-scrollbar {
+  display: none;
+}
+.angle-btn {
+  min-width: 92px;
+  height: 52px;
+  border-radius: 8px;
+  background: #171A21;
+  border: 1px solid #2a2e3a;
+  color: #cfd3dd;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.angle-btn:hover {
+  background: #1f2330;
+  color: #fff;
+  border-color: var(--neon-purple);
+}
+
 .rail-menu::-webkit-scrollbar {
   display: none;
 }
@@ -2121,6 +2204,9 @@ button:disabled {
   }
 }
 @media (max-width: 940px) {
+  .native-action-row {
+    display: none;
+  }
   .nav-rail {
     width: 56px;
   }

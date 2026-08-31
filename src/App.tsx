@@ -6,7 +6,7 @@ import { AvatarState, interactionState, loadAvatarState, saveAvatarState, stateP
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
-import { DEFAULT_MENU, loadMenuXml, MenuItem } from './services/menuXml';
+import { DEFAULT_MENU, loadMenuXml, MenuItem, menuSection } from './services/menuXml';
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
 import { isAgeConfirmed, confirmAdultAge } from './services/ageGate';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
@@ -384,6 +384,74 @@ export default function App() {
     menuItems.find(i => i.id === id)?.label ?? DEFAULT_MENU.find(i => i.id === id)?.label ?? id;
   const menuTitle = (id: string) =>
     menuItems.find(i => i.id === id)?.title ?? DEFAULT_MENU.find(i => i.id === id)?.title ?? '';
+
+  // ---- menu-driven actions (ids come from menu.xml) ----
+  const RAIL_ICONS: Record<string, string> = {
+    appearance: '💀', presets: '🗂️', import: '📥', body: '👤', clothing: '👚',
+    hair: '💇', face: '🎭', eyes: '👁', accessories: '💍', augments: '⚡',
+    tattoos: '🖤', animations: '🎬', story: '📖', gallery: '🖼', premium: '⭐',
+    chat: '💬', help: '❓', settings: '⚙️'
+  };
+  const railActive = (id: string): boolean => {
+    switch (id) {
+      case 'appearance': return view === 'builder';
+      case 'presets': return view === 'presets';
+      case 'import': return view === 'import';
+      case 'body': return openSections.body && view === 'builder';
+      case 'clothing': return openSections.clothing && view === 'builder';
+      case 'hair': return view === 'builder' && dockTab === 'style';
+      case 'face': return openSections.face && view === 'builder';
+      case 'eyes': return openSections.eyes && view === 'builder';
+      case 'augments': return openSections.augments && view === 'builder';
+      case 'tattoos': return openSections.tattoos && view === 'builder';
+      case 'animations': return view === 'video';
+      case 'story': return view === 'story';
+      case 'gallery': return view === 'gallery';
+      case 'premium': return premiumOpen;
+      case 'chat': return view === 'chat';
+      case 'help': return helpOpen;
+      case 'settings': return isSettingsOpen;
+      default: return false;
+    }
+  };
+  const railAction = (id: string) => {
+    const toView = (v: ActiveView) => {
+      setView(v);
+      if (isMobile) setMobileSheet('none');
+    };
+    switch (id) {
+      case 'appearance': toView('builder'); break;
+      case 'presets': toView('presets'); break;
+      case 'import': toView('import'); break;
+      case 'body': openSection('body'); break;
+      case 'clothing': openSection('clothing'); break;
+      case 'hair': setView('builder'); setDockTab('style'); break;
+      case 'face': openSection('face'); break;
+      case 'eyes': openSection('eyes'); break;
+      case 'accessories': openSection('clothing'); break;
+      case 'augments': openSection('augments'); break;
+      case 'tattoos': openSection('tattoos'); break;
+      case 'animations': setView('video'); break;
+      case 'story': toView('story'); break;
+      case 'gallery': toView('gallery'); break;
+      case 'premium': setPremiumOpen(true); break;
+      case 'chat': setView('chat'); break;
+      case 'help': setHelpOpen(true); break;
+      case 'settings': setIsSettingsOpen(true); break;
+    }
+  };
+  const headerAction = (id: string) => {
+    if (id === 'generate') handleGenerate();
+    else if (id === 'random') handleRandomize();
+    else if (id === 'rotate') setRotationAngle(r => (r + 45) % 360);
+    else if (id === 'zoom') setZoomLevel(z => (z > 1.2 ? 1 : 1.4));
+  };
+  const angleAction = (id: string) => {
+    if (id === 'angle_front') resetCamera();
+    else if (id === 'angle_3q') { setZoomLevel(1.3); setRotationAngle(0); }
+    else if (id === 'angle_side') setRotationAngle(90);
+    else if (id === 'angle_back') setRotationAngle(180);
+  };
   const [copiedId, setCopiedId] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
   const [styleFilter, setStyleFilter] = useState<string | null>(null);
@@ -1551,7 +1619,9 @@ export default function App() {
           M
         </div>
 
-        <div className="rail-menu">
+        <div className="rail-build-label">{menuLabel('rail_header')}</div>
+
+                <div className="rail-menu">
           {isMobile && (
             <button
               className={`rail-btn ${mobileSheet === 'inspector' ? 'active' : ''}`}
@@ -1559,191 +1629,31 @@ export default function App() {
                 setView('builder');
                 setMobileSheet('inspector');
               }}
-              title={menuTitle('edit_inspector')}
+              title="Edit Identity (inspector)"
             >
               <span className="rail-icon">✏️</span>
-              <span>{menuLabel('edit_inspector')}</span>
+              <span>Edit</span>
             </button>
           )}
 
-          <button
-            className={`rail-btn ${view === 'presets' ? 'active' : ''}`}
-            onClick={() => {
-              setView('presets');
-              if (isMobile) setMobileSheet('none');
-            }}
-            title={menuTitle('presets')}
-          >
-            <span className="rail-icon">🗂️</span>
-            <span>{menuLabel('presets')}</span>
-          </button>
-
-          <button
-            className={`rail-btn ${view === 'builder' ? 'active' : ''}`}
-            onClick={() => {
-              setView('builder');
-              if (isMobile) setMobileSheet('none');
-            }}
-            title={menuTitle('appearance')}
-          >
-            <span className="rail-icon">💀</span>
-            <span>{menuLabel('appearance')}</span>
-          </button>
-
-          <button
-            className={`rail-btn ${openSections.body && view === 'builder' ? 'active' : ''}`}
-            onClick={() => {
-              openSection('body');
-            }}
-            title={menuTitle('body')}
-          >
-            <span className="rail-icon">👤</span>
-            <span>{menuLabel('body')}</span>
-          </button>
-
-          <button
-            className={`rail-btn ${openSections.clothing && view === 'builder' ? 'active' : ''}`}
-            onClick={() => {
-              openSection('clothing');
-            }}
-            title={menuTitle('clothing')}
-          >
-            <span className="rail-icon">👚</span>
-            <span>{menuLabel('clothing')}</span>
-          </button>
-
-          <button
-            className="rail-btn"
-            onClick={() => {
-              setView('builder');
-              setDockTab('style');
-            }}
-            title={menuTitle('hair')}
-          >
-            <span className="rail-icon">💇‍♀️</span>
-            <span>{menuLabel('hair')}</span>
-          </button>
-
-          <button
-            className={`rail-btn ${openSections.face && view === 'builder' ? 'active' : ''}`}
-            onClick={() => {
-              openSection('face');
-            }}
-            title={menuTitle('face')}
-          >
-            <span className="rail-icon">🎭</span>
-            <span>{menuLabel('face')}</span>
-          </button>
-
-          <button
-            className={`rail-btn ${openSections.eyes && view === 'builder' ? 'active' : ''}`}
-            onClick={() => {
-              openSection('eyes');
-            }}
-            title={menuTitle('eyes')}
-          >
-            <span className="rail-icon">👁️</span>
-            <span>{menuLabel('eyes')}</span>
-          </button>
-
-          <button
-            className="rail-btn"
-            onClick={() => {
-              openSection('clothing');
-            }}
-            title={menuTitle('accessories')}
-          >
-            <span className="rail-icon">💍</span>
-            <span>{menuLabel('accessories')}</span>
-          </button>
-
-          <button
-            className={`rail-btn ${openSections.augments && view === 'builder' ? 'active' : ''}`}
-            onClick={() => {
-              openSection('augments');
-            }}
-            title={menuTitle('augments')}
-          >
-            <span className="rail-icon">⚡</span>
-            <span>{menuLabel('augments')}</span>
-          </button>
-
-          <button
-            className={`rail-btn ${openSections.tattoos && view === 'builder' ? 'active' : ''}`}
-            onClick={() => {
-              openSection('tattoos');
-            }}
-            title={menuTitle('tattoos')}
-          >
-            <span className="rail-icon">🖤</span>
-            <span>{menuLabel('tattoos')}</span>
-          </button>
-
-          <button
-            className={`rail-btn ${view === 'video' ? 'active' : ''}`}
-            onClick={() => setView('video')}
-            title={menuTitle('animations')}
-          >
-            <span className="rail-icon">🎬</span>
-            <span>{menuLabel('animations')}</span>
-          </button>
-
-          <button
-            className={`rail-btn ${view === 'import' ? 'active' : ''}`}
-            onClick={() => {
-              setView('import');
-              if (isMobile) setMobileSheet('none');
-            }}
-            title={menuTitle('import')}
-          >
-            <span className="rail-icon">📥</span>
-            <span>{menuLabel('import')}</span>
-          </button>
-
-          <button
-            className={`rail-btn ${view === 'story' ? 'active' : ''}`}
-            onClick={() => {
-              setView('story');
-              if (isMobile) setMobileSheet('none');
-            }}
-            title={menuTitle('story')}
-          >
-            <span className="rail-icon">📖</span>
-            <span>{menuLabel('story')}</span>
-          </button>
-
-          <button
-            className={`rail-btn ${view === 'gallery' ? 'active' : ''}`}
-            onClick={() => {
-              setView('gallery');
-              if (isMobile) setMobileSheet('none');
-            }}
-            title={menuTitle('gallery')}
-          >
-            <span className="rail-icon">🖼️</span>
-            <span>{menuLabel('gallery')}</span>
-          </button>
-
-          <button
-            className={`rail-btn ${premiumOpen ? 'active' : ''}`}
-            onClick={() => setPremiumOpen(true)}
-            title={menuTitle('premium')}
-          >
-            <span className="rail-icon">⭐</span>
-            <span>{menuLabel('premium')}</span>
-          </button>
-
-          <button
-            className={`rail-btn ${helpOpen ? 'active' : ''}`}
-            onClick={() => setHelpOpen(true)}
-            title={menuTitle('help')}
-          >
-            <span className="rail-icon">❓</span>
-            <span>{menuLabel('help')}</span>
-          </button>
+          {menuSection(menuItems, 'rail')
+            .filter(i => i.kind === 'Button')
+            .map(b => (
+              <div key={b.id} style={{ display: 'contents' }}>
+                {(b.id === 'body' || b.id === 'help') && <div className="rail-spacer" />}
+                <button
+                  className={`rail-btn ${railActive(b.id) ? 'active' : ''}`}
+                  onClick={() => railAction(b.id)}
+                  title={menuTitle(b.id)}
+                >
+                  <span className="rail-icon">{RAIL_ICONS[b.id] || '•'}</span>
+                  <span>{menuLabel(b.id)}</span>
+                </button>
+              </div>
+            ))}
         </div>
 
-        <div className="rail-footer">
+<div className="rail-footer">
           <button className="rail-btn" onClick={handleRandomize} title={menuTitle('random')}>
             <span className="rail-icon">🎲</span>
           </button>
@@ -1754,10 +1664,6 @@ export default function App() {
             title={menuTitle('stats')}
           >
             <span className="rail-icon">📊</span>
-          </button>
-
-          <button className="rail-btn" onClick={() => setIsSettingsOpen(true)} title={menuTitle('settings')}>
-            <span className="rail-icon">⚙️</span>
           </button>
 
           <button
@@ -1775,9 +1681,6 @@ export default function App() {
             <span style={{ fontSize: 8 }}>{adult ? '18+ ON' : '18+'}</span>
           </button>
 
-          <button className="rail-btn" onClick={() => setView('chat')} title={menuTitle('chat')}>
-            <span className="rail-icon">💬</span>
-          </button>
         </div>
       </aside>
 
@@ -1840,7 +1743,24 @@ export default function App() {
         <header className="viewport-header">
           <div className="avatar-design-title">
             <span>CREATE YOUR IDENTITY</span>
-            <h2>Avatar Design</h2>
+            <h2>{menuLabel('header_title')}</h2>
+          </div>
+
+          {/* Menu-driven header actions (wide screens; phones use the HUD + footer) */}
+          <div className="native-action-row">
+            {menuSection(menuItems, 'header')
+              .filter(i => i.kind === 'Button')
+              .map(b => (
+                <button
+                  key={b.id}
+                  className={`native-action ${b.id === 'generate' ? 'native-generate' : ''}`}
+                  disabled={b.id === 'generate' && busy}
+                  onClick={() => headerAction(b.id)}
+                  title={menuTitle(b.id)}
+                >
+                  {menuLabel(b.id)}
+                </button>
+              ))}
           </div>
 
           <div className="mode-pills">
@@ -2186,6 +2106,20 @@ export default function App() {
         )}
 
         {/* Lower Tool Dock (Hair, Color Wheel, Add-ons, Angle Previews) */}
+                  {/* Camera Angle Strip (menu XML) — sits under the preview, above the dock */}
+          <div className="angle-strip">
+            {menuSection(menuItems, 'angles').map(a => (
+              <button
+                key={a.id}
+                className="angle-btn"
+                onClick={() => angleAction(a.id)}
+                title={menuTitle(a.id)}
+              >
+                {menuLabel(a.id)}
+              </button>
+            ))}
+          </div>
+
         <div className="lower-dock">
           {/* Left: Hair & Color Wheel */}
           <div className="dock-hair-section">

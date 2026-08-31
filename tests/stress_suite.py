@@ -31,7 +31,7 @@ with sync_playwright() as p:
     heap0 = pg.evaluate("performance.memory ? performance.memory.usedJSHeapSize : 0")
     t0 = time.time()
     for i in range(30):
-        pg.locator("button", has_text="GENERATE RENDER").first.click()
+        pg.locator(".btn-generate-media").first.click()
         pg.wait_for_timeout(420)
     t30 = time.time() - t0
     heap1 = pg.evaluate("performance.memory ? performance.memory.usedJSHeapSize : 0")
@@ -134,7 +134,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
     # synchronous double-dispatch: both handlers run in the same task — the
     # exact race the busyRef guard must close (button also disables on busy)
-    pg.locator("button", has_text="GENERATE RENDER").first.evaluate("el => { el.click(); el.click(); }")
+    pg.locator(".btn-generate-media").first.evaluate("el => { el.click(); el.click(); }")
     pg.wait_for_timeout(1200)
     g = pg.evaluate("JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]').length")
     rec("concurrency", "double-click -> gallery items", g, "expect 1")
@@ -153,7 +153,7 @@ with sync_playwright() as p:
     """)
     pg.reload(wait_until="networkidle")
     pg.wait_for_timeout(400)
-    pg.locator("button", has_text="GENERATE RENDER").first.click()
+    pg.locator(".btn-generate-media").first.click()
     pg.wait_for_timeout(700)  # render in flight (5s mock)
     pg.locator(".footer-provider-select").select_option("local")
     pg.wait_for_timeout(1200)

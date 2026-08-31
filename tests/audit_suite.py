@@ -75,7 +75,7 @@ with sync_playwright() as p:
     """)
     pg.reload(wait_until="networkidle")
     pg.wait_for_timeout(500)
-    pg.locator("button", has_text="GENERATE RENDER").first.click()
+    pg.locator(".btn-generate-media").first.click()
     seen = []
     for _ in range(18):
         pg.wait_for_timeout(300)
@@ -217,7 +217,7 @@ with sync_playwright() as p:
     chk("APK mode: app still boots", pg.locator(".app-container").count() == 1)
     pg.close()
 
-    # --- 7) MENU XML: data-driven menu + FAULTY-XML fallback ---
+    # --- 7) MENU XML (native Android format): data-driven + FAULTY fallback ---
     fx = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixtures')
     custom_xml = open(os.path.join(fx, 'menu_custom.xml'), encoding='utf-8').read()
     faulty_xml = open(os.path.join(fx, 'menu_faulty.xml'), encoding='utf-8').read()
@@ -242,6 +242,8 @@ with sync_playwright() as p:
     pg.wait_for_timeout(700)
     chk("menu XML: custom title drives the rail", pg.locator(".rail-btn[title='ARCHIVE CUSTOM']").count() == 1)
     chk("menu XML: custom dock label applied", pg.locator(".dock-tab", has_text="COSMETICS").count() == 1)
+    chk("menu XML: angle strip driven by XML", pg.locator(".angle-btn").count() == 1)
+    chk("menu XML: header actions driven by XML", pg.locator(".native-action").count() == 1)
     ctx.close()
 
     # deliberately FAULTY XML -> app falls back to the built-in menu
@@ -255,6 +257,9 @@ with sync_playwright() as p:
     chk("faulty menu XML: app still boots", pg.locator(".app-container").count() == 1)
     chk("faulty menu XML: built-in labels restored", pg.locator(".rail-btn[title='Generation Archive']").count() == 1)
     chk("faulty menu XML: dock tabs intact", pg.locator(".dock-tab", has_text="HAIR STYLE").count() == 1)
+    chk("faulty menu XML: angle strip restored (4 buttons)", pg.locator(".angle-btn").count() == 4)
+    chk("faulty menu XML: header actions restored (4 buttons)", pg.locator(".native-action").count() == 4)
+    chk("faulty menu XML: BUILD rail header restored", pg.locator(".rail-build-label").inner_text() == "BUILD")
     chk("faulty menu XML: no page errors", len(errs) == 0, errs[:1])
     ctx.close()
 

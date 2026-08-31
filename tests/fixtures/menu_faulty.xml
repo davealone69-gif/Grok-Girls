@@ -1,14 +1,23 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- DELIBERATELY FAULTY MENU — unclosed label attribute, unclosed item
-     and section tags, plus an item missing its required id. Used by the
-     audit suite to prove the app falls back to the built-in menu. -->
-<menu version="1">
-  <section id="rail">
-    <item id="presets" label="BROKEN PRESETS
-    <item icon="🗂️" title="Missing id attribute">
-    <item id="gallery" title="Generation Archive">
-  </section>
-  <section id="dock">
-    <item id="hair_style" label="HAIR STYLE"
-  </section>
-</menu>
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DELIBERATELY FAULTY MENU (native format) — unclosed android:text
+     attribute, missing required android:id, unclosed tags. The app must
+     fall back to the built-in layout. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal">
+  <LinearLayout android:id="@+id/navigationRail" android:orientation="vertical">
+    <Button android:id="@+id/btnGallery" android:text="Gallery
+    <Button android:text="Missing id attribute">
+  </LinearLayout>
+  <LinearLayout android:id="@+id/angleStrip">
+    <Button android:id="@+id/angleFront" android:text="FRONT"
+  </LinearLayout>
+  <ScrollView>
+    <LinearLayout android:id="@+id/optionsPanel">
+      <LinearLayout android:id="@+id/optionsContainer">
+        <Button android:id="@+id/catMakeup" android:text="MAKEUP"
+      </LinearLayout>
+    </LinearLayout>
+  </ScrollView>
+</LinearLayout>

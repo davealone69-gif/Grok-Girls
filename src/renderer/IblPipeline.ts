@@ -7,9 +7,27 @@
 /* a constant (1,0) stand-in. Sampling empty cubemaps would render     */
 /* the IBL contribution black, so this keeps the milestone visible.    */
 /*                                                                     */
-/* Production path (unchanged shader interface): real HDR equirect     */
-/* import + GPU equirect-to-cubemap conversion + irradiance            */
-/* convolution + roughness prefiltering + generated BRDF LUT.          */
+/* RENDER-TARGET RULE (shared with RenderTarget.ts): the allocations   */
+/* below are SAMPLED textures (CPU-uploaded float data) — they stay    */
+/* float: float textures are perfectly valid for sampling. Only        */
+/* RENDERING into float attachments is probed, and every render target */
+/* must come from createRenderTarget() (RenderTarget.ts), which probes */
+/* every candidate format on a real FBO once per GL context (cached    */
+/* capability table) and falls back RGBA16F -> RGBA32F -> RGBA8.       */
+/*                                                                     */
+/* Production path (unchanged shader interface) — every intermediate   */
+/* render target MUST be allocated via createRenderTarget() with the   */
+/* requested format and the ACTUAL selected format must be read from   */
+/* the returned colorInternal (never assume the request was honored):  */
+/*   1. equirectangular -> cubemap conversion  -> { color: 'rgba16f' } */
+/*   2. irradiance convolution                 -> { color: 'rgba16f' } */
+/*   3. prefiltered environment mip levels     -> { color: 'rgba16f' } */
+/*      PER-MIP RULE: base-level renderability does not prove every    */
+/*      mip level is renderable — build the actual cubemap/mip         */
+/*      attachment config and call checkFramebufferComplete() before   */
+/*      rendering each level.                                          */
+/*   4. BRDF integration LUT                  -> { color: 'rgba16f' }  */
+/*      (RG16F LUT: probe the exact 2D format being used)              */
 /* ------------------------------------------------------------------ */
 
 export interface IblPipeline {

@@ -39,6 +39,18 @@ at startup).
 > `GltfSkeleton.ts`, `GltfAvatar.ts` — GLB assets render through the
 > existing skin program + shadow + cinematic passes (uSkinned + GPU
 > morph uniforms), no second rendering path.
+>
+> Render-target rule: `src/renderer/RenderTarget.ts` — never trust
+> EXT_color_buffer_float just because it is advertised; every render
+> target is created via `createRenderTarget({ width, height, color,
+> depth })` — per-format capability table probed once per GL context
+> (RGBA16F -> RGBA32F -> RGBA8 chain, depth 32F -> 24 -> 16), the
+> requested format starts the fallback chain, and the actual selected
+> format is reported back (colorInternal/depthInternal).
+> Sampling-only float textures stay float. IBL pipeline: all four
+> intermediate targets of the production path (equirect->cubemap,
+> irradiance, prefiltered mips, BRDF LUT) must allocate via
+> `createRenderTarget()`.
 
 ## Wired into the Capacitor app
 

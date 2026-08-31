@@ -41,6 +41,7 @@ import { createShadowMap, destroyShadowMap } from './renderer/ShadowMap';
 import { ShadowShader } from './renderer/ShadowShader';
 import { createIblPipeline, destroyIblPipeline, generateStudioEnvironment, DEFAULT_IBL_SETTINGS } from './renderer/IblPipeline';
 import { CinematicPipeline, CinematicRenderer, createFullscreenTriangle } from './renderer/CinematicPipeline';
+import { probeCapabilities, createRenderTarget, checkFramebufferComplete } from './renderer/RenderTarget';
 import { parseGlb } from './renderer/avatar/GlbLoader';
 import { readAccessor } from './renderer/avatar/GltfAccessor';
 import { loadAvatarGlb, disposeAvatarAsset, updateSkeleton } from './renderer/avatar/GltfAvatar';
@@ -101,6 +102,9 @@ if (typeof window !== 'undefined') {
     CinematicPipeline,
     CinematicRenderer,
     createFullscreenTriangle,
+    probeCapabilities,
+    createRenderTarget,
+    checkFramebufferComplete,
     parseGlb,
     readAccessor,
     loadAvatarGlb,

@@ -11,6 +11,8 @@
 /*   renderer.render(() => { avatarRenderer.render(avatar, camera); }) */
 /* ------------------------------------------------------------------ */
 
+import { createRenderTarget, RenderTarget } from './RenderTarget';
+
 export interface CinematicSettings {
   exposure: number;
   bloomThreshold: number;
@@ -208,95 +210,7 @@ function linkProgram(gl: WebGL2RenderingContext, vs: string, fs: string): WebGLP
   return p;
 }
 
-function createTexture2D(
-  gl: WebGL2RenderingContext,
-  w: number,
-  h: number,
-  internalFormat: number,
-  format: number,
-  type: number
-): WebGLTexture {
-  const tex = gl.createTexture();
-  if (!tex) throw new Error('Cinematic: createTexture failed');
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, w, h, 0, format, type, null);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.bindTexture(gl.TEXTURE_2D, null);
-  return tex;
-}
-
-interface Target {
-  fbo: WebGLFramebuffer;
-  color: WebGLTexture;
-  depth: WebGLTexture | null;
-  /** GL internal format actually used for the color attachment. */
-  colorFormat: number;
-}
-
-/**
- * Renderable-format probing with fallback: prefer RGBA16F (HDR), but some
- * GL implementations (notably the WebKit software GL used by headless CI
- * browsers) advertise EXT_color_buffer_float while refusing float color
- * attachments — those get RGBA8 automatically. Float depth works
- * everywhere; DEPTH_COMPONENT24/16 are the fallbacks.
- */
-function createTarget(gl: WebGL2RenderingContext, w: number, h: number, depth = false): Target {
-  const fbo = gl.createFramebuffer();
-  if (!fbo) throw new Error('Cinematic: createFramebuffer failed');
-
-  const colorFormats: Array<[number, number, number]> = [
-    [gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT],
-    [gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE]
-  ];
-  const depthFormats: Array<[number, number]> = [
-    [gl.DEPTH_COMPONENT32F, gl.FLOAT],
-    [gl.DEPTH_COMPONENT24, gl.UNSIGNED_INT],
-    [gl.DEPTH_COMPONENT16, gl.UNSIGNED_SHORT]
-  ];
-
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-  let color: WebGLTexture | null = null;
-  let depthTex: WebGLTexture | null = null;
-  let colorFormat = colorFormats[0][0];
-
-  for (const cf of colorFormats) {
-    if (color) {
-      gl.deleteTexture(color);
-      color = null;
-    }
-    color = createTexture2D(gl, w, h, cf[0], cf[1], cf[2]);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, color, 0);
-    let complete = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-    if (complete && depth) {
-      for (const df of depthFormats) {
-        if (depthTex) {
-          gl.deleteTexture(depthTex);
-          depthTex = null;
-        }
-        depthTex = createTexture2D(gl, w, h, df[0], gl.DEPTH_COMPONENT, df[1]);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, depthTex, 0);
-        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE) {
-          complete = true;
-          break;
-        }
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, null, 0);
-        complete = false;
-      }
-    }
-    if (complete) {
-      colorFormat = cf[0];
-      break;
-    }
-  }
-
-  gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  if (!color) throw new Error('Cinematic: no renderable color format');
-  return { fbo, color, depth: depthTex, colorFormat };
-}
+type Target = RenderTarget;
 
 export class CinematicRenderer {
   readonly pipeline: CinematicPipeline;
@@ -314,7 +228,7 @@ export class CinematicRenderer {
   private historyB: Target | null = null;
   private historyActive = true;
 
-  /** Actual HDR color format in use ('rgba16f' or 'rgba8' fallback). */
+  /** Actual HDR color format in use ('rgba16f', 'rgba32f' or 'rgba8'). */
   hdrFormat = 'rgba16f';
 
   private brightProgram: WebGLProgram;
@@ -383,15 +297,17 @@ export class CinematicRenderer {
     this.width = w;
     this.height = h;
     const gl = this.gl;
-    this.hdr = createTarget(gl, w, h, true);
-    this.hdrFormat = this.hdr.colorFormat === gl.RGBA16F ? 'rgba16f' : 'rgba8';
+    this.hdr = createRenderTarget(gl, { width: w, height: h, depth: true });
+    this.hdrFormat =
+      this.hdr.colorInternal === gl.RGBA16F ? 'rgba16f' :
+      this.hdr.colorInternal === gl.RGBA32F ? 'rgba32f' : 'rgba8';
     const bw = Math.max(1, w >> 1);
     const bh = Math.max(1, h >> 1);
-    this.bloomA = createTarget(gl, bw, bh);
-    this.bloomB = createTarget(gl, bw, bh);
-    this.dofTarget = createTarget(gl, w, h);
-    this.historyA = createTarget(gl, w, h);
-    this.historyB = createTarget(gl, w, h);
+    this.bloomA = createRenderTarget(gl, { width: bw, height: bh });
+    this.bloomB = createRenderTarget(gl, { width: bw, height: bh });
+    this.dofTarget = createRenderTarget(gl, { width: w, height: h });
+    this.historyA = createRenderTarget(gl, { width: w, height: h });
+    this.historyB = createRenderTarget(gl, { width: w, height: h });
     this.historyActive = true;
     // clear history (first-frame TAA would otherwise sample garbage)
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.historyA.fbo);

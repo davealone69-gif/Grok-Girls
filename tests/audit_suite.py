@@ -204,6 +204,18 @@ with sync_playwright() as p:
     chk("M6 innocent 'hard' gets clean reply", not adult_hit, last[:80])
     pg.close()
 
+    # --- 6) ANDROID-FIRST: no service worker inside the Capacitor webview ---
+    # An SW cached from an older build could serve a stale app after an APK
+    # update — the webview must unregister/never register one.
+    pg = b.new_page(viewport={"width": 393, "height": 851})
+    pg.add_init_script("window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android' };")
+    pg.goto("http://localhost:8080/", wait_until="networkidle")
+    pg.wait_for_timeout(1000)
+    sw_count = pg.evaluate("() => navigator.serviceWorker.getRegistrations().then(rs => rs.length)")
+    chk("APK mode: no service worker registered", sw_count == 0, sw_count)
+    chk("APK mode: app still boots", pg.locator(".app-container").count() == 1)
+    pg.close()
+
     b.close()
 
 print(json.dumps(results, indent=1))

@@ -1,5 +1,5 @@
 /* Grok Girls Studio — service worker (offline-first PWA) */
-const VERSION = 'grok-girls-v8';
+const VERSION = 'grok-girls-v9';
 const SHELL = [
   '/',
   '/index.html',

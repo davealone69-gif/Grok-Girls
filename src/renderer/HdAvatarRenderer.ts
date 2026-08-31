@@ -16,6 +16,9 @@
 /*  - HAIR (milestone 2): procedural strand color/roughness/direction/ */
 /*    density maps, dedicated hair shader with anisotropic dual-lobe   */
 /*    specular + root darkening + alpha cutoff; hair shell over skull  */
+/*  - SHADOWS (milestone 3): depth-only pass to a 2048² 32F depth      */
+/*    texture, 3x3 PCF + slope-scaled bias + strength, shadow sampled  */
+/*    on unit 7 in the skin PBR pass (eyes/hair cast shadows too)      */
 /*  - GPU skinning path: when a Skeleton is bound, uBones[128] drive   */
 /*    a 17-float/vertex skinned mesh (avatar_skin.vert layout)        */
 /*  - AvatarParameters modulate bone scales (height/chest/waist/hips/  */
@@ -23,7 +26,7 @@
 /*  - HDFrameRenderer off-screen pass at the configured resolution     */
 /* ------------------------------------------------------------------ */
 
-import { mat4Identity, mat4Invert, mat4LookAt, mat4Multiply, mat4Perspective, mat4RotationAxisDeg, mat4Scale, mat4Transpose, Mat4 } from './math';
+import { mat4Identity, mat4Invert, mat4LookAt, mat4Multiply, mat4Ortho, mat4Perspective, mat4RotationAxisDeg, mat4RotationY, mat4Scale, mat4Translation, mat4Transpose, Mat4 } from './math';
 import { HDFrameRenderer } from './HDFrameRenderer';
 import { RenderConfig } from './types';
 import { RenderResolution } from './RenderResolution';
@@ -39,6 +42,8 @@ import { DEFAULT_EYE_PARAMETERS, DEFAULT_IRIS_COLOR } from './EyeMaterial';
 import { createHairTextures, destroyHairTextures, HairTextures } from './HairTextures';
 import { HairShader } from './HairShader';
 import { DEFAULT_HAIR_PARAMETERS } from './HairMaterial';
+import { createShadowMap, destroyShadowMap, ShadowMap } from './ShadowMap';
+import { ShadowShader } from './ShadowShader';
 
 /* 300 es — vertex shader for the non-skinned path. Native attribute
  * layout: 0 pos, 1 normal, 2 uv, 3 tangent (vec4, w = handedness). */
@@ -83,6 +88,10 @@ uniform vec3 uCameraPosition;
 uniform vec3 uLightPosition;
 uniform vec3 uLightColor;
 uniform float uLightIntensity;
+uniform sampler2D uShadowMap;
+uniform mat4 uLightViewProjection;
+uniform float uShadowBias;
+uniform float uShadowStrength;
 const float PI = 3.14159265359;
 
 vec3 sampleNormal() {
@@ -106,6 +115,31 @@ float distributionGGX(vec3 N, vec3 H, float roughness) {
   return a2 / max(PI * d * d, 0.000001);
 }
 
+
+float calculateShadow(vec3 worldPosition, vec3 normal, vec3 lightDirection) {
+  vec4 lightSpace = uLightViewProjection * vec4(worldPosition, 1.0);
+  vec3 projection = lightSpace.xyz / lightSpace.w;
+  projection = projection * 0.5 + 0.5;
+
+  if (projection.z > 1.0 || projection.x < 0.0 || projection.x > 1.0 || projection.y < 0.0 || projection.y > 1.0) {
+    return 1.0;
+  }
+
+  float bias = max(uShadowBias * (1.0 - dot(normal, lightDirection)), uShadowBias * 0.25);
+  vec2 texelSize = 1.0 / vec2(textureSize(uShadowMap, 0));
+
+  float visibility = 0.0;
+  // 3x3 PCF.
+  for (int x = -1; x <= 1; x++) {
+    for (int y = -1; y <= 1; y++) {
+      float depth = texture(uShadowMap, projection.xy + vec2(x, y) * texelSize).r;
+      visibility += projection.z - bias <= depth ? 1.0 : 0.0;
+    }
+  }
+  visibility /= 9.0;
+
+  return mix(1.0, visibility, uShadowStrength);
+}
 
 vec3 calculateSubsurface(vec3 N, vec3 L, vec3 V, vec3 baseColor, float thickness) {
   float NdotL = dot(N, L);
@@ -157,7 +191,9 @@ void main() {
   vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
   float NdotL = max(dot(N, L), 0.0);
   vec3 diffuse = kD * baseColor.rgb / PI;
-  vec3 lighting = (diffuse + specular) * radiance * NdotL;
+  float shadow = calculateShadow(vWorldPosition, N, L);
+
+  vec3 lighting = (diffuse + specular) * radiance * NdotL * shadow;
 
   vec3 ambient = baseColor.rgb * 0.025;
 
@@ -212,7 +248,8 @@ const UNIFORM_NAMES = [
   'uLightPosition', 'uLightColor', 'uLightIntensity',
   'uBaseColorFactor', 'uMetallicFactor', 'uRoughnessFactor',
   'uBones', 'uBaseColorTexture', 'uRoughnessTexture', 'uNormalTexture',
-  'uThicknessTexture', 'uSubsurfaceStrength', 'uSubsurfaceRadius'
+  'uThicknessTexture', 'uSubsurfaceStrength', 'uSubsurfaceRadius',
+  'uShadowMap', 'uLightViewProjection', 'uShadowBias', 'uShadowStrength'
 ];
 
 function cacheUniforms(
@@ -306,6 +343,10 @@ export class HdAvatarRenderer {
   private hairSecondarySpecular = DEFAULT_HAIR_PARAMETERS.secondarySpecular;
   private hairRootDarkening = DEFAULT_HAIR_PARAMETERS.rootDarkening;
   private hairAlphaCutoff = DEFAULT_HAIR_PARAMETERS.alphaCutoff;
+  // shadow mapping (milestone 3)
+  private shadowMap: ShadowMap | null = null;
+  private shadowShader: ShadowShader | null = null;
+  private lightViewProjection = new Float32Array(16);
   private uniforms = new Map<WebGLProgram, UniformCache>();
   private frameRenderer: HDFrameRenderer | null = null;
   private autoRotate = true;
@@ -339,6 +380,11 @@ export class HdAvatarRenderer {
     this.hairShader = new HairShader(gl);
     this.hairMesh = buildSphereMesh(48, 32);
     this.hairMesh.upload(gl);
+
+    // shadow mapping: depth FBO + pass program + light matrix
+    this.shadowMap = createShadowMap(gl, 2048);
+    this.shadowShader = new ShadowShader(gl);
+    this.updateLightMatrix();
 
     // uniform location cache (one entry set per program; both programs
     // share the same fragment uniforms)
@@ -377,6 +423,7 @@ export class HdAvatarRenderer {
   }
   setKeyLight(x: number, y: number, z: number): void {
     this.lightPosition = [x, y, z];
+    this.updateLightMatrix();
   }
   setSkeleton(s: Skeleton | null): void {
     this.skeleton = s;
@@ -449,6 +496,12 @@ export class HdAvatarRenderer {
     this.hairShader = null;
     this.hairMesh?.destroy(this.gl);
     this.hairMesh = null;
+    if (this.shadowMap) {
+      destroyShadowMap(this.gl, this.shadowMap);
+      this.shadowMap = null;
+    }
+    this.shadowShader?.dispose();
+    this.shadowShader = null;
     this.mesh.destroy(this.gl);
     this.frameRenderer?.destroy();
     this.gl.deleteProgram(this.program);
@@ -470,6 +523,9 @@ export class HdAvatarRenderer {
       canvas.width = w;
       canvas.height = h;
     }
+
+    // ---- 1. shadow depth pass (once per frame) ----
+    this.renderShadowPass();
 
     // ---- HD off-screen pass (native onDrawFrame) ----
     this.frameRenderer?.beginFrame();
@@ -565,12 +621,66 @@ export class HdAvatarRenderer {
     shader.bindTexture(3, 'uDensityTexture', textures.density);
 
     // hair shell over the skull region (procedural placeholder cap)
+    shader.setMatrix4('uModel', this.hairModelMatrix());
+    mesh.draw(gl);
+  }
+
+  /** Hair placement (parented to the avatar model). */
+  private hairModelMatrix(): Mat4 {
     const local = mat4Multiply(
       mat4Translation(0, 0.95, 0),
       mat4Scale(1.18, 0.72, 1.18)
     );
-    shader.setMatrix4('uModel', mat4Multiply(this.model, local));
-    mesh.draw(gl);
+    return mat4Multiply(this.model, local);
+  }
+
+  /**
+   * Light-space view-projection for the shadow pass: orthographic
+   * projection of the scene from the light position toward the avatar.
+   */
+  private updateLightMatrix(): void {
+    const target: [number, number, number] = [0, 1.2, 0];
+    const up: [number, number, number] = [0, 1, 0];
+    const view = mat4LookAt(this.lightPosition, target, up);
+    const r = 3.5;
+    const proj = mat4Ortho(-r, r, -r, r, 0.5, 20);
+    const lvp = mat4Multiply(proj, view);
+    this.lightViewProjection = new Float32Array(lvp);
+  }
+
+  /** 1. Shadow depth pass — avatar (+ eyes/hair) into the depth texture. */
+  private renderShadowPass(): void {
+    const gl = this.gl;
+    const shadow = this.shadowMap;
+    const shader = this.shadowShader;
+    if (!shadow || !shader) return;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, shadow.framebuffer);
+    gl.viewport(0, 0, shadow.size, shadow.size);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST);
+    gl.colorMask(false, false, false, false);
+
+    shader.use();
+    shader.setLightViewProjection(this.lightViewProjection);
+    this.drawAvatarDepth(shader);
+
+    gl.colorMask(true, true, true, true);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  /** Draws every opaque piece into the shadow depth attachment. */
+  private drawAvatarDepth(shader: ShadowShader): void {
+    shader.setModel(this.model);
+    this.mesh.draw(this.gl);
+    for (let i = 0; i < this.eyeMeshes.length; i++) {
+      shader.setModel(this.eyeModelMatrix(i));
+      this.eyeMeshes[i].draw(this.gl);
+    }
+    if (this.hairMesh) {
+      shader.setModel(this.hairModelMatrix());
+      this.hairMesh.draw(this.gl);
+    }
   }
 
   /** EYE MESH pair — sclera/iris/pupil/cornea via the dedicated shader. */
@@ -598,16 +708,22 @@ export class HdAvatarRenderer {
 
     const offsets = [-1, 1];
     for (let i = 0; i < 2; i++) {
-      // The iris (UV centre) sits at sphere -x; rotate +90° around Y so
-      // it faces the avatar's forward (+z). Eyes parent to the avatar
-      // model (rotate with it), positioned just proud of the head.
-      const local = mat4Multiply(
-        mat4Translation(offsets[i] * this.eyeOffsetX, this.eyeY, this.eyeZ),
-        mat4Multiply(mat4RotationY(Math.PI / 2), mat4Scale(this.eyeRadius, this.eyeRadius, this.eyeRadius))
-      );
-      shader.setMatrix4('uModel', mat4Multiply(this.model, local));
+      shader.setMatrix4('uModel', this.eyeModelMatrix(i));
       this.eyeMeshes[i].draw(gl);
     }
+  }
+
+  /** Eye placement (parented to the avatar model). */
+  private eyeModelMatrix(i: number): Mat4 {
+    const offsets = [-1, 1];
+    // The iris (UV centre) sits at sphere -x; rotate +90° around Y so
+    // it faces the avatar's forward (+z). Eyes parent to the avatar
+    // model (rotate with it), positioned just proud of the head.
+    const local = mat4Multiply(
+      mat4Translation(offsets[i] * this.eyeOffsetX, this.eyeY, this.eyeZ),
+      mat4Multiply(mat4RotationY(Math.PI / 2), mat4Scale(this.eyeRadius, this.eyeRadius, this.eyeRadius))
+    );
+    return mat4Multiply(this.model, local);
   }
 
   private applyCommonUniforms(gl: WebGL2RenderingContext, program: WebGLProgram) {
@@ -641,6 +757,17 @@ export class HdAvatarRenderer {
     // subsurface scattering (wrap light + thickness map)
     gl.uniform1f(u.uSubsurfaceStrength, this.subsurfaceStrength);
     gl.uniform3f(u.uSubsurfaceRadius, this.subsurfaceRadius[0], this.subsurfaceRadius[1], this.subsurfaceRadius[2]);
+
+    // shadow map on unit 7 (skin PBR pass only)
+    const shadow = this.shadowMap;
+    if (shadow) {
+      gl.activeTexture(gl.TEXTURE7);
+      gl.bindTexture(gl.TEXTURE_2D, shadow.depthTexture);
+      gl.uniform1i(u.uShadowMap, 7);
+      gl.uniformMatrix4fv(u.uLightViewProjection, false, this.lightViewProjection);
+      gl.uniform1f(u.uShadowBias, 0.0015);
+      gl.uniform1f(u.uShadowStrength, 0.92);
+    }
   }
 
   /** native createAvatarMesh(): the placeholder sphere.

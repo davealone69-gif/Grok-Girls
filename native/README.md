@@ -22,7 +22,9 @@ at startup).
 > and precedes a dedicated corneal shell (next refinement). The web hair
 > path (`HairTextures.ts`, `HairMaterial.ts`, `HairShader.ts` — strand
 > color/roughness/direction/density maps, anisotropic dual-lobe specular,
-> root darkening, alpha cutoff) is milestone 2; shadow maps come next.
+> root darkening, alpha cutoff) is milestone 2. Shadow mapping
+> (`ShadowMap.ts`, `ShadowShader.ts` — 2048² 32F depth pass, 3×3 PCF,
+> slope-scaled bias, strength) is milestone 3; HDR + IBL is next.
 
 ## Wired into the Capacitor app
 

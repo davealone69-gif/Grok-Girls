@@ -32,6 +32,8 @@ import { DEFAULT_EYE_PARAMETERS, DEFAULT_IRIS_COLOR } from './renderer/EyeMateri
 import { createHairTextures, destroyHairTextures } from './renderer/HairTextures';
 import { HairShader } from './renderer/HairShader';
 import { DEFAULT_HAIR_PARAMETERS } from './renderer/HairMaterial';
+import { createShadowMap, destroyShadowMap } from './renderer/ShadowMap';
+import { ShadowShader } from './renderer/ShadowShader';
 import { HDFrameRenderer } from './renderer/HDFrameRenderer';
 import { RenderResolution, RENDER_RESOLUTIONS } from './renderer/RenderResolution';
 import { HDRenderTarget } from './renderer/HDRenderTarget';
@@ -64,7 +66,10 @@ if (typeof window !== 'undefined') {
     createHairTextures,
     destroyHairTextures,
     HairShader,
-    DEFAULT_HAIR_PARAMETERS
+    DEFAULT_HAIR_PARAMETERS,
+    createShadowMap,
+    destroyShadowMap,
+    ShadowShader
   };
 }
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';

@@ -405,6 +405,61 @@ with sync_playwright() as p:
     chk("hd renderer: gallery item saved (hdrenderer)", prov and prov[-1] == 'hdrenderer', str(prov[-3:]))
     chk("hd renderer: exactly one gallery item added (busy guard)", after_count == before_count + 1, f"{before_count} -> {after_count}")
 
+    # HDRenderView (native GLSurfaceView demo mirror): spinning cube + lifecycle
+    # reset any open overlay first; the click is dispatched directly on the
+    # element (the HUD sits under the header's pointer surface on some runs)
+    pg.keyboard.press("Escape")
+    pg.wait_for_timeout(300)
+    pg.evaluate("() => { const b = [...document.querySelectorAll('.hud-btn')].find(x => x.textContent.includes('3D')); if (b) b.click(); }")
+    pg.wait_for_timeout(1000)
+    chk("hd view: cube overlay visible", pg.locator(".hd-cube-overlay").count() == 1)
+    a1 = pg.evaluate("() => window.__hdView.getAngle()")
+    pg.wait_for_timeout(500)
+    a2 = pg.evaluate("() => window.__hdView.getAngle()")
+    chk("hd view: cube spins (continuous render mode)", a2 > a1, round(a2 - a1, 1))
+    px = pg.evaluate("() => window.__hdView.readCenterPixel()")
+    chk("hd view: center pixel is the lit cube", px[3] == 255 and px[0] + px[1] + px[2] > 30, str(px))
+    pg.evaluate("() => window.__hdView.onPause()")
+    b1 = pg.evaluate("() => window.__hdView.getAngle()")
+    pg.wait_for_timeout(400)
+    b2 = pg.evaluate("() => window.__hdView.getAngle()")
+    chk("hd view: onPause stops the spin (MainActivity mirror)", abs(b2 - b1) < 0.01)
+    pg.evaluate("() => window.__hdView.onResume()")
+    c1 = pg.evaluate("() => window.__hdView.getAngle()")
+    pg.wait_for_timeout(400)
+    c2 = pg.evaluate("() => window.__hdView.getAngle()")
+    chk("hd view: onResume restarts the spin", c2 > c1)
+    pg.locator(".hd-cube-close").click()
+    pg.wait_for_timeout(300)
+    chk("hd view: EXIT 3D returns to the studio", pg.locator(".hd-cube-overlay").count() == 0 and pg.locator(".character-image").count() == 1)
+
+    # HDRenderTarget + RenderResolution (native mirrors)
+    rt = pg.evaluate("""() => {
+      const c = document.createElement('canvas');
+      c.width = 16; c.height = 16;
+      const gl = c.getContext('webgl2');
+      if (!gl) return { ok: false, why: 'no webgl2' };
+      const t = new window.__hdDebug.HDRenderTarget(gl, 16, 16);
+      t.create();
+      const created = !!(t.framebuffer && t.colorTexture && t.depthBuffer);
+      // completeness was checked in create(); force an error path
+      let threw = false;
+      try {
+        const bad = new window.__hdDebug.HDRenderTarget(gl, 0, 16); // 0 width must fail
+        bad.create();
+      } catch (e) { threw = true; }
+      t.destroy();
+      const destroyed = !t.framebuffer && !t.colorTexture && !t.depthBuffer;
+      return { ok: true, created, threw, destroyed };
+    }""")
+    chk("hd target: create() makes FBO + color + depth", bool(rt) and rt.get("ok") and rt.get("created"), str(rt)[:120])
+    chk("hd target: incomplete framebuffer throws (Kotlin IllegalState)", bool(rt) and rt.get("threw"), str(rt and rt.get("threw")))
+    chk("hd target: destroy() releases all handles", bool(rt) and rt.get("destroyed"), str(rt and rt.get("destroyed")))
+    resmap = pg.evaluate("() => { const m = window.__hdDebug.RENDER_RESOLUTIONS; return Object.fromEntries(Object.entries(m).map(([k, v]) => [k, v.width + 'x' + v.height])); }")
+    chk("hd resolutions: exact native enum values",
+        resmap and resmap.get("HD_720P") == "1280x720" and resmap.get("FULL_HD") == "1920x1080"
+        and resmap.get("QHD") == "2560x1440" and resmap.get("UHD_4K") == "3840x2160", str(resmap))
+
     # unknown Avatar ID -> Load Outfit falls back to the DEFAULT definition
     pg.locator(".identity-avatar-id").fill("zzz_none")
     pg.wait_for_timeout(200)

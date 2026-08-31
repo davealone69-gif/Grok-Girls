@@ -102,6 +102,33 @@ export function mat4LookAt(eye: [number, number, number], target: [number, numbe
   return m;
 }
 
+/** Rodrigues rotation around an arbitrary axis (axis is normalized here;
+ *  Android's Matrix.rotateM does not normalize, which only changes the
+ *  effective spin rate). Mirrors Matrix.rotateM(m, 0, deg, x, y, z). */
+export function mat4RotationAxisDeg(axis: [number, number, number], angleDeg: number): Mat4 {
+  const a = (angleDeg * Math.PI) / 180;
+  let [x, y, z] = axis;
+  const len = Math.hypot(x, y, z) || 1;
+  x /= len;
+  y /= len;
+  z /= len;
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  const t = 1 - c;
+  const m = new Float32Array(16);
+  m[0] = c + x * x * t;
+  m[1] = y * x * t + z * s;
+  m[2] = z * x * t - y * s;
+  m[4] = x * y * t - z * s;
+  m[5] = c + y * y * t;
+  m[6] = z * y * t + x * s;
+  m[8] = x * z * t + y * s;
+  m[9] = y * z * t - x * s;
+  m[10] = c + z * z * t;
+  m[15] = 1;
+  return m;
+}
+
 export function mat4Ortho(l: number, r: number, b: number, t: number, n: number, f: number): Mat4 {
   const m = new Float32Array(16);
   m[0] = 2 / (r - l);

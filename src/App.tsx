@@ -19,8 +19,17 @@ import { AVATAR_CATEGORIES, applyCategoryOption, activeCategoryOption } from './
 import { AvatarDesignerViewModel, createAvatarDesignerViewModel } from './models/avatarDesignerViewModel';
 import { AvatarPreviewView, AvatarPreviewHandle } from './components/AvatarPreviewView';
 import { HDRenderer, buildDefaultScene } from './renderer/HDRenderer';
+import { HDRenderView, HDRenderViewHandle } from './renderer/HDRenderView';
+import { RenderResolution, RENDER_RESOLUTIONS } from './renderer/RenderResolution';
+import { HDRenderTarget } from './renderer/HDRenderTarget';
 if (typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__hdDebug = { HDRenderer, buildDefaultScene };
+  (window as unknown as Record<string, unknown>).__hdDebug = {
+    HDRenderer,
+    buildDefaultScene,
+    HDRenderTarget,
+    RenderResolution,
+    RENDER_RESOLUTIONS
+  };
 }
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
 import { isAgeConfirmed, confirmAdultAge } from './services/ageGate';
@@ -411,10 +420,19 @@ export default function App() {
   const avatarVm = avatarVmRef.current;
   const [avatarDef, setAvatarDef] = useState<AvatarDefinition>(() => avatarVm.get());
   const avatarPreviewRef = useRef<AvatarPreviewHandle>(null);
+  const [cubeMode, setCubeMode] = useState(false);
+  const hdViewRef = useRef<HDRenderViewHandle>(null);
   useEffect(() => {
     (window as unknown as Record<string, unknown>).__grokGirlsVm = avatarVm;
     (window as unknown as Record<string, unknown>).__grokGirlsPreview = {
       setAvatar: (d: AvatarDefinition) => avatarPreviewRef.current?.setAvatar(d)
+    };
+    (window as unknown as Record<string, unknown>).__hdView = {
+      onResume: () => hdViewRef.current?.onResume(),
+      onPause: () => hdViewRef.current?.onPause(),
+      release: () => hdViewRef.current?.release(),
+      getAngle: () => hdViewRef.current?.getAngle() ?? -1,
+      readCenterPixel: () => hdViewRef.current?.readCenterPixel() ?? [0, 0, 0, 0]
     };
     return avatarVm.subscribe((def, change) => {
       setAvatarDef(def);
@@ -533,8 +551,9 @@ export default function App() {
     setHdRendering(true);
     setHdProgress(0);
     try {
+      const res = RENDER_RESOLUTIONS[RenderResolution.FULL_HD]; // 1920×1080, the native enum
       const renderer = new HDRenderer(undefined, pct => setHdProgress(pct));
-      renderer.configure({ width: 1920, height: 1920, hdr: true, shadows: true, bloom: true, samples: 3, seed: Number(seedInput) || 7 });
+      renderer.configure({ width: res.width, height: res.height, hdr: true, shadows: true, bloom: true, samples: 3, seed: Number(seedInput) || 7 });
       renderer.loadScene(buildDefaultScene(avatarDef));
       const result = renderer.render();
       renderer.dispose();
@@ -546,7 +565,7 @@ export default function App() {
         provider: 'hdrenderer'
       });
       void refreshGallery();
-      showToast(`HD render complete · ${result.width}×${result.height} · ${result.ms}ms`);
+      showToast(`HD render complete · FULL_HD ${result.width}×${result.height} · ${result.ms}ms`);
     } catch (err) {
       showToast(`HD render failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -2054,6 +2073,13 @@ export default function App() {
               <span>🎲</span> RANDOM
             </button>
             <button
+              className={`hud-btn ${cubeMode ? 'live-active' : ''}`}
+              onClick={() => setCubeMode(v => !v)}
+              title="Interactive 3D viewport (native HDRenderView demo)"
+            >
+              <span>🧊</span> 3D
+            </button>
+            <button
               className={`hud-btn ${livePreview ? 'live-active' : ''}`}
               onClick={toggleLivePreview}
               title="Live preview: re-render the viewport as you edit the prompt (never overwrites your saved photo)"
@@ -2215,6 +2241,14 @@ export default function App() {
               </div>
             </div>
           )}
+        {cubeMode && (
+          <div className="hd-cube-overlay">
+            <HDRenderView ref={hdViewRef} className="hd3d-canvas" />
+            <button className="hd-cube-close" onClick={() => setCubeMode(false)} title="Exit 3D viewport">
+              ✕ EXIT 3D
+            </button>
+          </div>
+        )}
         </div>
 
         {immersive && (
@@ -2222,6 +2256,8 @@ export default function App() {
             ⛶ EXIT FULLSCREEN (F)
           </button>
         )}
+
+
 
         {/* Lower Tool Dock (Hair, Color Wheel, Add-ons, Angle Previews) */}
                   {/* Camera Angle Strip (menu XML) — sits under the preview, above the dock */}

@@ -386,6 +386,37 @@ button:disabled {
   z-index: 5;
 }
 
+.hd-cube-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  background: #05060a;
+}
+.hd3d-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.hd-cube-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #cfd3dd;
+  background: rgba(20, 22, 32, 0.9);
+  border: 1px solid #2a2e3a;
+  cursor: pointer;
+}
+.hd-cube-close:hover {
+  color: #fff;
+  border-color: var(--neon-purple);
+}
+
 .rail-menu::-webkit-scrollbar {
   display: none;
 }
@@ -603,6 +634,9 @@ button:disabled {
   background: rgba(13, 13, 23, 0.85);
   backdrop-filter: blur(8px);
   z-index: 10;
+  /* never spill over the stage below (clips instead of covering it) */
+  overflow: hidden;
+  flex-wrap: wrap;
 }
 
 .avatar-design-title h2 {

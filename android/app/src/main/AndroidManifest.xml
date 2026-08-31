@@ -38,5 +38,11 @@
 
     <!-- Permissions -->
 
+    <!-- HD renderer: OpenGL ES 3.2 (mirrors the native manifest's
+         glEsVersion 0x00030002 requirement) -->
+    <uses-feature
+        android:glEsVersion="0x00030002"
+        android:required="true" />
+
     <uses-permission android:name="android.permission.INTERNET" />
 </manifest>

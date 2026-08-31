@@ -32,18 +32,44 @@ export function getProvider(id: AvatarProviderId): AvatarProviderCapability {
 
 export function validateProviderSelection(selection: AvatarProviderSelection): void {
   const capability = getProvider(selection.provider);
-  if (selection.agentId && !capability.agentId) throw new Error(`${selection.provider} does not accept an agent ID`);
-  if (selection.imageUrl && !capability.imageSource) throw new Error(`${selection.provider} does not accept an image URL`);
-  if (selection.provider === 'lemonslice' && Number(Boolean(selection.agentId)) + Number(Boolean(selection.imageUrl)) !== 1) {
-    throw new Error('LemonSlice requires exactly one avatar source: agent ID or image URL');
+  const hasAgentId = Boolean(selection.agentId?.trim());
+  const hasImageUrl = Boolean(selection.imageUrl?.trim());
+
+  if (hasAgentId && hasImageUrl) {
+    throw new Error('Choose exactly one avatar source: agent ID or image URL');
   }
-  if (selection.idleTimeout != null && !Number.isFinite(selection.idleTimeout)) throw new Error('Invalid idle timeout');
+  if (!hasAgentId && !hasImageUrl) {
+    throw new Error('An avatar source is required');
+  }
+  if (hasAgentId && !capability.agentId) {
+    throw new Error(`${selection.provider} does not accept an agent ID`);
+  }
+  if (hasImageUrl && !capability.imageSource) {
+    throw new Error(`${selection.provider} does not accept an image URL`);
+  }
+  if (hasImageUrl) {
+    const url = new URL(selection.imageUrl!);
+    if (url.protocol !== 'https:') throw new Error('Avatar image URL must use HTTPS');
+  }
+  if (selection.idleTimeout != null && (!Number.isFinite(selection.idleTimeout) || selection.idleTimeout < 0)) {
+    throw new Error('Invalid idle timeout');
+  }
 }
 
-export function selectRealtimeProvider(preferred: AvatarProviderId, hasAgentId: boolean): AvatarProviderId {
+export function selectRealtimeProvider(
+  preferred: AvatarProviderId,
+  hasAgentId: boolean,
+  hasImageSource = !hasAgentId,
+): AvatarProviderId {
+  const supportsSource = (capability: AvatarProviderCapability) =>
+    (hasAgentId && capability.agentId) || (!hasAgentId && hasImageSource && capability.imageSource);
+
   const preferredCapability = getProvider(preferred);
-  if (preferredCapability.realtime && (!hasAgentId || preferredCapability.agentId)) return preferred;
-  const fallback = AVATAR_PROVIDERS.find((item) => item.realtime && (!hasAgentId || item.agentId));
-  if (!fallback) throw new Error('No compatible realtime avatar provider is configured');
+  if (preferredCapability.realtime && supportsSource(preferredCapability)) return preferred;
+
+  const fallback = AVATAR_PROVIDERS.find(
+    (item) => item.realtime && supportsSource(item),
+  );
+  if (!fallback) throw new Error('No compatible realtime avatar provider is configured for the selected source');
   return fallback.id;
 }

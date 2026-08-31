@@ -29,6 +29,9 @@ import { DEFAULT_SUBSURFACE_RADIUS, DEFAULT_SUBSURFACE_STRENGTH } from './render
 import { createEyeTextures, destroyEyeTextures } from './renderer/EyeTextures';
 import { EyeShader } from './renderer/EyeShader';
 import { DEFAULT_EYE_PARAMETERS, DEFAULT_IRIS_COLOR } from './renderer/EyeMaterial';
+import { createHairTextures, destroyHairTextures } from './renderer/HairTextures';
+import { HairShader } from './renderer/HairShader';
+import { DEFAULT_HAIR_PARAMETERS } from './renderer/HairMaterial';
 import { HDFrameRenderer } from './renderer/HDFrameRenderer';
 import { RenderResolution, RENDER_RESOLUTIONS } from './renderer/RenderResolution';
 import { HDRenderTarget } from './renderer/HDRenderTarget';
@@ -57,7 +60,11 @@ if (typeof window !== 'undefined') {
     destroyEyeTextures,
     EyeShader,
     DEFAULT_EYE_PARAMETERS,
-    DEFAULT_IRIS_COLOR
+    DEFAULT_IRIS_COLOR,
+    createHairTextures,
+    destroyHairTextures,
+    HairShader,
+    DEFAULT_HAIR_PARAMETERS
   };
 }
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';

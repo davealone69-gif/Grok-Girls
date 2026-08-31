@@ -19,7 +19,10 @@ at startup).
 > GLB/texture parity lands. The web eye system (`EyeTextures.ts`,
 > `EyeMaterial.ts`, `EyeShader.ts` — sclera/iris/pupil/limbal ring, cornea
 > Fresnel wet layer, PBR specular) mirrors the native eye-renderer plan
-> and precedes a dedicated corneal shell (next refinement).
+> and precedes a dedicated corneal shell (next refinement). The web hair
+> path (`HairTextures.ts`, `HairMaterial.ts`, `HairShader.ts` — strand
+> color/roughness/direction/density maps, anisotropic dual-lobe specular,
+> root darkening, alpha cutoff) is milestone 2; shadow maps come next.
 
 ## Wired into the Capacitor app
 

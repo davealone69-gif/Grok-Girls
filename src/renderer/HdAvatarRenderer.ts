@@ -13,6 +13,9 @@
 /*  - EYE SYSTEM (milestone 1): procedural sclera/iris/pupil maps +   */
 /*    iris normal, dedicated eye shader with cornea Fresnel wet layer  */
 /*    and PBR specular; two eye spheres parented to the avatar         */
+/*  - HAIR (milestone 2): procedural strand color/roughness/direction/ */
+/*    density maps, dedicated hair shader with anisotropic dual-lobe   */
+/*    specular + root darkening + alpha cutoff; hair shell over skull  */
 /*  - GPU skinning path: when a Skeleton is bound, uBones[128] drive   */
 /*    a 17-float/vertex skinned mesh (avatar_skin.vert layout)        */
 /*  - AvatarParameters modulate bone scales (height/chest/waist/hips/  */
@@ -33,6 +36,9 @@ import { DEFAULT_SUBSURFACE_RADIUS, DEFAULT_SUBSURFACE_STRENGTH, SkinMaterial } 
 import { createEyeTextures, destroyEyeTextures, EyeTextures } from './EyeTextures';
 import { EyeShader } from './EyeShader';
 import { DEFAULT_EYE_PARAMETERS, DEFAULT_IRIS_COLOR } from './EyeMaterial';
+import { createHairTextures, destroyHairTextures, HairTextures } from './HairTextures';
+import { HairShader } from './HairShader';
+import { DEFAULT_HAIR_PARAMETERS } from './HairMaterial';
 
 /* 300 es — vertex shader for the non-skinned path. Native attribute
  * layout: 0 pos, 1 normal, 2 uv, 3 tangent (vec4, w = handedness). */
@@ -289,6 +295,17 @@ export class HdAvatarRenderer {
   private wetness = DEFAULT_EYE_PARAMETERS.wetness;
   private scleraRoughness = DEFAULT_EYE_PARAMETERS.scleraRoughness;
   private irisRoughness = DEFAULT_EYE_PARAMETERS.irisRoughness;
+  // hair (milestone 2)
+  private hairTextures: HairTextures | null = null;
+  private hairShader: HairShader | null = null;
+  private hairMesh: AvatarMesh | null = null;
+  private hairBaseColor: [number, number, number] = DEFAULT_HAIR_PARAMETERS.baseColor;
+  private hairRoughness = DEFAULT_HAIR_PARAMETERS.roughness;
+  private hairAnisotropy = DEFAULT_HAIR_PARAMETERS.anisotropy;
+  private hairPrimarySpecular = DEFAULT_HAIR_PARAMETERS.primarySpecular;
+  private hairSecondarySpecular = DEFAULT_HAIR_PARAMETERS.secondarySpecular;
+  private hairRootDarkening = DEFAULT_HAIR_PARAMETERS.rootDarkening;
+  private hairAlphaCutoff = DEFAULT_HAIR_PARAMETERS.alphaCutoff;
   private uniforms = new Map<WebGLProgram, UniformCache>();
   private frameRenderer: HDFrameRenderer | null = null;
   private autoRotate = true;
@@ -316,6 +333,12 @@ export class HdAvatarRenderer {
     this.eyeShader = new EyeShader(gl);
     this.eyeMeshes = [buildSphereMesh(32, 24), buildSphereMesh(32, 24)];
     for (const m of this.eyeMeshes) m.upload(gl);
+
+    // hair: procedural strand maps + dedicated hair program + shell mesh
+    this.hairTextures = createHairTextures(gl, 1024);
+    this.hairShader = new HairShader(gl);
+    this.hairMesh = buildSphereMesh(48, 32);
+    this.hairMesh.upload(gl);
 
     // uniform location cache (one entry set per program; both programs
     // share the same fragment uniforms)
@@ -418,6 +441,14 @@ export class HdAvatarRenderer {
     this.eyeShader = null;
     for (const m of this.eyeMeshes) m.destroy(this.gl);
     this.eyeMeshes = [];
+    if (this.hairTextures) {
+      destroyHairTextures(this.gl, this.hairTextures);
+      this.hairTextures = null;
+    }
+    this.hairShader?.dispose();
+    this.hairShader = null;
+    this.hairMesh?.destroy(this.gl);
+    this.hairMesh = null;
     this.mesh.destroy(this.gl);
     this.frameRenderer?.destroy();
     this.gl.deleteProgram(this.program);
@@ -504,6 +535,42 @@ export class HdAvatarRenderer {
     }
 
     this.drawEyes(gl);
+    this.drawHair(gl);
+  }
+
+  /** HAIR — strand anisotropic material over the skull region. */
+  private drawHair(gl: WebGL2RenderingContext) {
+    const shader = this.hairShader;
+    const textures = this.hairTextures;
+    const mesh = this.hairMesh;
+    if (!shader || !textures || !mesh) return;
+
+    shader.use();
+    shader.setMatrix4('uView', this.view);
+    shader.setMatrix4('uProjection', this.projection);
+    shader.set3f('uCameraPosition', this.camera[0], this.camera[1], this.camera[2]);
+    shader.set3f('uLightPosition', this.lightPosition[0], this.lightPosition[1], this.lightPosition[2]);
+    shader.set3f('uLightColor', this.lightColor[0], this.lightColor[1], this.lightColor[2]);
+    shader.set1f('uLightIntensity', this.lightIntensity);
+    shader.set3f('uBaseColor', this.hairBaseColor[0], this.hairBaseColor[1], this.hairBaseColor[2]);
+    shader.set1f('uRoughness', this.hairRoughness);
+    shader.set1f('uAnisotropy', this.hairAnisotropy);
+    shader.set1f('uPrimarySpecular', this.hairPrimarySpecular);
+    shader.set1f('uSecondarySpecular', this.hairSecondarySpecular);
+    shader.set1f('uRootDarkening', this.hairRootDarkening);
+    shader.set1f('uAlphaCutoff', this.hairAlphaCutoff);
+    shader.bindTexture(0, 'uColorTexture', textures.color);
+    shader.bindTexture(1, 'uRoughnessTexture', textures.roughness);
+    shader.bindTexture(2, 'uDirectionTexture', textures.direction);
+    shader.bindTexture(3, 'uDensityTexture', textures.density);
+
+    // hair shell over the skull region (procedural placeholder cap)
+    const local = mat4Multiply(
+      mat4Translation(0, 0.95, 0),
+      mat4Scale(1.18, 0.72, 1.18)
+    );
+    shader.setMatrix4('uModel', mat4Multiply(this.model, local));
+    mesh.draw(gl);
   }
 
   /** EYE MESH pair — sclera/iris/pupil/cornea via the dedicated shader. */

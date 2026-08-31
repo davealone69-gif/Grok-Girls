@@ -19,7 +19,12 @@ import { AVATAR_CATEGORIES, applyCategoryOption, activeCategoryOption } from './
 import { AvatarDesignerViewModel, createAvatarDesignerViewModel } from './models/avatarDesignerViewModel';
 import { AvatarPreviewView, AvatarPreviewHandle } from './components/AvatarPreviewView';
 import { HDRenderer, buildDefaultScene } from './renderer/HDRenderer';
-import { HDRenderView, HDRenderViewHandle } from './renderer/HDRenderView';
+import { HdAvatarRenderer, defaultAvatarSkeleton } from './renderer/HdAvatarRenderer';
+import { AvatarParameters, DEFAULT_AVATAR_PARAMETERS } from './renderer/avatar/AvatarParameters';
+import { Skeleton, Bone } from './renderer/avatar/Skeleton';
+import { MorphController } from './renderer/avatar/MorphTarget';
+import { DEFAULT_AVATAR_MATERIAL } from './renderer/avatar/AvatarMaterial';
+import { HDFrameRenderer } from './renderer/HDFrameRenderer';
 import { RenderResolution, RENDER_RESOLUTIONS } from './renderer/RenderResolution';
 import { HDRenderTarget } from './renderer/HDRenderTarget';
 if (typeof window !== 'undefined') {
@@ -28,7 +33,15 @@ if (typeof window !== 'undefined') {
     buildDefaultScene,
     HDRenderTarget,
     RenderResolution,
-    RENDER_RESOLUTIONS
+    RENDER_RESOLUTIONS,
+    HDFrameRenderer,
+    HdAvatarRenderer,
+    defaultAvatarSkeleton,
+    Skeleton,
+    Bone,
+    MorphController,
+    DEFAULT_AVATAR_PARAMETERS,
+    DEFAULT_AVATAR_MATERIAL
   };
 }
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
@@ -421,18 +434,27 @@ export default function App() {
   const [avatarDef, setAvatarDef] = useState<AvatarDefinition>(() => avatarVm.get());
   const avatarPreviewRef = useRef<AvatarPreviewHandle>(null);
   const [cubeMode, setCubeMode] = useState(false);
-  const hdViewRef = useRef<HDRenderViewHandle>(null);
+  const avatar3dRef = useRef<HdAvatarRenderer | null>(null);
+  const avatarCanvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     (window as unknown as Record<string, unknown>).__grokGirlsVm = avatarVm;
     (window as unknown as Record<string, unknown>).__grokGirlsPreview = {
       setAvatar: (d: AvatarDefinition) => avatarPreviewRef.current?.setAvatar(d)
     };
-    (window as unknown as Record<string, unknown>).__hdView = {
-      onResume: () => hdViewRef.current?.onResume(),
-      onPause: () => hdViewRef.current?.onPause(),
-      release: () => hdViewRef.current?.release(),
-      getAngle: () => hdViewRef.current?.getAngle() ?? -1,
-      readCenterPixel: () => hdViewRef.current?.readCenterPixel() ?? [0, 0, 0, 0]
+    (window as unknown as Record<string, unknown>).__hdAvatar = {
+      setRotation: (x: number, y: number) => avatar3dRef.current?.setRotation(x, y),
+      setMaterial: (m: number, r: number) => avatar3dRef.current?.setMaterial(m, r),
+      setExposure: (v: number) => avatar3dRef.current?.setExposure(v),
+      setKeyLight: (x: number, y: number, z: number) => avatar3dRef.current?.setKeyLight(x, y, z),
+      setParameters: (p: AvatarParameters) => avatar3dRef.current?.setParameters(p),
+      setAutoRotate: (v: boolean) => avatar3dRef.current?.setAutoRotate(v),
+      pause: () => avatar3dRef.current?.pause(),
+      resume: () => avatar3dRef.current?.resume(),
+      release: () => avatar3dRef.current?.release(),
+      getAngle: () => avatar3dRef.current?.getAngle() ?? -1,
+      readCenterPixel: () => avatar3dRef.current?.readCenterPixel() ?? [0, 0, 0, 0],
+      readPixelAt: (nx: number, ny: number) => avatar3dRef.current?.readPixelAt(nx, ny) ?? [0, 0, 0, 0],
+      maxStrip: (nx: number) => avatar3dRef.current?.maxStrip(nx) ?? [0, 0, 0]
     };
     return avatarVm.subscribe((def, change) => {
       setAvatarDef(def);
@@ -475,6 +497,41 @@ export default function App() {
     else if (id === 'toggle_tattoos') toggleTattoos();
     else if (id === 'toggle_augments') toggleAugments();
   };
+
+  // ---- mount/unmount the avatar 3D renderer (native HdAvatarRenderer) ----
+  useEffect(() => {
+    if (!cubeMode) return;
+    const canvas = avatarCanvasRef.current;
+    if (!canvas) return;
+    let renderer: HdAvatarRenderer | null = null;
+    try {
+      renderer = new HdAvatarRenderer(canvas, { skeleton: defaultAvatarSkeleton() });
+      avatar3dRef.current = renderer;
+      renderer.start();
+    } catch (e) {
+      console.warn('[avatar3d] renderer failed to start', e);
+    }
+    return () => {
+      renderer?.release();
+      avatar3dRef.current = null;
+    };
+  }, [cubeMode]);
+
+  // ---- avatar definition drives the 3D parameters (native morph layer) ----
+  useEffect(() => {
+    if (!avatar3dRef.current) return;
+    const b = avatarDef.body;
+    const bodyW = b === 'Heavy' ? 1.12 : b === 'Slim' ? 0.86 : 1;
+    const chest = b === 'Heavy' ? 1.14 : b === 'Athletic' ? 1.05 : b === 'Slim' ? 0.88 : 1;
+    const waist = b === 'Heavy' ? 1.05 : b === 'Slim' ? 0.85 : 1;
+    const hips = b === 'Heavy' ? 1.14 : b === 'Slim' ? 0.88 : 1;
+    const headScale = avatarDef.head === 'Head 03' || avatarDef.head === 'Head 04' ? 1.06 : 1;
+    const height = avatarDef.age === 'Mature' ? 1 : avatarDef.age === 'Young Adult' ? 0.97 : 1;
+    avatar3dRef.current.setParameters({
+      height, bodyWidth: bodyW, shoulderWidth: 1, chest, waist, hipWidth: hips,
+      armLength: 1, legLength: 1, headScale, eyeSize: 1, noseWidth: 1, jawWidth: 1, cheekWidth: 1
+    });
+  }, [avatarDef, cubeMode]);
 
   // ---- category catalog state (AvatarCategories mirror) ----
   const [catId, setCatId] = useState('gender');
@@ -2243,7 +2300,7 @@ export default function App() {
           )}
         {cubeMode && (
           <div className="hd-cube-overlay">
-            <HDRenderView ref={hdViewRef} className="hd3d-canvas" />
+            <canvas ref={avatarCanvasRef} className="hd3d-canvas" aria-label="HD avatar 3D viewport" />
             <button className="hd-cube-close" onClick={() => setCubeMode(false)} title="Exit 3D viewport">
               ✕ EXIT 3D
             </button>

@@ -1,14 +1,37 @@
 /* Types mirroring the native renderer package (renderer/*.kt). */
 
 export interface RenderConfig {
-  width?: number; // default 1920
-  height?: number; // default 1920
-  hdr?: boolean; // float framebuffer (default true)
-  shadows?: boolean; // 2-cascade shadow map (default true)
-  bloom?: boolean; // post bloom pass (default true)
-  samples?: number; // render pass count, blended (default 3)
+  width?: number; // explicit size (legacy path)
+  height?: number;
+  /* ---- native RenderConfig v2 (com.example.hdrenderer) ---- */
+  resolution?: RenderResolution; // default FULL_HD
+  renderScale?: number; // default 1.0
+  enableDepth?: boolean; // default true
+  enableMsaa?: boolean; // default true (web: canvas antialias)
+  msaaSamples?: number; // default 4
+  /* enableHdr/enableBloom are the native names for hdr/bloom */
+  enableHdr?: boolean; // default false
+  enableBloom?: boolean; // default false
+  hdr?: boolean;
+  bloom?: boolean;
+  shadows?: boolean;
+  samples?: number;
   background?: [number, number, number];
   seed?: number;
+}
+
+/** width/height getters of the native RenderConfig:
+ *  (resolution.width * renderScale).toInt().coerceAtLeast(1) */
+export function configSize(cfg: RenderConfig): { width: number; height: number } {
+  if (cfg.resolution) {
+    const base = RENDER_RESOLUTIONS[cfg.resolution];
+    const scale = cfg.renderScale ?? 1;
+    return {
+      width: Math.max(1, Math.trunc(base.width * scale)),
+      height: Math.max(1, Math.trunc(base.height * scale))
+    };
+  }
+  return { width: cfg.width ?? 1920, height: cfg.height ?? 1920 };
 }
 
 export interface Material {
@@ -44,6 +67,8 @@ export interface Mesh {
   indexCount: number;
   material?: Material;
 }
+
+import { RenderResolution, RENDER_RESOLUTIONS } from './RenderResolution';
 
 export interface Scene {
   meshes: Mesh[];

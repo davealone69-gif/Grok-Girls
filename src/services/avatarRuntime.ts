@@ -34,7 +34,9 @@ export class AvatarRuntime {
     this.events = events;
   }
 
-  getState() { return this.state; }
+  getState() {
+    return this.state;
+  }
 
   private setState(state: AvatarRuntimeState) {
     this.state = state;
@@ -48,23 +50,38 @@ export class AvatarRuntime {
       ? AbortSignal.any([options.signal, this.abort.signal])
       : this.abort.signal;
     this.setState('starting');
+
     try {
-      const sourceUrl = diceBearUrl(options.style);
+      if (!options.endpoint.trim()) throw new Error('Avatar session endpoint is required.');
+
+      // LemonSlice accepts exactly one avatar source. An existing agent ID wins;
+      // otherwise the deterministic DiceBear image URL is used as the source.
+      const source = options.agentId?.trim()
+        ? { agentId: options.agentId.trim() }
+        : { agentImageUrl: diceBearUrl(options.style) };
+
       const response = await fetch(options.endpoint.replace(/\/$/, '') + '/avatar/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          agentId: options.agentId,
-          agentImageUrl: sourceUrl,
+          ...source,
           prompt: options.prompt,
           idlePrompt: options.idlePrompt,
-          idleTimeout: options.idleTimeout
+          idleTimeout: options.idleTimeout,
         }),
-        signal
+        signal,
       });
-      if (!response.ok) throw new Error(`Avatar session request failed (${response.status})`);
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`Avatar session request failed (${response.status}): ${text || response.statusText}`);
+      }
+
       const ticket = await response.json() as AvatarSessionTicket;
-      if (!ticket.roomUrl || !ticket.token) throw new Error('Avatar session response is missing roomUrl or token');
+      if (!ticket.roomUrl || !ticket.token) {
+        throw new Error('Avatar session response is missing roomUrl or token.');
+      }
+
       this.setState('connecting');
       this.events.ticket?.(ticket);
       return ticket;
@@ -80,7 +97,9 @@ export class AvatarRuntime {
     }
   }
 
-  connected() { this.setState('connected'); }
+  connected() {
+    this.setState('connected');
+  }
 
   stop() {
     this.abort?.abort();

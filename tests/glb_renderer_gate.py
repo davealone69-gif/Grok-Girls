@@ -64,12 +64,11 @@ def main():
           const target = d.createRenderTarget(gl, {width:64, height:64, color:'rgba16f', depth:'depth32f'});
           const renderer = new d.GltfHdPbrRenderer(gl, {exposure:1});
           await renderer.load(data);
-          renderer.render(64, 64);
+          renderer.render(256, 256);
+          const px = new Uint8Array(4); gl.readPixels(128, 128, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+          const primitiveCount = renderer.primitiveCount, loaded = renderer.loaded;
           gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
           const complete = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-          const px = new Uint8Array(4); gl.readPixels(32, 32, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
-          const primitiveCount = renderer.primitiveCount;
-          const loaded = renderer.loaded;
           renderer.destroy(); target.destroy();
           return {ok:true, loaded, primitiveCount, capsStable:JSON.stringify(caps1)===JSON.stringify(caps2), selectedColor:target.colorInternal, selectedDepth:target.depthInternal, complete, center:[...px]};
         }''', encoded)
@@ -78,6 +77,7 @@ def main():
     assert result.get('loaded') is True, result
     assert result.get('primitiveCount') == 1, result
     assert result.get('capsStable'), result
+    assert max(result.get('center', [0, 0, 0, 0])[:3]) > 0, result
     print(json.dumps(result))
 
 

@@ -94,6 +94,7 @@
                 android:textStyle="bold" />
 
             <Button android:id="@+id/btnGenerate" android:text="GENERATE RENDER" android:contentDescription="Generate high-detail render" />
+            <Button android:id="@+id/btnHdRender" android:text="HD RENDER" android:contentDescription="On-device HD renderer (1920x1920, shadows + bloom)" />
             <Button android:id="@+id/btnRandom" android:text="Random" android:contentDescription="Randomize Persona Traits" />
             <Button android:id="@+id/btnRotate" android:text="Rotate" android:contentDescription="Rotate view" />
             <Button android:id="@+id/btnZoom" android:text="Zoom" android:contentDescription="Zoom view" />

@@ -18,6 +18,10 @@ import {
 import { AVATAR_CATEGORIES, applyCategoryOption, activeCategoryOption } from './models/avatarCategories';
 import { AvatarDesignerViewModel, createAvatarDesignerViewModel } from './models/avatarDesignerViewModel';
 import { AvatarPreviewView, AvatarPreviewHandle } from './components/AvatarPreviewView';
+import { HDRenderer, buildDefaultScene } from './renderer/HDRenderer';
+if (typeof window !== 'undefined') {
+  (window as unknown as Record<string, unknown>).__hdDebug = { HDRenderer, buildDefaultScene };
+}
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
 import { isAgeConfirmed, confirmAdultAge } from './services/ageGate';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
@@ -520,8 +524,40 @@ export default function App() {
       case 'settings': setIsSettingsOpen(true); break;
     }
   };
+  const [hdRendering, setHdRendering] = useState(false);
+  const [hdProgress, setHdProgress] = useState(0);
+  // renderer.HDRenderer — configure(RenderConfig).loadScene(scene).render()
+  const handleHdRender = async () => {
+    if (busyRef.current || hdRendering) return;
+    enterBusy();
+    setHdRendering(true);
+    setHdProgress(0);
+    try {
+      const renderer = new HDRenderer(undefined, pct => setHdProgress(pct));
+      renderer.configure({ width: 1920, height: 1920, hdr: true, shadows: true, bloom: true, samples: 3, seed: Number(seedInput) || 7 });
+      renderer.loadScene(buildDefaultScene(avatarDef));
+      const result = renderer.render();
+      renderer.dispose();
+      await addGalleryItem({
+        avatarId: girls[0]?.id || 'hd-render',
+        mode: 'image',
+        prompt: `HD RENDER · ${avatarDef.gender} · ${avatarDef.skin} · ${avatarDef.hair} · ${avatarDef.outfit}`,
+        assetUrl: result.pngDataUrl,
+        provider: 'hdrenderer'
+      });
+      void refreshGallery();
+      showToast(`HD render complete · ${result.width}×${result.height} · ${result.ms}ms`);
+    } catch (err) {
+      showToast(`HD render failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      exitBusy();
+      setHdRendering(false);
+      setHdProgress(0);
+    }
+  };
   const headerAction = (id: string) => {
     if (id === 'generate') handleGenerate();
+    else if (id === 'hd_render') void handleHdRender();
     else if (id === 'random') handleRandomize();
     else if (id === 'rotate') setRotationAngle(r => (r + 45) % 360);
     else if (id === 'zoom') setZoomLevel(z => (z > 1.2 ? 1 : 1.4));
@@ -1827,13 +1863,15 @@ export default function App() {
           </div>
 
           {/* Menu-driven header actions (wide screens; phones use the HUD + footer) */}
+          {hdRendering && <span className="hd-progress-chip">HD RENDER {hdProgress}%</span>}
+
           <div className="native-action-row">
             {menuSection(menuItems, 'header')
               .filter(i => i.kind === 'Button')
               .map(b => (
                 <button
                   key={b.id}
-                  className={`native-action ${b.id === 'generate' ? 'native-generate' : ''}`}
+                  className={`native-action ${b.id === 'generate' ? 'native-generate' : ''} ${b.id === 'hd_render' ? 'native-hd' : ''}`}
                   disabled={b.id === 'generate' && busy}
                   onClick={() => headerAction(b.id)}
                   title={menuTitle(b.id)}

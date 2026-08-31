@@ -258,7 +258,7 @@ with sync_playwright() as p:
     chk("faulty menu XML: built-in labels restored", pg.locator(".rail-btn[title='Generation Archive']").count() == 1)
     chk("faulty menu XML: dock tabs intact", pg.locator(".dock-tab", has_text="HAIR STYLE").count() == 1)
     chk("faulty menu XML: angle strip restored (4 buttons)", pg.locator(".angle-btn").count() == 4)
-    chk("faulty menu XML: header actions restored (4 buttons)", pg.locator(".native-action").count() == 4)
+    chk("faulty menu XML: header actions restored (5 buttons)", pg.locator(".native-action").count() == 5)
     chk("faulty menu XML: BUILD rail header restored", pg.locator(".rail-build-label").inner_text() == "BUILD")
     chk("faulty menu XML: no page errors", len(errs) == 0, errs[:1])
     ctx.close()
@@ -358,6 +358,52 @@ with sync_playwright() as p:
     status1 = pg.locator(".preview-draw-status").inner_text()
     chk("preview view: setAvatar invalidates the draw", "Android" in status1 and "Tone 06" in status1 and "Mohawk" in status1, status1[:60])
     chk("preview view: procedural render still present", pg.locator(".character-image").count() == 1)
+
+    # HD renderer (HDRenderer): WebGL2 pipeline proof — small render, real pixels
+    hd = pg.evaluate("""() => {
+      const { HDRenderer } = window.__hdDebug;
+      const r = new HDRenderer();
+      r.configure({ width: 256, height: 256, shadows: true, bloom: true, samples: 1 });
+      r.loadScene({
+        meshes: [{
+          data: new Float32Array([
+            -0.5, 0, 0, 0, 0, 1, 0, 0,
+             0.5, 0, 0, 0, 0, 1, 1, 0,
+             0.0, 1, 0, 0, 0, 1, 0.5, 1
+          ]),
+          indices: new Uint32Array([0, 1, 2]),
+          indexCount: 3,
+          material: { baseColor: [1, 0, 0], roughness: 0.5 }
+        }],
+        camera: { position: [0, 0.5, 2], target: [0, 0.3, 0], fovDeg: 40 }
+      });
+      const out = r.render();
+      const d = out.canvas.getContext('2d').getImageData(0, 0, 256, 256).data;
+      let mx = 0; let glerr = r.debugLog.length;
+      for (let i = 0; i < d.length; i += 4) mx = Math.max(mx, d[i]);
+      return { mx, glerr, w: out.width };
+    }""")
+    chk("hd renderer: pipeline produces real pixels", bool(hd) and hd.get('w') == 256 and hd.get('mx', 0) > 100, str(hd)[:120])
+    chk("hd renderer: zero GL errors", bool(hd) and hd.get('glerr') == 0, str(hd and hd.get('glerr')))
+
+    # HD RENDER button: dispatch + saved gallery item (race-proof: the
+    # gallery count must grow by exactly one — the busy guard blocks doubles)
+    before_count = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]').length")
+    pg.locator(".native-action", has_text="HD RENDER").click()
+    # wait for the completion toast (SwiftShader renders take a while)
+    try:
+        pg.wait_for_function(
+            "() => { const t = [...document.querySelectorAll('.toast')].map(x => x.textContent).join(' '); return t.includes('HD render complete'); }",
+            timeout=120000
+        )
+        done = True
+    except Exception:
+        done = False
+    chk("hd renderer: render completes + toast", done, "")
+    prov = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]').map(i => i.provider)")
+    after_count = len(prov)
+    chk("hd renderer: gallery item saved (hdrenderer)", prov and prov[-1] == 'hdrenderer', str(prov[-3:]))
+    chk("hd renderer: exactly one gallery item added (busy guard)", after_count == before_count + 1, f"{before_count} -> {after_count}")
 
     # unknown Avatar ID -> Load Outfit falls back to the DEFAULT definition
     pg.locator(".identity-avatar-id").fill("zzz_none")

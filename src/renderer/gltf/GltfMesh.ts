@@ -56,19 +56,20 @@ export function uploadGltfPrimitive(gl: WebGL2RenderingContext, asset: GltfAsset
   if (!vao) throw new Error('Unable to create glTF VAO');
   gl.bindVertexArray(vao);
   const buffers: WebGLBuffer[] = [];
-
   const attrs: Array<[string, number, boolean]> = [
-    ['POSITION', 0, false], ['NORMAL', 1, false], ['TEXCOORD_0', 2, false],
-    ['TANGENT', 3, false], ['JOINTS_0', 4, true], ['WEIGHTS_0', 5, false],
+    ['POSITION', 0, false],
+    ['NORMAL', 1, false],
+    ['TEXCOORD_0', 2, false],
+    ['JOINTS_0', 3, true],
+    ['WEIGHTS_0', 4, false],
   ];
   for (const [name, location, integer] of attrs) {
     const index = primitive.attributes[name];
     if (index !== undefined) buffers.push(uploadAttribute(gl, asset, index, location, integer));
   }
-
   let indexBuffer: WebGLBuffer | null = null;
   let indexCount = 0;
-  let indexType: number = gl.UNSIGNED_SHORT;
+  let indexType = gl.UNSIGNED_SHORT;
   if (primitive.indices !== undefined) {
     const accessor = asset.json.accessors?.[primitive.indices];
     if (!accessor) throw new Error('Missing index accessor');
@@ -80,7 +81,11 @@ export function uploadGltfPrimitive(gl: WebGL2RenderingContext, asset: GltfAsset
     indexCount = accessor.count;
     indexType = accessor.componentType;
   }
-
+  if (primitive.indices === undefined) {
+    const positionAccessor = primitive.attributes.POSITION;
+    if (positionAccessor === undefined) throw new Error('glTF primitive has no POSITION');
+    indexCount = asset.json.accessors?.[positionAccessor]?.count ?? 0;
+  }
   gl.bindVertexArray(null);
   return { vao, vertexBuffers: buffers, indexBuffer, indexCount, indexType, mode: primitive.mode ?? gl.TRIANGLES, materialIndex: primitive.material ?? 0, morphTargets: morphData(asset, primitive) };
 }
@@ -94,5 +99,6 @@ export function destroyGltfPrimitive(gl: WebGL2RenderingContext, primitive: Gltf
 export function drawGltfPrimitive(gl: WebGL2RenderingContext, primitive: GltfGpuPrimitive): void {
   gl.bindVertexArray(primitive.vao);
   if (primitive.indexBuffer) gl.drawElements(primitive.mode, primitive.indexCount, primitive.indexType, 0);
+  else gl.drawArrays(primitive.mode, 0, primitive.indexCount);
   gl.bindVertexArray(null);
 }

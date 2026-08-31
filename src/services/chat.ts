@@ -55,7 +55,7 @@ export function localReply(girl: Girl, room: Room, message: string, adult = fals
   if (adult) {
     const matched = matchAct(message);
     if (matched) return `${girl.name}: ${matched.chatReply}`;
-    if (/fuck|sex|cum|pussy|cock|hard|wet|spread|deeper|suck|lick|orgasm|breed|throat|ass|tits|blow|finger|clit|anal|ride|oral|toy|dildo|spank|choke|squirt|dp|ahegao|collar|leash/.test(m)) {
+    if (/fuck|sex|cum|pussy|cock|wet|spread|deeper|suck|lick|orgasm|breed|throat|ass|tits|blow|finger|clit|anal|ride|oral|toy|dildo|spank|choke|squirt|dp|ahegao|collar|leash/.test(m)) {
       return randomActReply(girl.name);
     }
   }

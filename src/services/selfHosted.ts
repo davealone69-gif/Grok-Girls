@@ -367,6 +367,8 @@ export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHost
       });
       if (!submit.ok) throw new Error(`ComfyUI HTTP ${submit.status} (submit)`);
       const { prompt_id } = await submit.json();
+      // M7: persist the queued job so a closed app resumes it on next launch
+      saveComfyJob({ promptId: prompt_id, base, prompt: req.prompt, createdAt: Date.now() });
       const deadline = Date.now() + 180000;
       while (Date.now() < deadline) {
         await sleep(1500);
@@ -376,6 +378,7 @@ export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHost
         const entry = data[prompt_id];
         if (!entry) continue;
         if (entry.status?.status_str === 'error') {
+          clearComfyJob();
           return { status: 'error', warning: 'ComfyUI workflow failed — check the server log.' };
         }
         const outs = entry.outputs?.['9']?.images;
@@ -392,6 +395,7 @@ export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHost
           // Persist as a data URL so the render survives reloads and stays in
           // the gallery (blob: URLs die when the page unloads).
           const dataUrl = await blobToDataUrl(blob);
+          clearComfyJob();
           return { status: 'ready', assetUrl: dataUrl, jobId: prompt_id };
         }
       }
@@ -412,4 +416,91 @@ export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHost
     status: 'error',
     warning: `Unrecognized server at ${base}. Expected A1111 (sdapi/v1) or ComfyUI. Run TEST CONNECTION in Settings.`
   };
+}
+
+
+/* ------------------------------------------------------------------ */
+/* M7 — ComfyUI job resume: the 3-minute poll loop abandons a queued   */
+/* job when the app closes. We persist the prompt_id at submit time    */
+/* and resume polling on the next launch.                              */
+/* ------------------------------------------------------------------ */
+
+interface ComfyJob {
+  promptId: string;
+  base: string;
+  prompt: string;
+  createdAt: number;
+}
+
+const COMFY_JOB_KEY = 'grok-girls-comfy-job-v1';
+
+function saveComfyJob(job: ComfyJob) {
+  try {
+    localStorage.setItem(COMFY_JOB_KEY, JSON.stringify(job));
+  } catch (e) {
+    console.warn('[comfy] could not persist job', e);
+  }
+}
+
+function clearComfyJob() {
+  try {
+    localStorage.removeItem(COMFY_JOB_KEY);
+  } catch {}
+}
+
+export interface ComfyResumeResult {
+  status: 'ready' | 'error' | 'queued';
+  assetUrl?: string;
+  warning?: string;
+  avatarId?: string;
+  prompt?: string;
+}
+
+/** Poll a previously submitted ComfyUI job. Returns null when there is
+ *  nothing to resume. Keeps the job stored while it is still running so a
+ *  later launch can try again. */
+export async function resumeComfyJob(): Promise<ComfyResumeResult | null> {
+  let job: ComfyJob;
+  try {
+    const raw = localStorage.getItem(COMFY_JOB_KEY);
+    if (!raw) return null;
+    job = JSON.parse(raw) as ComfyJob;
+    if (!job?.promptId || !job?.base) return null;
+  } catch {
+    return null;
+  }
+  const { promptId, base } = job;
+  const deadline = Date.now() + 180000;
+  while (Date.now() < deadline) {
+    await sleep(1500);
+    const h = await fetchWithTimeout(`${base}/history/${promptId}`).catch(() => null);
+    if (!h || !h.ok) continue;
+    const data = await h.json();
+    const entry = data[promptId];
+    if (!entry) continue;
+    if (entry.status?.status_str === 'error') {
+      clearComfyJob();
+      return { status: 'error', warning: 'ComfyUI workflow failed — check the server log.', prompt: job.prompt };
+    }
+    const outs = entry.outputs?.['9']?.images;
+    if (Array.isArray(outs) && outs.length) {
+      const img = outs[0];
+      const params = new URLSearchParams({
+        filename: img.filename,
+        subfolder: img.subfolder || '',
+        type: img.type || 'output'
+      });
+      const imgRes = await fetchWithTimeout(`${base}/view?${params}`);
+      if (!imgRes.ok) {
+        clearComfyJob();
+        return { status: 'error', warning: 'ComfyUI image fetch failed.', prompt: job.prompt };
+      }
+      const blob = await imgRes.blob();
+      const dataUrl = await blobToDataUrl(blob);
+      clearComfyJob();
+      return { status: 'ready', assetUrl: dataUrl, prompt: job.prompt };
+    }
+  }
+  // Still running — keep the job stored for the next launch.
+  return { status: 'queued', warning: 'ComfyUI render still running — will resume on next launch.', prompt: job.prompt };
 }

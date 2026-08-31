@@ -1,7 +1,0 @@
-export interface ProjectSnapshot { version:1; createdAt:string; girls:unknown; gallery:unknown; settings:Record<string,string>; }
-const PREFIX='grok-girls-';
-export function snapshot():ProjectSnapshot{const settings:Record<string,string>={};for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.startsWith(PREFIX))settings[k]=localStorage.getItem(k)||'';}return{version:1,createdAt:new Date().toISOString(),girls:read('grok-girls-girls'),gallery:read('grok-girls-gallery'),settings};}
-function read(k:string){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch{return null;}}
-export function exportSnapshot():Blob{return new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'});}
-export async function restoreSnapshot(file:File):Promise<void>{const data=JSON.parse(await file.text()) as ProjectSnapshot;if(data.version!==1||!data.settings)throw new Error('Unsupported Grok-Girls backup');for(const[k,v]of Object.entries(data.settings))localStorage.setItem(k,v);if(data.girls)localStorage.setItem('grok-girls-girls',JSON.stringify(data.girls));if(data.gallery)localStorage.setItem('grok-girls-gallery',JSON.stringify(data.gallery));}
-export function downloadSnapshot(){const a=document.createElement('a');const u=URL.createObjectURL(exportSnapshot());a.href=u;a.download=`grok-girls-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u);}

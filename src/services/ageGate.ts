@@ -22,7 +22,3 @@ export function setAdultMode(enabled: boolean): boolean {
   try { localStorage.setItem(ADULT_KEY, enabled ? 'enabled' : 'disabled'); } catch {}
   return enabled;
 }
-
-export function sanitizeMaturePrompt(prompt: string): string {
-  return prompt.replace(/\bminor\b|\bunderage\b|\bchild\b|\bteen\b/gi, 'adult');
-}

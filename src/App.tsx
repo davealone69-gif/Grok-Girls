@@ -5,7 +5,7 @@ import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDele
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
-import { getServerBase } from './services/selfHosted';
+import { getServerBase, resumeComfyJob } from './services/selfHosted';
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
 import { isAgeConfirmed, confirmAdultAge } from './services/ageGate';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
@@ -13,6 +13,7 @@ import { NSFW_NEGATIVE } from './services/adultActs';
 import { adultOptions, defaultAdultSelections } from './services/adultOptions';
 import { saveAvatar } from './services/avatarEditor';
 import { downloadMedia, exportGallery, importGallery } from './services/media';
+import { stripePaymentLink } from './services/stripe';
 import {
   AvatarDraft,
   avatarOptions,
@@ -349,6 +350,22 @@ export default function App() {
       localStorage.setItem('grok-girls-provider-v1', provider);
     } catch {}
   }, [provider]);
+  // H1: chat has its OWN engine selector — picking SELF-HOSTED for renders
+  // no longer breaks chat. The footer ENGINE drives generation only.
+  const [chatProvider, setChatProvider] = useState<ProviderName>(() => {
+    try {
+      const v = localStorage.getItem('grok-girls-chat-provider-v1');
+      if (v === 'local' || v === 'openrouter' || v === 'gemini' || v === 'custom' || v === 'selfhosted')
+        return v;
+    } catch {}
+    return 'local';
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('grok-girls-chat-provider-v1', chatProvider);
+    } catch {}
+  }, [chatProvider]);
+  const adultChatPinWarnRef = useRef(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
@@ -441,6 +458,28 @@ export default function App() {
   /* ------------------------------------------------------------ rooms */
   const [roomId, setRoomId] = useState(rooms[0].id);
   const room: Room = useMemo(() => rooms.find(r => r.id === roomId) ?? rooms[0], [roomId]);
+
+  /* ------------------------------------- ComfyUI job resume (M7) */
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const resumed = await resumeComfyJob();
+      if (!resumed || !alive || resumed.status !== 'ready' || !resumed.assetUrl) return;
+      await addGalleryItem({
+        avatarId: resumed.avatarId || girls[0]?.id || 'resumed',
+        mode: 'image',
+        prompt: resumed.prompt || 'Resumed ComfyUI render',
+        assetUrl: resumed.assetUrl,
+        provider: 'selfhosted'
+      });
+      void refreshGallery();
+      showToast('ComfyUI render finished while the app was closed — saved to gallery');
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ------------------------------------- image hydration (IndexedDB) */
   useEffect(() => {
@@ -685,9 +724,9 @@ export default function App() {
     setPromptOpen(false);
     setOutfitOpen(false);
     setStyleFilter(null);
-    setNegativePrompt('');
-    setSeedInput('');
-    showToast('Changes discarded');
+    // M8: keep the user's engine settings (negative prompt, seed, steps,
+    // CFG) — CANCEL discards the draft only, never the saved settings.
+    showToast('Draft discarded — engine settings kept');
   };
 
   const copyAvatarId = () => {
@@ -1020,7 +1059,15 @@ export default function App() {
     setChatInput('');
     enterBusy();
     try {
-      const answer = await reply(girl, room, next, text, provider, adult);
+      // M5: 18+ conversations never go to cloud chat providers — the
+      // self-hosted / local engines are the only sanctioned adult path.
+      const adultPinned = adult && chatProvider !== 'local' && chatProvider !== 'selfhosted';
+      const chatEngine = adultPinned ? 'local' : chatProvider;
+      if (adultPinned && !adultChatPinWarnRef.current) {
+        adultChatPinWarnRef.current = true;
+        showToast('18+ mode: chat pinned to LOCAL — cloud chat engines are not used for adult conversations');
+      }
+      const answer = await reply(girl, room, next, text, chatEngine, adult);
       const out: ChatMessage[] = [
         ...next,
         { id: String(now + 1), role: 'assistant', text: answer, createdAt: now + 1 }
@@ -1282,10 +1329,10 @@ export default function App() {
           setZoomLevel(z => (z > 1.2 ? 1 : 1.4));
           break;
         case 'g':
-          handleGenerate();
+          if (e.altKey) handleGenerate();
           break;
         case 's':
-          handleSaveAvatar();
+          if (e.altKey) handleSaveAvatar();
           break;
         case 'p':
           setPromptOpen(v => !v);
@@ -2295,7 +2342,7 @@ export default function App() {
           {/* Middle: Details & Add-Ons */}
           <div className="dock-addons-section">
             <div className="dock-section-title">DETAILS &amp; ADD-ONS</div>
-            <div className="addons-grid">
+            <div className="addons-grid" tabIndex={0} aria-label="Add-on options">
               {addonCards.map(a => (
                 <div key={a.key} className="addon-card active" onClick={a.onClick} title="Click to cycle options">
                   <div className="addon-icon">{a.icon}</div>
@@ -2614,8 +2661,8 @@ export default function App() {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <select
                   className="mini-provider-select"
-                  value={provider}
-                  onChange={e => setProvider(e.target.value as ProviderName)}
+                  value={chatProvider}
+                  onChange={e => setChatProvider(e.target.value as ProviderName)}
                   title="Chat AI engine"
                 >
                   <option value="local">LOCAL</option>
@@ -2635,7 +2682,7 @@ export default function App() {
 
             <div className="companion-log">
               {chat.length === 0 ? (
-                <div style={{ color: '#777', textAlign: 'center', margin: 'auto' }}>
+                <div style={{ color: '#9a9ab8', textAlign: 'center', margin: 'auto' }}>
                   Say hello to {girl.name} to begin your conversation…
                 </div>
               ) : (
@@ -2969,6 +3016,7 @@ export default function App() {
                     type="range"
                     min={1}
                     max={12}
+                    aria-label="Head shape"
                     value={draft.headShapeIndex || 4}
                     onChange={e => setDraft(d => ({ ...d, headShapeIndex: Number(e.target.value) }))}
                     className="slider-track"
@@ -2984,6 +3032,7 @@ export default function App() {
                     type="range"
                     min={18}
                     max={60}
+                    aria-label="Age"
                     value={draft.age}
                     onChange={e => setDraft(d => ({ ...d, age: Number(e.target.value) }))}
                     className="slider-track"
@@ -3515,16 +3564,22 @@ export default function App() {
               <button type="button" onClick={() => setPremiumOpen(false)}>
                 Not now
               </button>
-              <button
-                type="button"
-                className="generate"
-                onClick={() => {
-                  const ok = redirectToPaymentLink();
-                  showToast(ok ? 'Opening checkout…' : 'Payment link not configured yet');
-                }}
-              >
-                UPGRADE NOW
-              </button>
+              {stripePaymentLink ? (
+                <button
+                  type="button"
+                  className="generate"
+                  onClick={() => {
+                    const ok = redirectToPaymentLink();
+                    showToast(ok ? 'Opening checkout…' : 'Payment link not configured yet');
+                  }}
+                >
+                  UPGRADE NOW
+                </button>
+              ) : (
+                <span style={{ color: '#777', fontSize: 11, alignSelf: 'center' }}>
+                  Payments not configured — everything in this app is already unlocked.
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -3562,7 +3617,7 @@ export default function App() {
                 browser only).
               </div>
               <div>
-                <b>Shortcuts</b> — R rotate · Z zoom · P prompt editor · G generate · S save · V video
+                <b>Shortcuts</b> — R rotate · Z zoom · P prompt editor · V video · Alt+G generate · Alt+S save
                 studio · C chat · F fullscreen · Ctrl+Z / Ctrl+Y undo / redo · ←/→ navigate lightbox ·
                 Esc closes any overlay.
               </div>

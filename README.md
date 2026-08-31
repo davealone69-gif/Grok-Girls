@@ -137,3 +137,15 @@ src/
 - Everything persists in browser localStorage — personas, drafts, chats, gallery, settings.
 - The Noir render engine (`createLocalPlaceholderSvg`) parses the compiled prompt and stylizes the scene accordingly — check `public/assets/noir-render-demo.svg` for a sample.
 - Sandbox preview note: filesystem previews have no network access; the live dev server preview is the best way to use the app.
+
+
+## Hosting note (H3)
+The PWA uses absolute paths (`/manifest.webmanifest`, `/icons/…`) and is meant to be hosted at a
+**domain root** (or Capacitor's bundled webview). Hosting under a sub-path (e.g. GitHub Pages
+`user.github.io/repo/`) is not supported — the manifest/scope/asset URLs would resolve against the
+domain root. Root-only hosting is the documented, supported deployment.
+
+## Automated tests
+`npm ci && npm run build` then serve `dist/` on :8080 with `tests/mocks/mock_big_a1111.py` (:7860)
+and `tests/mocks/mock_slow_a1111.py` (:7861) running, and execute `python3 tests/ci_runner.py`.
+The same suites gate every CI push (job `Browser test suites`).

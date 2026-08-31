@@ -24,7 +24,10 @@ at startup).
 > color/roughness/direction/density maps, anisotropic dual-lobe specular,
 > root darkening, alpha cutoff) is milestone 2. Shadow mapping
 > (`ShadowMap.ts`, `ShadowShader.ts` — 2048² 32F depth pass, 3×3 PCF,
-> slope-scaled bias, strength) is milestone 3; HDR + IBL is next.
+> slope-scaled bias, strength) is milestone 3. HDR + IBL
+> (`IblPipeline.ts` — RGBA16F studio cubemaps, irradiance/prefiltered/
+> BRDF LUT, exposure + ACES) is milestone 4; production path is real HDR
+> equirectangular import + GPU convolution.
 
 ## Wired into the Capacitor app
 

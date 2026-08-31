@@ -19,6 +19,9 @@
 /*  - SHADOWS (milestone 3): depth-only pass to a 2048² 32F depth      */
 /*    texture, 3x3 PCF + slope-scaled bias + strength, shadow sampled  */
 /*    on unit 7 in the skin PBR pass (eyes/hair cast shadows too)      */
+/*  - HDR + IBL (milestone 4): bootstrap studio cubemaps (irradiance   */
+/*    64², prefiltered 512², BRDF LUT 256²) on units 4/5/6, diffuse +  */
+/*    specular IBL in the skin pass, exposure (2^ev) + ACES tone map   */
 /*  - GPU skinning path: when a Skeleton is bound, uBones[128] drive   */
 /*    a 17-float/vertex skinned mesh (avatar_skin.vert layout)        */
 /*  - AvatarParameters modulate bone scales (height/chest/waist/hips/  */
@@ -44,6 +47,7 @@ import { HairShader } from './HairShader';
 import { DEFAULT_HAIR_PARAMETERS } from './HairMaterial';
 import { createShadowMap, destroyShadowMap, ShadowMap } from './ShadowMap';
 import { ShadowShader } from './ShadowShader';
+import { createIblPipeline, destroyIblPipeline, DEFAULT_IBL_SETTINGS, IblPipeline } from './IblPipeline';
 
 /* 300 es — vertex shader for the non-skinned path. Native attribute
  * layout: 0 pos, 1 normal, 2 uv, 3 tangent (vec4, w = handedness). */
@@ -92,6 +96,13 @@ uniform sampler2D uShadowMap;
 uniform mat4 uLightViewProjection;
 uniform float uShadowBias;
 uniform float uShadowStrength;
+uniform samplerCube uIrradianceMap;
+uniform samplerCube uPrefilteredMap;
+uniform sampler2D uBrdfLut;
+uniform float uIblIntensity;
+uniform float uEnvironmentRotation;
+uniform float uExposure;
+uniform vec3 uEmissiveFactor;
 const float PI = 3.14159265359;
 
 vec3 sampleNormal() {
@@ -167,6 +178,41 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
   return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
+mat3 rotationY(float angle) {
+  float c = cos(angle);
+  float s = sin(angle);
+  return mat3(c, 0.0, s, 0.0, 1.0, 0.0, -s, 0.0, c);
+}
+
+vec3 calculateDiffuseIbl(vec3 N, vec3 albedo, float metallic) {
+  vec3 direction = rotationY(uEnvironmentRotation) * N;
+  vec3 irradiance = texture(uIrradianceMap, direction).rgb;
+  vec3 F0 = mix(vec3(0.04), albedo, metallic);
+  vec3 F = fresnelSchlick(max(dot(N, normalize(uCameraPosition - vWorldPosition)), 0.0), F0);
+  vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+  return irradiance * albedo * kD;
+}
+
+vec3 calculateSpecularIbl(vec3 N, vec3 V, vec3 albedo, float metallic, float roughness) {
+  vec3 R = reflect(-V, N);
+  R = rotationY(uEnvironmentRotation) * R;
+  float mip = roughness * 5.0;
+  vec3 prefiltered = textureLod(uPrefilteredMap, R, mip).rgb;
+  vec3 F0 = mix(vec3(0.04), albedo, metallic);
+  vec3 F = fresnelSchlick(max(dot(N, V), 0.0), F0);
+  vec2 brdf = texture(uBrdfLut, vec2(max(dot(N, V), 0.0), roughness)).rg;
+  return prefiltered * (F * brdf.x + brdf.y);
+}
+
+vec3 toneMapACES(vec3 x) {
+  const float a = 2.51;
+  const float b = 0.03;
+  const float c = 2.43;
+  const float d = 0.59;
+  const float e = 0.14;
+  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
 void main() {
   vec4 baseColor = texture(uBaseColorTexture, vTexCoord) * uBaseColorFactor;
   float roughness = texture(uRoughnessTexture, vTexCoord).r * uRoughnessFactor;
@@ -195,15 +241,19 @@ void main() {
 
   vec3 lighting = (diffuse + specular) * radiance * NdotL * shadow;
 
-  vec3 ambient = baseColor.rgb * 0.025;
+  vec3 diffuseIbl = calculateDiffuseIbl(N, baseColor.rgb, metallic);
+  vec3 specularIbl = calculateSpecularIbl(N, V, baseColor.rgb, metallic, roughness);
+  vec3 ambient = (diffuseIbl + specularIbl) * uIblIntensity;
+
+  vec3 emissive = uEmissiveFactor;
 
   float thickness = texture(uThicknessTexture, vTexCoord).r;
   vec3 subsurface = calculateSubsurface(N, L, V, baseColor.rgb, thickness);
 
-  vec3 color = ambient + lighting + subsurface;
+  vec3 color = ambient + lighting + emissive + subsurface;
 
-  // Simple HDR-to-display transform.
-  color = color / (color + vec3(1.0));
+  color *= pow(2.0, uExposure);
+  color = toneMapACES(color);
   // Gamma encode.
   color = pow(color, vec3(1.0 / 2.2));
 
@@ -249,7 +299,9 @@ const UNIFORM_NAMES = [
   'uBaseColorFactor', 'uMetallicFactor', 'uRoughnessFactor',
   'uBones', 'uBaseColorTexture', 'uRoughnessTexture', 'uNormalTexture',
   'uThicknessTexture', 'uSubsurfaceStrength', 'uSubsurfaceRadius',
-  'uShadowMap', 'uLightViewProjection', 'uShadowBias', 'uShadowStrength'
+  'uShadowMap', 'uLightViewProjection', 'uShadowBias', 'uShadowStrength',
+  'uIrradianceMap', 'uPrefilteredMap', 'uBrdfLut',
+  'uIblIntensity', 'uEnvironmentRotation', 'uExposure', 'uEmissiveFactor'
 ];
 
 function cacheUniforms(
@@ -304,7 +356,6 @@ export class HdAvatarRenderer {
   private camera: [number, number, number] = [0, 1.55, 4.2];
   private rotationX = 0;
   private rotationY = 0;
-  private exposure = 1.0;
   private metallic = 0.0;
   private roughness = 0.42;
   private lightPosition: [number, number, number] = [2.5, 4.5, 3.5];
@@ -347,6 +398,11 @@ export class HdAvatarRenderer {
   private shadowMap: ShadowMap | null = null;
   private shadowShader: ShadowShader | null = null;
   private lightViewProjection = new Float32Array(16);
+  // HDR + IBL (milestone 4)
+  private ibl: IblPipeline | null = null;
+  private iblIntensity = DEFAULT_IBL_SETTINGS.intensity;
+  private environmentRotation = DEFAULT_IBL_SETTINGS.rotation;
+  private exposure = DEFAULT_IBL_SETTINGS.exposure;
   private uniforms = new Map<WebGLProgram, UniformCache>();
   private frameRenderer: HDFrameRenderer | null = null;
   private autoRotate = true;
@@ -386,6 +442,9 @@ export class HdAvatarRenderer {
     this.shadowShader = new ShadowShader(gl);
     this.updateLightMatrix();
 
+    // HDR + IBL: bootstrap studio environment (irradiance/prefiltered/BRDF)
+    this.ibl = createIblPipeline(gl, 512);
+
     // uniform location cache (one entry set per program; both programs
     // share the same fragment uniforms)
     const names = UNIFORM_NAMES;
@@ -416,10 +475,9 @@ export class HdAvatarRenderer {
     this.metallic = Math.min(1, Math.max(0, metallic));
     this.roughness = Math.min(1, Math.max(0.04, roughness));
   }
-  /** Retained for API compatibility — the reference shader tone-maps
-   *  without an exposure uniform (color / (color + 1)). */
+  /** Exposure in EV (applied as 2^exposure before ACES tone mapping). */
   setExposure(value: number): void {
-    this.exposure = Math.min(8, Math.max(0.1, value));
+    this.exposure = Math.min(8, Math.max(0, value));
   }
   setKeyLight(x: number, y: number, z: number): void {
     this.lightPosition = [x, y, z];
@@ -502,6 +560,10 @@ export class HdAvatarRenderer {
     }
     this.shadowShader?.dispose();
     this.shadowShader = null;
+    if (this.ibl) {
+      destroyIblPipeline(this.gl, this.ibl);
+      this.ibl = null;
+    }
     this.mesh.destroy(this.gl);
     this.frameRenderer?.destroy();
     this.gl.deleteProgram(this.program);
@@ -768,6 +830,24 @@ export class HdAvatarRenderer {
       gl.uniform1f(u.uShadowBias, 0.0015);
       gl.uniform1f(u.uShadowStrength, 0.92);
     }
+
+    // IBL on units 4/5/6 (shadow on 7)
+    const ibl = this.ibl;
+    if (ibl) {
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, ibl.irradiance);
+      gl.uniform1i(u.uIrradianceMap, 4);
+      gl.activeTexture(gl.TEXTURE5);
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, ibl.prefiltered);
+      gl.uniform1i(u.uPrefilteredMap, 5);
+      gl.activeTexture(gl.TEXTURE6);
+      gl.bindTexture(gl.TEXTURE_2D, ibl.brdfLut);
+      gl.uniform1i(u.uBrdfLut, 6);
+      gl.uniform1f(u.uIblIntensity, this.iblIntensity);
+      gl.uniform1f(u.uEnvironmentRotation, this.environmentRotation);
+    }
+    gl.uniform1f(u.uExposure, this.exposure);
+    gl.uniform3f(u.uEmissiveFactor, 0, 0, 0);
   }
 
   /** native createAvatarMesh(): the placeholder sphere.

@@ -34,6 +34,7 @@ import { HairShader } from './renderer/HairShader';
 import { DEFAULT_HAIR_PARAMETERS } from './renderer/HairMaterial';
 import { createShadowMap, destroyShadowMap } from './renderer/ShadowMap';
 import { ShadowShader } from './renderer/ShadowShader';
+import { createIblPipeline, destroyIblPipeline, generateStudioEnvironment, DEFAULT_IBL_SETTINGS } from './renderer/IblPipeline';
 import { HDFrameRenderer } from './renderer/HDFrameRenderer';
 import { RenderResolution, RENDER_RESOLUTIONS } from './renderer/RenderResolution';
 import { HDRenderTarget } from './renderer/HDRenderTarget';
@@ -69,7 +70,11 @@ if (typeof window !== 'undefined') {
     DEFAULT_HAIR_PARAMETERS,
     createShadowMap,
     destroyShadowMap,
-    ShadowShader
+    ShadowShader,
+    createIblPipeline,
+    destroyIblPipeline,
+    generateStudioEnvironment,
+    DEFAULT_IBL_SETTINGS
   };
 }
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';

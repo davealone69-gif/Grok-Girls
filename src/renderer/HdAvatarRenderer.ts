@@ -1,15 +1,15 @@
 /* ------------------------------------------------------------------ */
 /* HdAvatarRenderer — the avatar renderer, replacing the spinning cube */
 /* as the live 3D viewport. Mirrors HdAvatarRenderer.kt:              */
-/*  - UV sphere with native attribute layout: pos/normal/uv/tangent4,  */
-/*    bone indices (uint8) + weights                                   */
-/*  - Cook-Torrance PBR (GGX D, Schlick-GGX G, Schlick F) with         */
-/*    PROCEDURAL skin texture maps (see ProceduralTextures.ts),        */
-/*    sampling semantics mirroring native HdPbrShader (units 0..4,     */
-/*    uHas*Map flags, mr map G=roughness/B=metallic, TBN normal map,   */
-/*    pow-2.2 base-color linearization)                                */
-/*  - fake subsurface scatter, exposure + ACES + gamma                 */
-/*  - setRotation / setMaterial(clamped) / setExposure / setKeyLight  */
+/*  - UV sphere mesh: pos/normal/uv/tangent4, bone indices (uint8) +   */
+/*    weights (tangent unused by the current reference shader)         */
+/*  - Cook-Torrance PBR (GGX D, Schlick-GGX G, Schlick F) driven by    */
+/*    PROCEDURAL skin textures (ProceduralSkinTextures.ts): sRGB base  */
+/*    color, R-channel roughness map, tangent-space normal map with    */
+/*    derivative TBN; factor uniforms + point light with intensity;    */
+/*    Reinhard tone map + gamma (reference: native renderer.hd spec)   */
+/*  - setRotation / setMaterial(clamped) / setExposure (inert) /       */
+/*    setKeyLight                                                      */
 /*  - GPU skinning path: when a Skeleton is bound, uBones[128] drive   */
 /*    a 17-float/vertex skinned mesh (avatar_skin.vert layout)        */
 /*  - AvatarParameters modulate bone scales (height/chest/waist/hips/  */
@@ -25,166 +25,129 @@ import { AvatarMesh, createAvatarMesh } from './avatar/AvatarMesh';
 import { Bone, Skeleton } from './avatar/Skeleton';
 import { AvatarParameters, DEFAULT_AVATAR_PARAMETERS } from './avatar/AvatarParameters';
 import { AvatarMaterial, DEFAULT_AVATAR_MATERIAL } from './avatar/AvatarMaterial';
-import { createProceduralSkinMaps, destroyProceduralSkinMaps, ProceduralSkinMaps } from './ProceduralTextures';
+import { createProceduralSkinTextures, destroyProceduralSkinTextures, ProceduralSkinTextures } from './ProceduralSkinTextures';
 
 /* 300 es — vertex shader for the non-skinned path. Native attribute
  * layout: 0 pos, 1 normal, 2 uv, 3 tangent (vec4, w = handedness). */
 const VERTEX_SHADER = `#version 300 es
 layout(location = 0) in vec3 aPosition;
 layout(location = 1) in vec3 aNormal;
-layout(location = 2) in vec2 aUV;
-layout(location = 3) in vec4 aTangent;
+layout(location = 2) in vec2 aTexCoord;
 uniform mat4 uModel;
 uniform mat4 uView;
 uniform mat4 uProjection;
-uniform mat4 uNormalMatrix;
 out vec3 vWorldPosition;
-out vec3 vNormal;
-out vec2 vUV;
-out vec4 vTangent;
+out vec3 vWorldNormal;
+out vec2 vTexCoord;
 void main() {
   vec4 world = uModel * vec4(aPosition, 1.0);
   vWorldPosition = world.xyz;
-  vNormal = normalize(mat3(uNormalMatrix) * aNormal);
-  vTangent = vec4(normalize(mat3(uModel) * aTangent.xyz), aTangent.w);
-  vUV = aUV;
+  vWorldNormal = normalize(mat3(transpose(inverse(uModel))) * aNormal);
+  vTexCoord = aTexCoord;
   gl_Position = uProjection * uView * world;
 }`;
 
-/* The native PbrSkin.frag — full Cook-Torrance + texture maps +
- * subsurface + ACES. Texture sampling mirrors native HdPbrShader:
- * units 0..4, uHas*Map flags, baseColor pow-2.2 linearized, mr map
- * G=roughness/B=metallic, TBN normal mapping with vTangent.w. */
+/* The native PbrSkin.frag — Cook-Torrance PBR driven by procedural
+ * skin textures + factor uniforms + point light (reference: native
+ * renderer.hd HdAvatarPbrShader spec, ES 3.00). */
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 in vec3 vWorldPosition;
-in vec3 vNormal;
-in vec2 vUV;
-in vec4 vTangent;
+in vec3 vWorldNormal;
+in vec2 vTexCoord;
 layout(location = 0) out vec4 outColor;
+uniform sampler2D uBaseColorTexture;
+uniform sampler2D uRoughnessTexture;
+uniform sampler2D uNormalTexture;
+uniform vec4 uBaseColorFactor;
+uniform float uMetallicFactor;
+uniform float uRoughnessFactor;
 uniform vec3 uCameraPosition;
 uniform vec3 uLightPosition;
 uniform vec3 uLightColor;
-uniform vec3 uAmbientColor;
-uniform vec4 uBaseColor;
-uniform float uMetallic;
-uniform float uRoughness;
-uniform float uExposure;
-uniform float uSubsurface;
-uniform vec3 uSubsurfaceColor;
-
-uniform sampler2D uBaseColorMap;
-uniform sampler2D uNormalMap;
-uniform sampler2D uMetallicRoughnessMap;
-uniform sampler2D uOcclusionMap;
-uniform sampler2D uEmissiveMap;
-uniform int uHasBaseColorMap;
-uniform int uHasNormalMap;
-uniform int uHasMetallicRoughnessMap;
-uniform int uHasOcclusionMap;
-uniform int uHasEmissiveMap;
-
+uniform float uLightIntensity;
 const float PI = 3.14159265359;
 
-vec3 getNormal() {
-  vec3 N = normalize(vNormal);
-  if (uHasNormalMap == 0) {
-    return N;
-  }
-  vec3 T = normalize(vTangent.xyz);
-  T = normalize(T - dot(T, N) * N);
-  vec3 B = normalize(cross(N, T)) * vTangent.w;
+vec3 sampleNormal() {
+  vec3 N = normalize(vWorldNormal);
+  vec3 tangentNormal = texture(uNormalTexture, vTexCoord).xyz * 2.0 - 1.0;
+  vec3 dp1 = dFdx(vWorldPosition);
+  vec3 dp2 = dFdy(vWorldPosition);
+  vec2 duv1 = dFdx(vTexCoord);
+  vec2 duv2 = dFdy(vTexCoord);
+  vec3 T = normalize(dp1 * duv2.y - dp2 * duv1.y);
+  vec3 B = normalize(-dp1 * duv2.x + dp2 * duv1.x);
   mat3 TBN = mat3(T, B, N);
-  vec3 normalSample = texture(uNormalMap, vUV).xyz * 2.0 - 1.0;
-  return normalize(TBN * normalSample);
+  return normalize(TBN * tangentNormal);
+}
+
+float distributionGGX(vec3 N, vec3 H, float roughness) {
+  float a = roughness * roughness;
+  float a2 = a * a;
+  float NdotH = max(dot(N, H), 0.0);
+  float d = NdotH * NdotH * (a2 - 1.0) + 1.0;
+  return a2 / max(PI * d * d, 0.000001);
+}
+
+float geometrySchlickGGX(float NdotV, float roughness) {
+  float r = roughness + 1.0;
+  float k = r * r / 8.0;
+  return NdotV / max(NdotV * (1.0 - k) + k, 0.000001);
+}
+
+float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+  return geometrySchlickGGX(max(dot(N, V), 0.0), roughness) *
+         geometrySchlickGGX(max(dot(N, L), 0.0), roughness);
 }
 
 vec3 fresnelSchlick(float cosTheta, vec3 F0) {
   return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
-float distributionGGX(vec3 N, vec3 H, float roughness) {
-  float a = roughness * roughness;
-  float a2 = a * a;
-  float NdotH = max(dot(N, H), 0.0);
-  float NdotH2 = NdotH * NdotH;
-  float denominator = NdotH2 * (a2 - 1.0) + 1.0;
-  return a2 / max(PI * denominator * denominator, 0.0001);
-}
-float geometrySchlickGGX(float NdotV, float roughness) {
-  float r = roughness + 1.0;
-  float k = (r * r) / 8.0;
-  return NdotV / (NdotV * (1.0 - k) + k);
-}
-float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
-  return geometrySchlickGGX(max(dot(N, V), 0.0), roughness) * geometrySchlickGGX(max(dot(N, L), 0.0), roughness);
-}
-vec3 acesToneMap(vec3 x) {
-  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
-}
+
 void main() {
-  vec4 base = uBaseColor;
-  if (uHasBaseColorMap == 1) {
-    base *= texture(uBaseColorMap, vUV);
-  }
-  vec3 albedo = pow(base.rgb, vec3(2.2));
+  vec4 baseColor = texture(uBaseColorTexture, vTexCoord) * uBaseColorFactor;
+  float roughness = texture(uRoughnessTexture, vTexCoord).r * uRoughnessFactor;
+  roughness = clamp(roughness, 0.045, 1.0);
+  float metallic = clamp(uMetallicFactor, 0.0, 1.0);
 
-  float metallic = uMetallic;
-  float roughness = uRoughness;
-  if (uHasMetallicRoughnessMap == 1) {
-    vec4 mr = texture(uMetallicRoughnessMap, vUV);
-    roughness *= mr.g;
-    metallic *= mr.b;
-  }
-  roughness = clamp(roughness, 0.04, 1.0);
-
-  vec3 N = getNormal();
+  vec3 N = sampleNormal();
   vec3 V = normalize(uCameraPosition - vWorldPosition);
   vec3 L = normalize(uLightPosition - vWorldPosition);
   vec3 H = normalize(V + L);
   float distanceToLight = length(uLightPosition - vWorldPosition);
   float attenuation = 1.0 / max(distanceToLight * distanceToLight, 0.01);
-  vec3 radiance = uLightColor * attenuation * 12.0;
-  float NdotL = max(dot(N, L), 0.0);
-  float NdotV = max(dot(N, V), 0.0);
-  vec3 F0 = mix(vec3(0.04), albedo, metallic);
-  float D = distributionGGX(N, H, roughness);
-  float G = geometrySmith(N, V, L, roughness);
+  vec3 radiance = uLightColor * uLightIntensity * attenuation;
+
+  vec3 F0 = mix(vec3(0.04), baseColor.rgb, metallic);
   vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
-  vec3 specular = D * G * F / max(4.0 * NdotV * NdotL, 0.001);
+  float NDF = distributionGGX(N, H, roughness);
+  float G = geometrySmith(N, V, L, roughness);
+  vec3 specular = (NDF * G * F) / max(4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0), 0.001);
+
   vec3 kS = F;
   vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
-  vec3 direct = (kD * albedo / PI + specular) * radiance * NdotL;
+  float NdotL = max(dot(N, L), 0.0);
+  vec3 diffuse = kD * baseColor.rgb / PI;
+  vec3 lighting = (diffuse + specular) * radiance * NdotL;
 
-  float ao = 1.0;
-  if (uHasOcclusionMap == 1) {
-    ao = texture(uOcclusionMap, vUV).r;
-  }
-  vec3 ambient = uAmbientColor * albedo * 0.55 * ao;
+  vec3 ambient = baseColor.rgb * 0.025;
+  vec3 color = ambient + lighting;
 
-  vec3 emissive = vec3(0.0);
-  if (uHasEmissiveMap == 1) {
-    emissive = pow(texture(uEmissiveMap, vUV).rgb, vec3(2.2));
-  }
-
-  /* fake subsurface: red scatter on back-lit edges */
-  float backLight = pow(max(dot(-L, N), 0.0), 2.5);
-  vec3 subsurface = uSubsurfaceColor * backLight * uSubsurface;
-  vec3 color = ambient + direct + subsurface + emissive;
-  color = vec3(1.0) - exp(-color * uExposure);
-  color = acesToneMap(color);
+  // Simple HDR-to-display transform.
+  color = color / (color + vec3(1.0));
+  // Gamma encode.
   color = pow(color, vec3(1.0 / 2.2));
-  outColor = vec4(color, base.a);
+
+  outColor = vec4(color, baseColor.a);
 }`;
 
 /* avatar_skin.vert — GPU skinning (4 weights, uBones[128]).
- * Native attribute layout: 0 pos, 1 normal, 2 uv, 3 tangent, 4 bone
- * indices (uvec4), 5 weights. */
+ * Shares the fragment's varyings with the plain vertex shader. */
 const SKIN_VERTEX_SHADER = `#version 300 es
 precision highp float;
 layout(location = 0) in vec3 aPosition;
 layout(location = 1) in vec3 aNormal;
-layout(location = 2) in vec2 aUv;
-layout(location = 3) in vec4 aTangent;
+layout(location = 2) in vec2 aTexCoord;
 layout(location = 4) in uvec4 aBoneIndices;
 layout(location = 5) in vec4 aBoneWeights;
 const int MAX_BONES = 128;
@@ -193,9 +156,8 @@ uniform mat4 uModel;
 uniform mat4 uView;
 uniform mat4 uProjection;
 out vec3 vWorldPosition;
-out vec3 vNormal;
-out vec2 vUV;
-out vec4 vTangent;
+out vec3 vWorldNormal;
+out vec2 vTexCoord;
 void main() {
   mat4 skin = uBones[aBoneIndices.x] * aBoneWeights.x;
   skin += uBones[aBoneIndices.y] * aBoneWeights.y;
@@ -205,11 +167,31 @@ void main() {
   vec3 skinnedNormal = mat3(skin) * aNormal;
   vec4 worldPosition = uModel * skinnedPosition;
   vWorldPosition = worldPosition.xyz;
-  vNormal = normalize(mat3(uModel) * skinnedNormal);
-  vTangent = vec4(normalize(mat3(uModel) * aTangent.xyz), aTangent.w);
-  vUV = aUv;
+  vWorldNormal = normalize(mat3(uModel) * skinnedNormal);
+  vTexCoord = aTexCoord;
   gl_Position = uProjection * uView * worldPosition;
 }`;
+
+type UniformCache = Record<string, WebGLUniformLocation | null>;
+
+const UNIFORM_NAMES = [
+  'uModel', 'uView', 'uProjection', 'uCameraPosition',
+  'uLightPosition', 'uLightColor', 'uLightIntensity',
+  'uBaseColorFactor', 'uMetallicFactor', 'uRoughnessFactor',
+  'uBones', 'uBaseColorTexture', 'uRoughnessTexture', 'uNormalTexture'
+];
+
+function cacheUniforms(
+  gl: WebGL2RenderingContext,
+  program: WebGLProgram,
+  names: string[]
+): UniformCache {
+  const cache: UniformCache = {};
+  for (const name of names) {
+    cache[name] = gl.getUniformLocation(program, name);
+  }
+  return cache;
+}
 
 function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
   const sh = gl.createShader(type)!;
@@ -256,12 +238,12 @@ export class HdAvatarRenderer {
   private roughness = 0.42;
   private lightPosition: [number, number, number] = [2.5, 4.5, 3.5];
   private lightColor: [number, number, number] = [1.0, 0.92, 0.82];
-  private ambientColor: [number, number, number] = [0.16, 0.18, 0.22];
-  private subsurfaceColor: [number, number, number] = [1.0, 0.32, 0.18];
+  private lightIntensity = 25.0;
   private skeleton: Skeleton | null;
   private parameters: AvatarParameters;
   private material: AvatarMaterial;
-  private skinMaps: ProceduralSkinMaps | null = null;
+  private skinTextures: ProceduralSkinTextures | null = null;
+  private uniforms = new Map<WebGLProgram, UniformCache>();
   private frameRenderer: HDFrameRenderer | null = null;
   private autoRotate = true;
   private angle = 0;
@@ -279,8 +261,14 @@ export class HdAvatarRenderer {
     this.program = link(gl, VERTEX_SHADER, FRAGMENT_SHADER);
     this.skinProgram = link(gl, SKIN_VERTEX_SHADER, FRAGMENT_SHADER);
 
-    // procedural skin maps (mirrors native PbrTexture + HdPbrShader units)
-    this.skinMaps = createProceduralSkinMaps(gl);
+    // procedural skin textures (sRGB base color, roughness, normal)
+    this.skinTextures = createProceduralSkinTextures(gl, 1024);
+
+    // uniform location cache (one entry set per program; both programs
+    // share the same fragment uniforms)
+    const names = UNIFORM_NAMES;
+    this.uniforms.set(this.program, cacheUniforms(gl, this.program, names));
+    this.uniforms.set(this.skinProgram, cacheUniforms(gl, this.skinProgram, names));
 
     // native onSurfaceCreated
     gl.enable(gl.DEPTH_TEST);
@@ -306,6 +294,8 @@ export class HdAvatarRenderer {
     this.metallic = Math.min(1, Math.max(0, metallic));
     this.roughness = Math.min(1, Math.max(0.04, roughness));
   }
+  /** Retained for API compatibility — the reference shader tone-maps
+   *  without an exposure uniform (color / (color + 1)). */
   setExposure(value: number): void {
     this.exposure = Math.min(8, Math.max(0.1, value));
   }
@@ -359,9 +349,9 @@ export class HdAvatarRenderer {
   }
   release(): void {
     cancelAnimationFrame(this.raf);
-    if (this.skinMaps) {
-      destroyProceduralSkinMaps(this.gl, this.skinMaps);
-      this.skinMaps = null;
+    if (this.skinTextures) {
+      destroyProceduralSkinTextures(this.gl, this.skinTextures);
+      this.skinTextures = null;
     }
     this.mesh.destroy(this.gl);
     this.frameRenderer?.destroy();
@@ -438,8 +428,8 @@ export class HdAvatarRenderer {
       }
       this.skeleton.update();
       gl.useProgram(this.skinProgram);
-      const loc = gl.getUniformLocation(this.skinProgram, 'uBones');
-      if (loc) gl.uniformMatrix4fv(loc, false, this.skeleton.skinMatrices);
+      const uBones = this.uniforms.get(this.skinProgram)?.uBones ?? null;
+      if (uBones) gl.uniformMatrix4fv(uBones, false, this.skeleton.skinMatrices);
       this.applyCommonUniforms(gl, this.skinProgram);
       this.mesh.draw(gl); // native: ONE mesh through the skinned shader
     } else {
@@ -450,43 +440,29 @@ export class HdAvatarRenderer {
   }
 
   private applyCommonUniforms(gl: WebGL2RenderingContext, program: WebGLProgram) {
-    gl.uniformMatrix4fv(gl.getUniformLocation(program, 'uModel'), false, this.model);
-    gl.uniformMatrix4fv(gl.getUniformLocation(program, 'uView'), false, this.view);
-    gl.uniformMatrix4fv(gl.getUniformLocation(program, 'uProjection'), false, this.projection);
-    gl.uniformMatrix4fv(gl.getUniformLocation(program, 'uNormalMatrix'), false, this.normalMatrix);
-    gl.uniform3fv(gl.getUniformLocation(program, 'uCameraPosition'), new Float32Array(this.camera));
-    gl.uniform3fv(gl.getUniformLocation(program, 'uLightPosition'), new Float32Array(this.lightPosition));
-    gl.uniform3fv(gl.getUniformLocation(program, 'uLightColor'), new Float32Array(this.lightColor));
-    gl.uniform3fv(gl.getUniformLocation(program, 'uAmbientColor'), new Float32Array(this.ambientColor));
-    gl.uniform4f(gl.getUniformLocation(program, 'uBaseColor'), this.material.baseColorR ?? 1, this.material.baseColorG ?? 1, this.material.baseColorB ?? 1, 1);
-    gl.uniform1f(gl.getUniformLocation(program, 'uExposure'), this.exposure);
-    gl.uniform1f(gl.getUniformLocation(program, 'uMetallic'), this.metallic);
-    gl.uniform1f(gl.getUniformLocation(program, 'uRoughness'), this.material.roughness ?? this.roughness);
-    gl.uniform1f(gl.getUniformLocation(program, 'uSubsurface'), this.material.subsurface ?? 0.18);
-    gl.uniform3fv(gl.getUniformLocation(program, 'uSubsurfaceColor'), new Float32Array(this.subsurfaceColor));
+    const u = this.uniforms.get(program) ?? {};
+    gl.uniformMatrix4fv(u.uModel, false, this.model);
+    gl.uniformMatrix4fv(u.uView, false, this.view);
+    gl.uniformMatrix4fv(u.uProjection, false, this.projection);
+    gl.uniform3fv(u.uCameraPosition, new Float32Array(this.camera));
+    gl.uniform3fv(u.uLightPosition, new Float32Array(this.lightPosition));
+    gl.uniform3fv(u.uLightColor, new Float32Array(this.lightColor));
+    gl.uniform1f(u.uLightIntensity, this.lightIntensity);
+    gl.uniform4f(u.uBaseColorFactor, this.material.baseColorR ?? 1, this.material.baseColorG ?? 1, this.material.baseColorB ?? 1, 1);
+    gl.uniform1f(u.uMetallicFactor, this.metallic);
+    gl.uniform1f(u.uRoughnessFactor, this.material.roughness ?? this.roughness);
 
-    // procedural skin maps on native HdPbrShader units 0..4
-    const maps = this.skinMaps;
+    // procedural skin textures on units 0..2
+    const textures = this.skinTextures;
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, maps ? maps.baseColor : null);
-    gl.uniform1i(gl.getUniformLocation(program, 'uBaseColorMap'), 0);
-    gl.uniform1i(gl.getUniformLocation(program, 'uHasBaseColorMap'), maps ? 1 : 0);
+    gl.bindTexture(gl.TEXTURE_2D, textures ? textures.baseColor : null);
+    gl.uniform1i(u.uBaseColorTexture, 0);
     gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, maps ? maps.normal : null);
-    gl.uniform1i(gl.getUniformLocation(program, 'uNormalMap'), 1);
-    gl.uniform1i(gl.getUniformLocation(program, 'uHasNormalMap'), maps ? 1 : 0);
+    gl.bindTexture(gl.TEXTURE_2D, textures ? textures.roughness : null);
+    gl.uniform1i(u.uRoughnessTexture, 1);
     gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, maps ? maps.metallicRoughness : null);
-    gl.uniform1i(gl.getUniformLocation(program, 'uMetallicRoughnessMap'), 2);
-    gl.uniform1i(gl.getUniformLocation(program, 'uHasMetallicRoughnessMap'), maps ? 1 : 0);
-    gl.activeTexture(gl.TEXTURE3);
-    gl.bindTexture(gl.TEXTURE_2D, null);
-    gl.uniform1i(gl.getUniformLocation(program, 'uOcclusionMap'), 3);
-    gl.uniform1i(gl.getUniformLocation(program, 'uHasOcclusionMap'), 0);
-    gl.activeTexture(gl.TEXTURE4);
-    gl.bindTexture(gl.TEXTURE_2D, null);
-    gl.uniform1i(gl.getUniformLocation(program, 'uEmissiveMap'), 4);
-    gl.uniform1i(gl.getUniformLocation(program, 'uHasEmissiveMap'), 0);
+    gl.bindTexture(gl.TEXTURE_2D, textures ? textures.normal : null);
+    gl.uniform1i(u.uNormalTexture, 2);
   }
 
   /** native createAvatarMesh(): the placeholder sphere.

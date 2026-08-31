@@ -883,7 +883,7 @@ export default function App() {
     // Render the new identity into the viewport immediately (no debounce).
     setLivePreview(true);
     setViewportOverride(
-      createLocalPlaceholderSvg(buildDraftPrompt(next, adult), 'image', 768, 768, seedInput ? Number(seedInput) : undefined)
+      createLocalPlaceholderSvg(buildDraftPrompt(next, adult), 'image', 1024, 1024, seedInput ? Number(seedInput) : undefined)
     );
     showToast('Identity randomized — save to keep it');
   };
@@ -918,7 +918,7 @@ export default function App() {
   // The app's own procedural render — used whenever there is no saved photo
   // (default viewport, thumbnails, angle previews). No bundled photos needed.
   const proceduralPreviewSvg = useMemo(
-    () => createLocalPlaceholderSvg(compiledPrompt, 'image', 768, 768, seedInput ? Number(seedInput) : undefined),
+    () => createLocalPlaceholderSvg(compiledPrompt, 'image', 1024, 1024, seedInput ? Number(seedInput) : undefined),
     [compiledPrompt, seedInput]
   );
   const proceduralThumb = (prompt: string) => createLocalPlaceholderSvg(prompt, 'image', 256, 256);

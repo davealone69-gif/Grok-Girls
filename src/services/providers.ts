@@ -310,7 +310,24 @@ export function createLocalPlaceholderSvg(
     <ellipse cx="${cx - headR * 0.52}" cy="${headY + headR * 0.26}" rx="${headR * 0.2}" ry="${headR * 0.12}" fill="${pal.accent}" opacity="0.12" style="filter: url(#rimGlow)"/>
     <ellipse cx="${cx + headR * 0.52}" cy="${headY + headR * 0.26}" rx="${headR * 0.2}" ry="${headR * 0.12}" fill="${pal.accent}" opacity="0.12" style="filter: url(#rimGlow)"/>
     <path d="M ${cx - headR * 0.05} ${headY - headR * 0.18} L ${cx - headR * 0.02} ${headY + headR * 0.34}" stroke="#000000" stroke-width="2" opacity="0.10"/>
-    <path d="M ${cx - headR * 0.2} ${headY + headR * 0.6} Q ${cx} ${headY + headR * 0.68} ${cx + headR * 0.2} ${headY + headR * 0.6}" stroke="#ffd9de" stroke-width="1.6" fill="none" opacity="0.55"/>`;
+    <!-- sultry half-lidded eyes: iris + pupil + catchlight + lid + lashes -->
+    <ellipse cx="${cx - headR * 0.34}" cy="${headY + headR * 0.08}" rx="${headR * 0.19}" ry="${headR * 0.095}" fill="url(#irisGrad)"/>
+    <circle cx="${cx - headR * 0.34}" cy="${headY + headR * 0.08}" r="${headR * 0.055}" fill="#0a0a12"/>
+    <circle cx="${cx - headR * 0.30}" cy="${headY + headR * 0.05}" r="${headR * 0.024}" fill="#ffffff" opacity="0.9"/>
+    <path d="M ${cx - headR * 0.55} ${headY + headR * 0.02} Q ${cx - headR * 0.34} ${headY - headR * 0.10} ${cx - headR * 0.13} ${headY + headR * 0.06}" stroke="#120c16" stroke-width="${headR * 0.10}" stroke-linecap="round" fill="none" opacity="0.92"/>
+    <path d="M ${cx - headR * 0.50} ${headY + headR * 0.05} L ${cx - headR * 0.485} ${headY + headR * 0.17} M ${cx - headR * 0.42} ${headY + headR * 0.02} L ${cx - headR * 0.41} ${headY + headR * 0.15}" stroke="#120c16" stroke-width="1.5" opacity="0.75"/>
+    <ellipse cx="${cx + headR * 0.34}" cy="${headY + headR * 0.08}" rx="${headR * 0.19}" ry="${headR * 0.095}" fill="url(#irisGrad)"/>
+    <circle cx="${cx + headR * 0.34}" cy="${headY + headR * 0.08}" r="${headR * 0.055}" fill="#0a0a12"/>
+    <circle cx="${cx + headR * 0.38}" cy="${headY + headR * 0.05}" r="${headR * 0.024}" fill="#ffffff" opacity="0.9"/>
+    <path d="M ${cx + headR * 0.13} ${headY + headR * 0.06} Q ${cx + headR * 0.34} ${headY - headR * 0.10} ${cx + headR * 0.55} ${headY + headR * 0.02}" stroke="#120c16" stroke-width="${headR * 0.10}" stroke-linecap="round" fill="none" opacity="0.92"/>
+    <path d="M ${cx + headR * 0.485} ${headY + headR * 0.05} L ${cx + headR * 0.50} ${headY + headR * 0.17} M ${cx + headR * 0.42} ${headY + headR * 0.02} L ${cx + headR * 0.41} ${headY + headR * 0.15}" stroke="#120c16" stroke-width="1.5" opacity="0.75"/>
+    <!-- gradient lips with gloss -->
+    <path d="M ${cx - headR * 0.30} ${headY + headR * 0.60} Q ${cx} ${headY + headR * 0.80} ${cx + headR * 0.30} ${headY + headR * 0.60} Q ${cx} ${headY + headR * 0.50} ${cx - headR * 0.30} ${headY + headR * 0.60} Z" fill="url(#lipGrad)"/>
+    <path d="M ${cx - headR * 0.18} ${headY + headR * 0.65} Q ${cx} ${headY + headR * 0.69} ${cx + headR * 0.18} ${headY + headR * 0.65}" stroke="#ffb3c0" stroke-width="1.1" fill="none" opacity="0.85"/>
+    <ellipse cx="${cx - headR * 0.08}" cy="${headY + headR * 0.585}" rx="${headR * 0.07}" ry="${headR * 0.028}" fill="#ffffff" opacity="0.35"/>
+    <!-- skin sheen: forehead + nose bridge -->
+    <ellipse cx="${cx - headR * 0.30}" cy="${headY - headR * 0.30}" rx="${headR * 0.50}" ry="${headR * 0.34}" fill="url(#skinSheen)" opacity="0.55"/>
+    <ellipse cx="${cx}" cy="${headY + headR * 0.10}" rx="${headR * 0.09}" ry="${headR * 0.30}" fill="url(#skinSheen)" opacity="0.35"/>`;
 
   const choker = hasChoker
     ? `<path d="M ${cx - headR * 0.55} ${headY + headR * 1.18} Q ${cx} ${headY + headR * 1.42} ${cx + headR * 0.55} ${headY + headR * 1.18} L ${cx + headR * 0.5} ${headY + headR * 1.34} Q ${cx} ${headY + headR * 1.58} ${cx - headR * 0.5} ${headY + headR * 1.34} Z"
@@ -384,6 +401,20 @@ export function createLocalPlaceholderSvg(
     </radialGradient>
     ${legGrad}
     ${netPattern}
+    <radialGradient id="skinSheen" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="irisGrad" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="${pal.accent}"/>
+      <stop offset="65%" stop-color="${pal.hair}"/>
+      <stop offset="100%" stop-color="#0a0a12"/>
+    </radialGradient>
+    <radialGradient id="lipGrad" cx="50%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#ff8fa3"/>
+      <stop offset="55%" stop-color="${pal.accent}"/>
+      <stop offset="100%" stop-color="#7a1a30"/>
+    </radialGradient>
     ${grain}
     ${vignette}
     <filter id="rimGlow" x="-60%" y="-60%" width="220%" height="220%">
@@ -397,6 +428,20 @@ export function createLocalPlaceholderSvg(
 
   <rect width="${W}" height="${H}" fill="url(#bgGrad)"/>
   <circle cx="${W * 0.4}" cy="${H * 0.3}" r="${W * 0.5}" fill="url(#keyLight)"/>
+
+  <!-- bokeh particles (deterministic, blurred) -->
+  <g>
+    ${[0, 1, 2, 3, 4, 5, 6, 7].map(i => {
+      const bx = W * (0.12 + ((seedVal + i * 37) % 68) / 100);
+      const by = H * (0.08 + ((seedVal + i * 53) % 48) / 100);
+      const br = W * (0.015 + ((seedVal + i * 17) % 40) / 1000);
+      const bo = 0.06 + ((seedVal + i * 29) % 40) / 1000;
+      return `<circle cx="${bx}" cy="${by}" r="${br}" fill="${i % 2 ? pal.backdrop[2] : '#ffffff'}" opacity="${bo.toFixed(3)}" style="filter: url(#softGlow)"/>`;
+    }).join('')}
+  </g>
+
+  <!-- floor glow pool -->
+  <ellipse cx="${cx}" cy="${H * 0.975}" rx="${W * 0.40}" ry="${H * 0.045}" fill="${pal.accent}" opacity="0.12" style="filter: url(#softGlow)"/>
 
   <!-- window light beams -->
   <g opacity="0.10">
@@ -433,6 +478,20 @@ export function createLocalPlaceholderSvg(
         stroke="${pal.hairHi}" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.35"/>
   <path d="M ${cx + 66} ${H * 0.30} C ${cx + 86} ${H * 0.42}, ${cx + 88} ${H * 0.52}, ${cx + 74} ${H * 0.60}"
         stroke="${pal.hairHi}" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.35"/>
+  <!-- flowing strand detail -->
+  ${[0, 1, 2, 3, 4, 5].map(i => {
+      const x0 = cx - 56 + i * 3;
+      const sw = 1.1 + (i % 3) * 0.5;
+      const op = (0.16 + (i % 3) * 0.07).toFixed(2);
+      return `<path d="M ${x0} ${H * 0.24} C ${x0 - 14 - i * 2} ${H * 0.40}, ${x0 - 8 - i} ${H * 0.55}, ${x0 + 6} ${H * 0.68}" stroke="${pal.hairHi}" stroke-width="${sw}" fill="none" opacity="${op}"/>`;
+    }).join('')}
+  ${[0, 1, 2, 3, 4, 5].map(i => {
+      const x0 = cx + 56 - i * 3;
+      const sw = 1.1 + (i % 3) * 0.5;
+      const op = (0.16 + (i % 3) * 0.07).toFixed(2);
+      return `<path d="M ${x0} ${H * 0.24} C ${x0 + 14 + i * 2} ${H * 0.40}, ${x0 + 8 + i} ${H * 0.55}, ${x0 - 6} ${H * 0.68}" stroke="${pal.hairHi}" stroke-width="${sw}" fill="none" opacity="${op}"/>`;
+    }).join('')}
+  <path d="M ${cx - 40} ${H * 0.16} Q ${cx} ${H * 0.10} ${cx + 40} ${H * 0.16}" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.22" style="filter: url(#softGlow)"/>
 
   <!-- legs -->
   ${legLeft}
@@ -444,6 +503,7 @@ export function createLocalPlaceholderSvg(
   ${torso}
   ${armLeft}
   ${armRight}
+  <path d="M ${cx - 18} ${H * 0.40} Q ${cx} ${H * 0.47} ${cx + 18} ${H * 0.40}" stroke="#ffffff" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.09" style="filter: url(#softGlow)"/>
 
   <!-- neck, head, face -->
   <rect x="${cx - headR * 0.22}" y="${headY + headR * 0.7}" width="${headR * 0.44}" height="${headR * 0.72}" fill="url(#skinGrad)"/>

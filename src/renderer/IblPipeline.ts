@@ -1,34 +1,4 @@
-/* ------------------------------------------------------------------ */
-/* IblPipeline — HDR image-based lighting (milestone 4).               */
-/*                                                                     */
-/* Bootstrap implementation: irradiance/prefiltered hold the studio    */
-/* face colors (flat convolution — box-filtered mipmaps approximate    */
-/* roughness prefiltering for a flat environment), and the BRDF LUT is */
-/* a constant (1,0) stand-in. Sampling empty cubemaps would render     */
-/* the IBL contribution black, so this keeps the milestone visible.    */
-/*                                                                     */
-/* RENDER-TARGET RULE (shared with RenderTarget.ts): the allocations   */
-/* below are SAMPLED textures (CPU-uploaded float data) — they stay    */
-/* float: float textures are perfectly valid for sampling. Only        */
-/* RENDERING into float attachments is probed, and every render target */
-/* must come from createRenderTarget() (RenderTarget.ts), which probes */
-/* every candidate format on a real FBO once per GL context (cached    */
-/* capability table) and falls back RGBA16F -> RGBA32F -> RGBA8.       */
-/*                                                                     */
-/* Production path (unchanged shader interface) — every intermediate   */
-/* render target MUST be allocated via createRenderTarget() with the   */
-/* requested format and the ACTUAL selected format must be read from   */
-/* the returned colorInternal (never assume the request was honored):  */
-/*   1. equirectangular -> cubemap conversion  -> { color: 'rgba16f' } */
-/*   2. irradiance convolution                 -> { color: 'rgba16f' } */
-/*   3. prefiltered environment mip levels     -> { color: 'rgba16f' } */
-/*      PER-MIP RULE: base-level renderability does not prove every    */
-/*      mip level is renderable — build the actual cubemap/mip         */
-/*      attachment config and call checkFramebufferComplete() before   */
-/*      rendering each level.                                          */
-/*   4. BRDF integration LUT                  -> { color: 'rgba16f' }  */
-/*      (RG16F LUT: probe the exact 2D format being used)              */
-/* ------------------------------------------------------------------ */
+/* HDR image-based lighting resources. Float textures here are sampling resources, not render targets. */
 
 export interface IblPipeline {
   environment: WebGLTexture;
@@ -43,142 +13,133 @@ export interface IblSettings {
   exposure: number;
 }
 
-export const DEFAULT_IBL_SETTINGS: IblSettings = {
-  intensity: 1.0,
-  rotation: 0.0,
-  exposure: 0.0
-};
+export const DEFAULT_IBL_SETTINGS: IblSettings = { intensity: 1, rotation: 0, exposure: 0 };
 
-/** Bootstrap studio: six flat face colors (softbox-panel approximation). */
 const STUDIO_FACE_VALUES: [number, number, number][] = [
-  [1.0, 1.0, 1.0],
-  [0.72, 0.72, 0.72],
-  [0.45, 0.45, 0.45],
-  [0.12, 0.12, 0.12],
-  [0.82, 0.82, 0.82],
-  [0.35, 0.35, 0.35]
+  [1.2, 1.08, 0.98], [0.72, 0.76, 0.84], [0.34, 0.39, 0.5],
+  [0.055, 0.055, 0.075], [0.82, 0.86, 0.96], [0.26, 0.22, 0.3]
 ];
 
-/**
- * RGBA16F cubemap. When faceValues is provided the faces are filled
- * (FLOAT source — legal for 16F internal formats in WebGL2); otherwise
- * the texture is allocated empty (HALF_FLOAT, null data).
- */
-function createEnvironmentTexture(
-  gl: WebGL2RenderingContext,
-  size: number,
-  faceValues: [number, number, number][] | null = null
-): WebGLTexture {
+const pipelineCache = new WeakMap<WebGL2RenderingContext, IblPipeline>();
+
+function createEnvironmentTexture(gl: WebGL2RenderingContext, size: number): WebGLTexture {
   const texture = gl.createTexture();
-  if (!texture) {
-    throw new Error('Unable to create environment texture');
-  }
-
+  if (!texture) throw new Error('IBL: unable to create cubemap');
   gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
-
   for (let face = 0; face < 6; face++) {
-    let data: Float32Array | null = null;
-    if (faceValues) {
-      data = new Float32Array(size * size * 4);
-      const v = faceValues[face];
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] = v[0];
-        data[i + 1] = v[1];
-        data[i + 2] = v[2];
-        data[i + 3] = 1.0;
+    const data = new Float32Array(size * size * 4);
+    const c = STUDIO_FACE_VALUES[face];
+    for (let y = 0; y < size; y++) {
+      const v = y / Math.max(1, size - 1);
+      const vertical = 0.72 + 0.28 * (1 - v);
+      for (let x = 0; x < size; x++) {
+        const u = x / Math.max(1, size - 1);
+        const panel = 0.92 + 0.08 * Math.sin(u * Math.PI);
+        const p = (y * size + x) * 4;
+        data[p] = c[0] * vertical * panel;
+        data[p + 1] = c[1] * vertical * panel;
+        data[p + 2] = c[2] * vertical * panel;
+        data[p + 3] = 1;
       }
     }
-    gl.texImage2D(
-      gl.TEXTURE_CUBE_MAP_POSITIVE_X + face,
-      0,
-      gl.RGBA16F,
-      size,
-      size,
-      0,
-      gl.RGBA,
-      faceValues ? gl.FLOAT : gl.HALF_FLOAT,
-      data
-    );
+    gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, gl.RGBA16F, size, size, 0, gl.RGBA, gl.FLOAT, data);
   }
-
   gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
   gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
-
   gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
-
   return texture;
 }
 
-/**
- * RG16F BRDF integration LUT. Bootstrap: constant (1, 0) so the
- * specular-IBL term is prefiltered * F (production: generated LUT).
- */
-function createBrdfLut(
-  gl: WebGL2RenderingContext,
-  size: number
-): WebGLTexture {
+function radicalInverseVdC(bits: number): number {
+  let b = bits >>> 0;
+  b = ((b << 16) | (b >>> 16)) >>> 0;
+  b = (((b & 0x55555555) << 1) | ((b & 0xAAAAAAAA) >>> 1)) >>> 0;
+  b = (((b & 0x33333333) << 2) | ((b & 0xCCCCCCCC) >>> 2)) >>> 0;
+  b = (((b & 0x0F0F0F0F) << 4) | ((b & 0xF0F0F0F0) >>> 4)) >>> 0;
+  return b * 2.3283064365386963e-10;
+}
+
+function geometrySchlickGGX(ndotV: number, roughness: number): number {
+  const k = ((roughness + 1) * (roughness + 1)) / 8;
+  return ndotV / (ndotV * (1 - k) + k);
+}
+
+function createBrdfLut(gl: WebGL2RenderingContext, size = 256): WebGLTexture {
   const texture = gl.createTexture();
-  if (!texture) {
-    throw new Error('Unable to create BRDF LUT');
-  }
-
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-
+  if (!texture) throw new Error('IBL: unable to create BRDF LUT');
+  const samples = 64;
   const data = new Float32Array(size * size * 2);
-  for (let i = 0; i < data.length; i += 2) {
-    data[i] = 1.0;
-    data[i + 1] = 0.0;
+  for (let y = 0; y < size; y++) {
+    const roughness = Math.max(0.001, (y + 0.5) / size);
+    const alpha = roughness * roughness;
+    for (let x = 0; x < size; x++) {
+      const ndotV = Math.max(0.001, (x + 0.5) / size);
+      const sinV = Math.sqrt(Math.max(0, 1 - ndotV * ndotV));
+      const vx = sinV, vz = ndotV;
+      let scale = 0, bias = 0;
+      for (let i = 0; i < samples; i++) {
+        const u1 = i / samples;
+        const u2 = radicalInverseVdC(i);
+        const phi = 2 * Math.PI * u1;
+        const cosTheta = Math.sqrt((1 - u2) / (1 + (alpha * alpha - 1) * u2));
+        const sinTheta = Math.sqrt(Math.max(0, 1 - cosTheta * cosTheta));
+        const hx = Math.cos(phi) * sinTheta;
+        const hy = Math.sin(phi) * sinTheta;
+        const hz = cosTheta;
+        const voh = Math.max(0, vx * hx + vz * hz);
+        const lx = 2 * voh * hx - vx;
+        const ly = 2 * voh * hy;
+        const lz = 2 * voh * hz - vz;
+        const ndotL = Math.max(0, lz);
+        const ndotH = Math.max(0, hz);
+        if (ndotL <= 0 || ndotH <= 0) continue;
+        const gv = geometrySchlickGGX(ndotV, roughness);
+        const gl = geometrySchlickGGX(ndotL, roughness);
+        const gvis = (gv * gl * voh) / Math.max(ndotH * ndotV, 1e-5);
+        const fc = Math.pow(1 - voh, 5);
+        scale += (1 - fc) * gvis;
+        bias += fc * gvis;
+      }
+      const p = (y * size + x) * 2;
+      data[p] = scale / samples;
+      data[p + 1] = bias / samples;
+    }
   }
+  gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG16F, size, size, 0, gl.RG, gl.FLOAT, data);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
   gl.bindTexture(gl.TEXTURE_2D, null);
-
   return texture;
 }
 
-/**
- * Bootstrap HDR studio environment cubemap (six flat faces).
- * For production this is replaced by a real HDR equirectangular
- * environment and GPU convolution — the shader interface stays the same.
- */
-export function generateStudioEnvironment(
-  gl: WebGL2RenderingContext,
-  size = 512
-): WebGLTexture {
-  return createEnvironmentTexture(gl, size, STUDIO_FACE_VALUES);
+export function generateStudioEnvironment(gl: WebGL2RenderingContext, size = 256): WebGLTexture {
+  return createEnvironmentTexture(gl, Math.max(16, Math.min(1024, Math.round(size))));
 }
 
-export function createIblPipeline(
-  gl: WebGL2RenderingContext,
-  size = 512
-): IblPipeline {
-  const environment = createEnvironmentTexture(gl, size);
-  const irradiance = createEnvironmentTexture(gl, 64, STUDIO_FACE_VALUES);
-  const prefiltered = createEnvironmentTexture(gl, size, STUDIO_FACE_VALUES);
-  const brdfLut = createBrdfLut(gl, 256);
-
-  return {
-    environment,
-    irradiance,
-    prefiltered,
-    brdfLut
+export function createIblPipeline(gl: WebGL2RenderingContext, size = 256): IblPipeline {
+  const cached = pipelineCache.get(gl);
+  if (cached) return cached;
+  const cubeSize = Math.max(16, Math.min(1024, Math.round(size)));
+  const pipeline: IblPipeline = {
+    environment: createEnvironmentTexture(gl, cubeSize),
+    irradiance: createEnvironmentTexture(gl, 64),
+    prefiltered: createEnvironmentTexture(gl, cubeSize),
+    brdfLut: createBrdfLut(gl, 256)
   };
+  pipelineCache.set(gl, pipeline);
+  return pipeline;
 }
 
-/** Delete the IBL GL textures (renderer release path). */
-export function destroyIblPipeline(
-  gl: WebGL2RenderingContext,
-  ibl: IblPipeline
-): void {
+export function destroyIblPipeline(gl: WebGL2RenderingContext, ibl: IblPipeline): void {
   gl.deleteTexture(ibl.environment);
   gl.deleteTexture(ibl.irradiance);
   gl.deleteTexture(ibl.prefiltered);
   gl.deleteTexture(ibl.brdfLut);
+  if (pipelineCache.get(gl) === ibl) pipelineCache.delete(gl);
 }

@@ -13,6 +13,7 @@ class Bitmap(
     fun copy(config: Config, isMutable: Boolean): Bitmap = Bitmap(width, height, config)
 
     fun recycle() {}
+    val isRecycled: Boolean get() = false
 
     fun copyPixelsToBuffer(dst: java.nio.Buffer): java.nio.Buffer = dst
 

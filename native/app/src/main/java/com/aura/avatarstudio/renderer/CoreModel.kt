@@ -41,7 +41,7 @@ data class GpuMesh(
     val joints: IntArray?,
     val weights: FloatArray?,
     val indices: IntArray,
-    val material: PbrMaterial,
+    val material: HdPbrMaterial,
     val morphTargets: List<MorphTarget>,
     /** Default morph weights from the glTF mesh (0.0 when unset). Animatable. */
     var morphWeights: FloatArray = FloatArray(0),
@@ -50,30 +50,33 @@ data class GpuMesh(
 )
 
 /**
- * PBR material. Factor fields are populated by the loader; the *_TextureIndex
- * fields reference glTF textures, and the *_Tex fields hold GL texture ids
- * (0 = none) filled in by [GltfTextures] on the GL thread.
+ * PBR material — GPU-texture based (see [PbrTexture]).
+ *
+ * Factor fields come from the glTF material; the *_TextureIndex fields are
+ * the loader-side glTF texture references (-1 = none); the *_Texture fields
+ * hold GL texture ids (0 = none) filled on the GL thread by [GltfTextures].
  */
-class PbrMaterial(
+class HdPbrMaterial(
     var baseColor: FloatArray = floatArrayOf(1f, 1f, 1f, 1f),
-    var metallic: Float = 1f,
-    var roughness: Float = 1f,
+    var metallic: Float = 0f,
+    var roughness: Float = 0.5f,
     var emissive: FloatArray = floatArrayOf(0f, 0f, 0f),
     var normalScale: Float = 1f,
     var occlusionStrength: Float = 1f,
+    var alphaMode: String = "OPAQUE",
+    var doubleSided: Boolean = false,
+    // loader-side glTF texture references
     var baseColorTextureIndex: Int = -1,
     var metallicRoughnessTextureIndex: Int = -1,
     var normalTextureIndex: Int = -1,
     var occlusionTextureIndex: Int = -1,
     var emissiveTextureIndex: Int = -1,
-    var alphaMode: String = "OPAQUE",
-    var doubleSided: Boolean = false,
-    // GL-side (filled on the GL thread)
-    var baseColorTex: Int = 0,
-    var metallicRoughnessTex: Int = 0,
-    var normalTex: Int = 0,
-    var occlusionTex: Int = 0,
-    var emissiveTex: Int = 0
+    // GL-side texture ids (filled on the GL thread)
+    var baseColorTexture: Int = 0,
+    var metallicRoughnessTexture: Int = 0,
+    var normalTexture: Int = 0,
+    var occlusionTexture: Int = 0,
+    var emissiveTexture: Int = 0
 )
 
 /** Base64 data-URI helper shared by the loader and the texture loader. */

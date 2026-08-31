@@ -360,8 +360,8 @@ class GltfAvatarLoader(
             primitive.material?.let {
                 document.materials
                     .getOrNull(it)
-            }?.toPbrMaterial()
-                ?: PbrMaterial()
+            }?.toHdPbrMaterial()
+                ?: HdPbrMaterial()
 
         val morphTargets =
             primitive.targets.map { target ->
@@ -710,14 +710,14 @@ class GltfAvatarLoader(
     ): ByteArray =
         GltfDataUris.decode(uri)
 
-    private fun GltfMaterial.toPbrMaterial():
-        PbrMaterial {
+    private fun GltfMaterial.toHdPbrMaterial():
+        HdPbrMaterial {
 
         val pbr =
             pbrMetallicRoughness
                 ?: GltfPbr()
 
-        return PbrMaterial(
+        return HdPbrMaterial(
             baseColor =
                 pbr.baseColorFactor
                     .toFloatArray(),

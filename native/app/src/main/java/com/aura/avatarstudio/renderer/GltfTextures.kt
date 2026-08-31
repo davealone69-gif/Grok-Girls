@@ -62,7 +62,8 @@ object GltfTextures {
 
         fun uploadImage(
             imageIndex: Int,
-            samplerIndex: Int?
+            samplerIndex: Int?,
+            srgb: Boolean
         ): Int {
             uploaded[imageIndex]?.let { return it }
             val image = document.images.getOrNull(imageIndex) ?: return 0
@@ -90,10 +91,16 @@ object GltfTextures {
             flipped.copyPixelsToBuffer(pixels)
             pixels.position(0)
 
+            // sRGB storage for base-color/emissive maps: the GPU decodes
+            // to linear light at sample time (correct PBR input).
+            val internalFormat =
+                if (srgb) GLES30.GL_SRGB8_ALPHA8
+                else GLES30.GL_RGBA8
+
             GLES30.glTexImage2D(
                 GLES30.GL_TEXTURE_2D,
                 0,
-                GLES30.GL_RGBA,
+                internalFormat,
                 flipped.width,
                 flipped.height,
                 0,
@@ -133,26 +140,39 @@ object GltfTextures {
             return tex[0]
         }
 
+        // Textures sampled as color (base-color/emissive) are sRGB;
+        // data maps (normal/metallic-roughness/occlusion) stay linear.
+        val srgbTextures = HashSet<Int>()
+        for (mesh in avatar.meshes) {
+            val m = mesh.material
+            if (m.baseColorTextureIndex >= 0) srgbTextures += m.baseColorTextureIndex
+            if (m.emissiveTextureIndex >= 0) srgbTextures += m.emissiveTextureIndex
+        }
+
         // Resolve texture.sources (with their samplers), then bind onto
         // materials. Dedup by image so shared images upload once.
         val texByTexture = HashMap<Int, Int>()
         for ((textureIndex, texture) in document.textures.withIndex()) {
             val source = texture.source ?: continue
             texByTexture[textureIndex] =
-                uploadImage(source, texture.sampler)
+                uploadImage(
+                    source,
+                    texture.sampler,
+                    textureIndex in srgbTextures
+                )
         }
 
         for (mesh in avatar.meshes) {
             val m = mesh.material
-            m.baseColorTex =
+            m.baseColorTexture =
                 if (m.baseColorTextureIndex >= 0) texByTexture[m.baseColorTextureIndex] ?: 0 else 0
-            m.metallicRoughnessTex =
+            m.metallicRoughnessTexture =
                 if (m.metallicRoughnessTextureIndex >= 0) texByTexture[m.metallicRoughnessTextureIndex] ?: 0 else 0
-            m.normalTex =
+            m.normalTexture =
                 if (m.normalTextureIndex >= 0) texByTexture[m.normalTextureIndex] ?: 0 else 0
-            m.occlusionTex =
+            m.occlusionTexture =
                 if (m.occlusionTextureIndex >= 0) texByTexture[m.occlusionTextureIndex] ?: 0 else 0
-            m.emissiveTex =
+            m.emissiveTexture =
                 if (m.emissiveTextureIndex >= 0) texByTexture[m.emissiveTextureIndex] ?: 0 else 0
         }
 
@@ -164,16 +184,16 @@ object GltfTextures {
         val ids = HashSet<Int>()
         for (mesh in avatar.meshes) {
             val m = mesh.material
-            if (m.baseColorTex != 0) ids += m.baseColorTex
-            if (m.metallicRoughnessTex != 0) ids += m.metallicRoughnessTex
-            if (m.normalTex != 0) ids += m.normalTex
-            if (m.occlusionTex != 0) ids += m.occlusionTex
-            if (m.emissiveTex != 0) ids += m.emissiveTex
-            m.baseColorTex = 0
-            m.metallicRoughnessTex = 0
-            m.normalTex = 0
-            m.occlusionTex = 0
-            m.emissiveTex = 0
+            if (m.baseColorTexture != 0) ids += m.baseColorTexture
+            if (m.metallicRoughnessTexture != 0) ids += m.metallicRoughnessTexture
+            if (m.normalTexture != 0) ids += m.normalTexture
+            if (m.occlusionTexture != 0) ids += m.occlusionTexture
+            if (m.emissiveTexture != 0) ids += m.emissiveTexture
+            m.baseColorTexture = 0
+            m.metallicRoughnessTexture = 0
+            m.normalTexture = 0
+            m.occlusionTexture = 0
+            m.emissiveTexture = 0
         }
         if (ids.isNotEmpty()) {
             GLES30.glDeleteTextures(ids.size, ids.toIntArray(), 0)

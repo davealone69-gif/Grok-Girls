@@ -212,6 +212,31 @@ fun main() {
         check("GltfTextures.resolve control flow", true)
         GltfTextures.release(avatar)
 
+        // HdPbrShader — single-program PBR reference (stub GL)
+        try {
+            val shader = HdPbrShader()
+            shader.create()
+            shader.bind()
+            shader.matrices(Mat4.identity(), Mat4.identity(), Mat4.identity())
+            shader.camera(floatArrayOf(0f, 0f, 3f))
+            shader.light(floatArrayOf(0f, 1f, 0f), floatArrayOf(1f, 1f, 1f))
+            shader.material(avatar.meshes[0].material)
+            shader.joints(FloatArray(16) { i -> if (i % 5 == 0) 1f else 0f })
+            shader.destroy()
+            check("HdPbrShader API smoke test", true)
+        } catch (e: Throwable) {
+            check("HdPbrShader API smoke test", false, e.toString())
+        }
+
+        // PbrTexture — asset texture utility (stub GL)
+        try {
+            val textures = PbrTexture(android.content.Context())
+            textures.destroy(0)
+            check("PbrTexture API smoke test", true)
+        } catch (e: Throwable) {
+            check("PbrTexture API smoke test", false, e.toString())
+        }
+
         PbrPipeline.upload(avatar)
         PbrPipeline.draw(
             avatar = avatar,

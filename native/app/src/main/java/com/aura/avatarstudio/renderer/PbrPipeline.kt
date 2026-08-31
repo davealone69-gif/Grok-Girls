@@ -219,19 +219,19 @@ object PbrPipeline {
         GLES30.glUniform1f(l.uTime, timeSeconds)
 
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mat.baseColorTex)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mat.baseColorTexture)
         GLES30.glUniform1i(l.uBaseColorTex, 0)
         GLES30.glActiveTexture(GLES30.GL_TEXTURE1)
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mat.metallicRoughnessTex)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mat.metallicRoughnessTexture)
         GLES30.glUniform1i(l.uMetallicRoughnessTex, 1)
         GLES30.glActiveTexture(GLES30.GL_TEXTURE2)
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mat.normalTex)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mat.normalTexture)
         GLES30.glUniform1i(l.uNormalTex, 2)
         GLES30.glActiveTexture(GLES30.GL_TEXTURE3)
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mat.occlusionTex)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mat.occlusionTexture)
         GLES30.glUniform1i(l.uOcclusionTex, 3)
         GLES30.glActiveTexture(GLES30.GL_TEXTURE4)
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mat.emissiveTex)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, mat.emissiveTexture)
         GLES30.glUniform1i(l.uEmissiveTex, 4)
 
         if (IblEnvironment.isBuilt) {
@@ -292,11 +292,11 @@ object PbrPipeline {
         val morphCount = mesh.morphTargets.size.coerceAtMost(MAX_MORPH)
         val skinned = mesh.joints != null && mesh.weights != null && jointCount > 0
         val mat = mesh.material
-        val hasBase = mat.baseColorTex != 0
-        val hasMr = mat.metallicRoughnessTex != 0
-        val hasNormal = mat.normalTex != 0
-        val hasOcc = mat.occlusionTex != 0
-        val hasEmisTex = mat.emissiveTex != 0
+        val hasBase = mat.baseColorTexture != 0
+        val hasMr = mat.metallicRoughnessTexture != 0
+        val hasNormal = mat.normalTexture != 0
+        val hasOcc = mat.occlusionTexture != 0
+        val hasEmisTex = mat.emissiveTexture != 0
         val hasEmis = hasEmisTex || mat.emissive.any { it > 0f }
         val hasTangent = mesh.tangents != null
         val ibl = IblEnvironment.isBuilt

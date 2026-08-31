@@ -20,6 +20,9 @@ object GLES30 {
     const val GL_FRAGMENT_SHADER = 0x8B30
     const val GL_FRAMEBUFFER = 0x8D40
     const val GL_HALF_FLOAT = 0x140B
+    const val GL_RGBA8 = 0x8058
+    const val GL_SRGB8_ALPHA8 = 0x8C43
+    const val GL_REPEAT = 0x2901
     const val GL_LEQUAL = 0x0203
     const val GL_LESS = 0x0201
     const val GL_LINEAR = 0x2601
@@ -57,6 +60,7 @@ object GLES30 {
     fun glAttachShader(program: Int, shader: Int) {}
     fun glBindBuffer(target: Int, buffer: Int) {}
     fun glBindFramebuffer(target: Int, framebuffer: Int) {}
+    fun glBindAttribLocation(program: Int, index: Int, name: String) {}
     fun glBindTexture(target: Int, texture: Int) {}
     fun glBindVertexArray(array: Int) {}
     fun glBlendFunc(sfactor: Int, dfactor: Int) {}
@@ -105,6 +109,7 @@ object GLES30 {
     fun glUniform1fv(location: Int, count: Int, value: FloatArray?, offset: Int) {}
     fun glUniform1i(location: Int, v0: Int) {}
     fun glUniform3f(location: Int, v0: Float, v1: Float, v2: Float) {}
+    fun glUniform3fv(location: Int, count: Int, value: FloatArray?, offset: Int) {}
     fun glUniform4f(location: Int, v0: Float, v1: Float, v2: Float, v3: Float) {}
     fun glUniform4fv(location: Int, count: Int, value: FloatArray?, offset: Int) {}
     fun glUniformMatrix3fv(location: Int, count: Int, transpose: Boolean, value: FloatArray?, offset: Int) {}

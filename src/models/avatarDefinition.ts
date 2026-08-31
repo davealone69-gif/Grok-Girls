@@ -64,74 +64,85 @@ const DEF_TO_GENDER: Record<string, AvatarDraft['gender']> = {
 };
 
 const BODY_TO_DEF: Record<string, string> = {
-  hourglass: 'Curvy',
-  curvy: 'Curvy',
+  hourglass: 'Average',
   petite: 'Slim',
   slim: 'Slim',
-  athletic: 'Average'
+  athletic: 'Athletic',
+  curvy: 'Heavy'
 };
 const DEF_TO_BODY: Record<string, string> = {
   Slim: 'slim',
-  Average: 'athletic',
-  Curvy: 'hourglass'
+  Athletic: 'athletic',
+  Average: 'petite',
+  Heavy: 'curvy'
+  // Custom: keep the current bodyType
 };
 
 const FACE_TO_DEF: Record<string, string> = {
   oval: 'Soft',
   heart: 'Soft',
   round: 'Soft',
-  diamond: 'Sharp',
+  diamond: 'Angular',
   sharp: 'Sharp',
   square: 'Sharp'
 };
-const DEF_TO_FACE: Record<string, string> = { Soft: 'oval', Sharp: 'sharp' };
+const DEF_TO_FACE: Record<string, string> = {
+  Soft: 'oval',
+  Angular: 'diamond',
+  Sharp: 'sharp'
+  // Custom: keep the current faceShape
+};
 
 const HAIR_TO_DEF: Record<string, string> = {
   'layered waves bob': 'Short',
-  'cyber undercut with side sweep': 'Short',
+  'cyber undercut with side sweep': 'Mohawk',
   'long glamorous waves': 'Long',
   'sleek straight bob': 'Short',
-  'high ponytail': 'Updo',
-  'messy bun with wisps': 'Updo',
+  'high ponytail': 'Ponytail',
+  'messy bun with wisps': 'Ponytail',
   'asymmetric pixie crop': 'Short',
   'wet-look waves': 'Long'
 };
 const DEF_TO_HAIR: Record<string, string> = {
   Short: 'sleek straight bob',
   Long: 'long glamorous waves',
-  Updo: 'high ponytail'
+  Ponytail: 'high ponytail',
+  Braids: 'twin braids with ribbon ties',
+  Mohawk: 'shaved sides with mohawk crest',
+  Bald: 'bald, shaved head'
 };
 
 const EYES_TO_DEF: Record<string, string> = {
   'dark brown': 'Natural',
   hazel: 'Natural',
   gray: 'Natural',
-  'ruby red': 'Vivid',
-  'emerald green': 'Vivid',
-  'ice blue': 'Vivid',
+  'ruby red': 'Glowing',
+  'emerald green': 'Glowing',
+  'ice blue': 'Glowing',
   'violet neon': 'Cyber',
   'cybernetic pale': 'Cyber'
 };
 const DEF_TO_EYES: Record<string, string> = {
   Natural: 'hazel',
-  Vivid: 'ruby red',
-  Cyber: 'violet neon'
+  Cyber: 'violet neon',
+  Glowing: 'ice blue',
+  Heterochromia: 'heterochromatic amber and violet'
 };
 
 function outfitToDef(outfit: string): string {
   const o = outfit.toLowerCase();
-  if (o.includes('nude') || o.includes('torn')) return 'Nude';
-  if (o.includes('corset') || o.includes('lingerie') || o.includes('bustier') || o.includes('bodysuit')) return 'Lingerie';
-  if (o.includes('cyber') || o.includes('techwear') || o.includes('leather')) return 'Cyber';
-  if (o.includes('gothic')) return 'Gothic';
+  if (o.includes('armoured') || o.includes('armored')) return 'Armoured';
+  if (o.includes('gown') || o.includes('dress')) return 'Formal';
+  if (o.includes('cyberpunk') || o.includes('techwear')) return 'Tech';
+  if (o.includes('biker') || o.includes('leather')) return 'Street';
   return 'Casual';
 }
 function defToOutfit(def: string): string {
   switch (def) {
-    case 'Lingerie': return avatarOptions.outfit[0];
-    case 'Cyber': return avatarOptions.outfit[1];
-    case 'Gothic': return avatarOptions.outfit[7];
-    case 'Nude': return avatarOptions.outfit[8];
+    case 'Street': return avatarOptions.outfit[6];
+    case 'Tech': return avatarOptions.outfit[1];
+    case 'Formal': return avatarOptions.outfit[3];
+    case 'Armoured': return 'black tactical armoured bodysuit with carbon fibre plating';
     default: return avatarOptions.outfit[5]; // silk robe — Casual
   }
 }
@@ -151,16 +162,32 @@ export function toAvatarDefinition(d: AvatarDraft): AvatarDefinition {
     eyes: EYES_TO_DEF[d.eyeColor] ?? 'Natural',
     face: FACE_TO_DEF[d.faceShape] ?? 'Soft',
     body: BODY_TO_DEF[d.bodyType] ?? 'Average',
-    tattoos: !d.tattooStyle || d.tattooStyle === 'none'
-      ? 'None'
-      : (d.tattoosCount ?? 0) > 0 ? cap(d.tattooStyle) : 'None',
-    augmentations: d.augmentStyle ? cap(d.augmentStyle) : 'None',
+    tattoos: tattoosToDef(d.tattooStyle),
+    augmentations: augmentsToDef(d.augmentStyle),
     outfit: outfitToDef(d.outfit)
   };
 }
 
 function cap(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** Placement-based canonical value (mirrors AvatarCategories). */
+function tattoosToDef(style: string | undefined): string {
+  const t = (style || '').toLowerCase();
+  if (!t || t === 'none') return 'None';
+  if (t.includes('face')) return 'Face';
+  if (t.includes('arm')) return 'Arms';
+  if (t.includes('sternum') || t.includes('torso')) return 'Torso';
+  return 'Full';
+}
+function augmentsToDef(style: string | undefined): string {
+  const a = (style || '').toLowerCase();
+  if (!a) return 'None';
+  if (a.includes('eye')) return 'Eyes';
+  if (a.includes('arm')) return 'Arms';
+  if (a.includes('face') || a.includes('facial')) return 'Face';
+  return 'Full';
 }
 
 /** Apply a canonical AvatarDefinition onto a draft (recognized values only). */
@@ -179,15 +206,24 @@ export function applyAvatarDefinition(d: AvatarDraft, def: AvatarDefinition): Av
   if (DEF_TO_EYES[def.eyes]) out.eyeColor = DEF_TO_EYES[def.eyes];
   if (DEF_TO_FACE[def.face]) out.faceShape = DEF_TO_FACE[def.face];
   if (DEF_TO_BODY[def.body]) out.bodyType = DEF_TO_BODY[def.body];
-  if (def.tattoos === 'None') {
-    out.tattooStyle = undefined;
-    out.tattoosCount = 0;
-  } else if (def.tattoos !== 'Ink') {
-    out.tattooStyle = def.tattoos.toLowerCase();
-    out.tattoosCount = Math.max(1, out.tattoosCount ?? 3);
-  }
-  if (def.augmentations === 'None') out.augmentStyle = undefined;
-  else out.augmentStyle = def.augmentations.toLowerCase();
+  const tats: Record<string, { style: string; count: number }> = {
+    None: { style: 'none', count: 0 },
+    Face: { style: 'delicate face tattoo, fine line art', count: 3 },
+    Arms: { style: 'cyber-line geometric arm tattoo', count: 4 },
+    Torso: { style: 'ornamental sternum mandala tattoo', count: 4 },
+    Full: { style: 'blackwork full-sleeve and torso tattoo art', count: 12 }
+  };
+  const t = tats[def.tattoos] ?? tats.None;
+  out.tattooStyle = t.style;
+  out.tattoosCount = t.count;
+  const aug: Record<string, string | undefined> = {
+    None: undefined,
+    Eyes: 'cybernetic glowing eye implants',
+    Arms: 'cybernetic arm plating',
+    Face: 'facial LED seam lines',
+    Full: 'full cybernetic integration'
+  };
+  out.augmentStyle = aug[def.augmentations] ?? undefined;
   out.outfit = defToOutfit(def.outfit);
   return out;
 }

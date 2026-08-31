@@ -15,6 +15,7 @@ import {
   toAvatarDefinition,
   AvatarDefinition
 } from './models/avatarDefinition';
+import { AVATAR_CATEGORIES, applyCategoryOption, activeCategoryOption } from './models/avatarCategories';
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
 import { isAgeConfirmed, confirmAdultAge } from './services/ageGate';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
@@ -49,7 +50,7 @@ type InspectorSection =
   | 'clothing'
   | 'tattoos'
   | 'augments';
-type DockTab = 'style' | 'color' | 'makeup' | 'eyebrows' | 'scene';
+type DockTab = 'style' | 'color' | 'makeup' | 'eyebrows' | 'scene' | 'categories';
 
 const ADULT_KEY = 'grok-girls-adult-v1';
 
@@ -424,6 +425,17 @@ export default function App() {
     else if (id === 'load_outfit') loadOutfit();
     else if (id === 'toggle_tattoos') toggleTattoos();
     else if (id === 'toggle_augments') toggleAugments();
+  };
+
+  // ---- category catalog state (AvatarCategories mirror) ----
+  const [catId, setCatId] = useState('gender');
+  const DOCK_TAB_IDS: Record<string, DockTab> = {
+    hair_style: 'style',
+    hair_color: 'color',
+    makeup: 'makeup',
+    eyebrows: 'eyebrows',
+    scene_style: 'scene',
+    catAvatar: 'categories'
   };
 
   // ---- menu-driven actions (ids come from menu.xml) ----
@@ -2197,39 +2209,53 @@ export default function App() {
           {/* Left: Hair & Color Wheel */}
           <div className="dock-hair-section">
             <div className="dock-tabs">
-              <button
-                className={`dock-tab ${dockTab === 'style' ? 'active' : ''}`}
-                onClick={() => setDockTab('style')}
-              >
-                {menuLabel('hair_style')}
-              </button>
-              <button
-                className={`dock-tab ${dockTab === 'color' ? 'active' : ''}`}
-                onClick={() => setDockTab('color')}
-              >
-                {menuLabel('hair_color')}
-              </button>
-              <button
-                className={`dock-tab ${dockTab === 'makeup' ? 'active' : ''}`}
-                onClick={() => setDockTab('makeup')}
-              >
-                {menuLabel('makeup')}
-              </button>
-              <button
-                className={`dock-tab ${dockTab === 'eyebrows' ? 'active' : ''}`}
-                onClick={() => setDockTab('eyebrows')}
-              >
-                {menuLabel('eyebrows')}
-              </button>
-              <button
-                className={`dock-tab ${dockTab === 'scene' ? 'active' : ''}`}
-                onClick={() => setDockTab('scene')}
-              >
-                {menuLabel('scene_style')}
-              </button>
+              {menuSection(menuItems, 'dock').map(d => {
+                const tabId = DOCK_TAB_IDS[d.id];
+                if (!tabId) return null;
+                return (
+                  <button
+                    key={d.id}
+                    className={`dock-tab ${dockTab === tabId ? 'active' : ''}`}
+                    onClick={() => setDockTab(tabId)}
+                  >
+                    {menuLabel(d.id)}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="dock-hair-content">
+              {dockTab === 'categories' && (
+                <div className="categories-panel">
+                  <div className="categories-list">
+                    {AVATAR_CATEGORIES.map(c => (
+                      <button
+                        key={c.id}
+                        className={`category-btn ${catId === c.id ? 'active' : ''}`}
+                        onClick={() => setCatId(c.id)}
+                      >
+                        {c.title}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="categories-options">
+                    {AVATAR_CATEGORIES.find(c => c.id === catId)?.options.map(o => {
+                      const active = activeCategoryOption(draft, catId) === o;
+                      return (
+                        <button
+                          key={o}
+                          className={`category-option ${active ? 'active' : ''}`}
+                          onClick={() => setDraft(d => applyCategoryOption(d, catId, o))}
+                        >
+                          {o}
+                        </button>
+                      );
+                    })}
+                    <pre className="identity-json">{JSON.stringify(toAvatarDefinition(draft), null, 1)}</pre>
+                  </div>
+                </div>
+              )}
+
               {dockTab === 'style' && (
                 <div className="hair-styles-grid">
                   {hairStylePresets.map(h => (

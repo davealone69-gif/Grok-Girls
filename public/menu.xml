@@ -159,6 +159,7 @@
                 <Button android:id="@+id/catMakeup" android:text="MAKEUP" />
                 <Button android:id="@+id/catEyebrows" android:text="EYEBROWS" />
                 <Button android:id="@+id/catSceneStyle" android:text="SCENE STYLE" />
+                <Button android:id="@+id/catAvatar" android:text="CATEGORIES" android:contentDescription="Avatar categories (canonical catalog)" />
             </LinearLayout>
 
             <TextView

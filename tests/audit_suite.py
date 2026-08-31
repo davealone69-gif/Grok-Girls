@@ -287,7 +287,7 @@ with sync_playwright() as p:
     # custom stored definition -> Load Outfit applies the canonical outfit
     pg.evaluate("""() => {
       const store = JSON.parse(localStorage.getItem('grok-girls-avatar-defs-v1')||'{}');
-      store['default'] = {"gender":"Female","skin":"Tone 02","head":"Head 02","age":"Adult","hair":"Long","eyes":"Cyber","face":"Sharp","body":"Curvy","tattoos":"Floral","augmentations":"None","outfit":"Cyber"};
+      store['default'] = {"gender":"Female","skin":"Tone 02","head":"Head 02","age":"Adult","hair":"Long","eyes":"Cyber","face":"Sharp","body":"Heavy","tattoos":"Arms","augmentations":"None","outfit":"Tech"};
       localStorage.setItem('grok-girls-avatar-defs-v1', JSON.stringify(store));
     }""")
     pg.locator(".identity-btn", has_text="Load Outfit").click()
@@ -304,6 +304,27 @@ with sync_playwright() as p:
     chk("avatar definition: tattoos toggle sets canonical style",
         before_ts != t.get("tattooStyle") and t.get("tattooStyle") == "floral noir",
         f"{before_ts} -> {t.get('tattooStyle')}")
+
+    # categories catalog drives the dock (AvatarCategories mirror)
+    pg.locator(".dock-tab", has_text="CATEGORIES").click()
+    pg.wait_for_timeout(300)
+    chk("avatar categories: 11 categories rendered", pg.locator(".category-btn").count() == 11, pg.locator(".category-btn").count())
+    gender_opts = pg.locator(".category-option").all_inner_texts()
+    chk("avatar categories: gender excludes Male (product rule)", "Male" not in gender_opts and "Non-binary" in gender_opts, str(gender_opts))
+    pg.locator(".category-btn", has_text="Skin").click()
+    pg.wait_for_timeout(200)
+    chk("avatar categories: skin has 6 tones", pg.locator(".category-option").count() == 6, pg.locator(".category-option").count())
+    pg.locator(".category-option", has_text="Tone 03").click()
+    pg.wait_for_timeout(400)
+    pg.locator(".identity-avatar-id").fill("default")
+    pg.locator(".identity-save").click()
+    pg.wait_for_timeout(400)
+    skin_after = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-avatar-defs-v1')||'{}')['default']")
+    chk("avatar categories: Tone 03 applied to saved definition", skin_after.get("skin") == "Tone 03", str(skin_after)[:100])
+    pg.locator(".category-btn", has_text="Outfit").click()
+    pg.wait_for_timeout(200)
+    outfit_opts = pg.locator(".category-option").all_inner_texts()
+    chk("avatar categories: outfit has Armoured", "Armoured" in outfit_opts, str(outfit_opts))
 
     # unknown Avatar ID -> Load Outfit falls back to the DEFAULT definition
     pg.locator(".identity-avatar-id").fill("zzz_none")

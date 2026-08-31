@@ -58,12 +58,8 @@ export function uploadGltfPrimitive(gl: WebGL2RenderingContext, asset: GltfAsset
   const buffers: WebGLBuffer[] = [];
 
   const attrs: Array<[string, number, boolean]> = [
-    ['POSITION', 0, false],
-    ['NORMAL', 1, false],
-    ['TEXCOORD_0', 2, false],
-    ['TANGENT', 3, false],
-    ['JOINTS_0', 4, true],
-    ['WEIGHTS_0', 5, false],
+    ['POSITION', 0, false], ['NORMAL', 1, false], ['TEXCOORD_0', 2, false],
+    ['TANGENT', 3, false], ['JOINTS_0', 4, true], ['WEIGHTS_0', 5, false],
   ];
   for (const [name, location, integer] of attrs) {
     const index = primitive.attributes[name];
@@ -72,7 +68,7 @@ export function uploadGltfPrimitive(gl: WebGL2RenderingContext, asset: GltfAsset
 
   let indexBuffer: WebGLBuffer | null = null;
   let indexCount = 0;
-  let indexType = gl.UNSIGNED_SHORT;
+  let indexType: number = gl.UNSIGNED_SHORT;
   if (primitive.indices !== undefined) {
     const accessor = asset.json.accessors?.[primitive.indices];
     if (!accessor) throw new Error('Missing index accessor');
@@ -86,16 +82,7 @@ export function uploadGltfPrimitive(gl: WebGL2RenderingContext, asset: GltfAsset
   }
 
   gl.bindVertexArray(null);
-  return {
-    vao,
-    vertexBuffers: buffers,
-    indexBuffer,
-    indexCount,
-    indexType,
-    mode: primitive.mode ?? gl.TRIANGLES,
-    materialIndex: primitive.material ?? 0,
-    morphTargets: morphData(asset, primitive),
-  };
+  return { vao, vertexBuffers: buffers, indexBuffer, indexCount, indexType, mode: primitive.mode ?? gl.TRIANGLES, materialIndex: primitive.material ?? 0, morphTargets: morphData(asset, primitive) };
 }
 
 export function destroyGltfPrimitive(gl: WebGL2RenderingContext, primitive: GltfGpuPrimitive): void {

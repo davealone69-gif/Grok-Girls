@@ -1,6 +1,9 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { installRendererDiagnostics } from './renderer/RendererDiagnostics';
+
+installRendererDiagnostics();
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -31,4 +34,3 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
     }
   });
 }
-

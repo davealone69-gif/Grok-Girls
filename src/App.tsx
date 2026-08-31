@@ -16,6 +16,7 @@ import {
   AvatarDefinition
 } from './models/avatarDefinition';
 import { AVATAR_CATEGORIES, applyCategoryOption, activeCategoryOption } from './models/avatarCategories';
+import { AvatarDesignerViewModel, createAvatarDesignerViewModel } from './models/avatarDesignerViewModel';
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
 import { isAgeConfirmed, confirmAdultAge } from './services/ageGate';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
@@ -397,8 +398,29 @@ export default function App() {
   // ---- canonical AvatarDefinition (Kotlin data-class mirror) ----
   const [avatarIdInput, setAvatarIdInput] = useState('default');
   const identityId = () => avatarIdInput.trim() || 'default';
+
+  // ---- AvatarDesignerViewModel (Kotlin mirror): the single dispatcher
+  // for canonical category edits. Exposed for the automated suites.
+  const avatarVmRef = useRef<AvatarDesignerViewModel | null>(null);
+  if (!avatarVmRef.current) avatarVmRef.current = createAvatarDesignerViewModel();
+  const avatarVm = avatarVmRef.current;
+  const [avatarDef, setAvatarDef] = useState<AvatarDefinition>(() => avatarVm.get());
+  useEffect(() => {
+    (window as unknown as Record<string, unknown>).__grokGirlsVm = avatarVm;
+    return avatarVm.subscribe((def, change) => {
+      setAvatarDef(def);
+      if (change) {
+        // VM-initiated edit -> apply exactly that category onto the draft
+        setDraft(d => applyCategoryOption(d, change.category, change.value));
+      }
+    });
+  }, [avatarVm]);
+  useEffect(() => {
+    // rich-UI edits flow one-way into the VM (no emission back)
+    avatarVm.syncFromDraft(draft);
+  }, [draft, avatarVm]);
   const saveIdentity = () => {
-    const def = toAvatarDefinition(draft);
+    const def = avatarVm.get() ?? toAvatarDefinition(draft);
     saveAvatarDefinition(identityId(), def);
     showToast(`Identity saved as "${identityId()}"`);
   };
@@ -2245,13 +2267,13 @@ export default function App() {
                         <button
                           key={o}
                           className={`category-option ${active ? 'active' : ''}`}
-                          onClick={() => setDraft(d => applyCategoryOption(d, catId, o))}
+                          onClick={() => avatarVm.setOption(catId, o)}
                         >
                           {o}
                         </button>
                       );
                     })}
-                    <pre className="identity-json">{JSON.stringify(toAvatarDefinition(draft), null, 1)}</pre>
+                    <pre className="identity-json">{JSON.stringify(avatarDef, null, 1)}</pre>
                   </div>
                 </div>
               )}

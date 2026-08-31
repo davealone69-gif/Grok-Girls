@@ -326,6 +326,26 @@ with sync_playwright() as p:
     outfit_opts = pg.locator(".category-option").all_inner_texts()
     chk("avatar categories: outfit has Armoured", "Armoured" in outfit_opts, str(outfit_opts))
 
+    # ViewModel semantics (Kotlin AvatarDesignerViewModel mirror)
+    pg.evaluate("() => window.__grokGirlsVm.setOption('age', 'Mature')")
+    pg.wait_for_timeout(400)
+    vm_age = pg.evaluate("() => window.__grokGirlsVm.get().age")
+    draft_age = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}').age")
+    chk("viewmodel: setOption updates the canonical definition", vm_age == "Mature", str(vm_age))
+    chk("viewmodel: change applies onto the draft", draft_age == 40, str(draft_age))
+    before = pg.evaluate("() => JSON.stringify(window.__grokGirlsVm.get())")
+    pg.evaluate("() => window.__grokGirlsVm.setOption('bogus_category', 'x')")
+    pg.wait_for_timeout(300)
+    after = pg.evaluate("() => JSON.stringify(window.__grokGirlsVm.get())")
+    chk("viewmodel: unknown category is a no-op (Kotlin else branch)", before == after, "unchanged" if before == after else "MUTATED")
+    # rich draft edits flow one-way into the VM
+    pg.locator(".dock-tab", has_text="HAIR STYLE").click()
+    pg.wait_for_timeout(200)
+    pg.locator(".hair-style-card[title='Glamour Waves']").click()
+    pg.wait_for_timeout(400)
+    vm_hair = pg.evaluate("() => window.__grokGirlsVm.get().hair")
+    chk("viewmodel: rich draft edit syncs into the VM", vm_hair == "Long", str(vm_hair))
+
     # unknown Avatar ID -> Load Outfit falls back to the DEFAULT definition
     pg.locator(".identity-avatar-id").fill("zzz_none")
     pg.wait_for_timeout(200)

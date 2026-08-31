@@ -1,13 +1,17 @@
 /* ------------------------------------------------------------------ */
 /* HdAvatarRenderer — the avatar renderer, replacing the spinning cube */
 /* as the live 3D viewport. Mirrors HdAvatarRenderer.kt:              */
-/*  - 128×96 UV sphere (position+normal+uv+tangent, 11 floats/vertex)  */
-/*  - Cook-Torrance PBR (GGX D, Schlick-GGX G, Schlick F)             */
-/*  - skin albedo (0.66, 0.34, 0.24), fake subsurface scatter,        */
-/*    exposure + ACES + gamma                                         */
+/*  - UV sphere with native attribute layout: pos/normal/uv/tangent4,  */
+/*    bone indices (uint8) + weights                                   */
+/*  - Cook-Torrance PBR (GGX D, Schlick-GGX G, Schlick F) with         */
+/*    PROCEDURAL skin texture maps (see ProceduralTextures.ts),        */
+/*    sampling semantics mirroring native HdPbrShader (units 0..4,     */
+/*    uHas*Map flags, mr map G=roughness/B=metallic, TBN normal map,   */
+/*    pow-2.2 base-color linearization)                                */
+/*  - fake subsurface scatter, exposure + ACES + gamma                 */
 /*  - setRotation / setMaterial(clamped) / setExposure / setKeyLight  */
 /*  - GPU skinning path: when a Skeleton is bound, uBones[128] drive   */
-/*    a 16-float/vertex skinned mesh (avatar_skin.vert layout)        */
+/*    a 17-float/vertex skinned mesh (avatar_skin.vert layout)        */
 /*  - AvatarParameters modulate bone scales (height/chest/waist/hips/  */
 /*    arms/legs/head) via local transforms                             */
 /*  - HDFrameRenderer off-screen pass at the configured resolution     */
@@ -21,13 +25,15 @@ import { AvatarMesh, createAvatarMesh } from './avatar/AvatarMesh';
 import { Bone, Skeleton } from './avatar/Skeleton';
 import { AvatarParameters, DEFAULT_AVATAR_PARAMETERS } from './avatar/AvatarParameters';
 import { AvatarMaterial, DEFAULT_AVATAR_MATERIAL } from './avatar/AvatarMaterial';
+import { createProceduralSkinMaps, destroyProceduralSkinMaps, ProceduralSkinMaps } from './ProceduralTextures';
 
-/* 320 es -> 300 es (identical logic, same layout locations) */
+/* 300 es — vertex shader for the non-skinned path. Native attribute
+ * layout: 0 pos, 1 normal, 2 uv, 3 tangent (vec4, w = handedness). */
 const VERTEX_SHADER = `#version 300 es
 layout(location = 0) in vec3 aPosition;
 layout(location = 1) in vec3 aNormal;
 layout(location = 2) in vec2 aUV;
-layout(location = 3) in vec3 aTangent;
+layout(location = 3) in vec4 aTangent;
 uniform mat4 uModel;
 uniform mat4 uView;
 uniform mat4 uProjection;
@@ -35,34 +41,63 @@ uniform mat4 uNormalMatrix;
 out vec3 vWorldPosition;
 out vec3 vNormal;
 out vec2 vUV;
-out vec3 vTangent;
+out vec4 vTangent;
 void main() {
   vec4 world = uModel * vec4(aPosition, 1.0);
   vWorldPosition = world.xyz;
   vNormal = normalize(mat3(uNormalMatrix) * aNormal);
-  vTangent = normalize(mat3(uModel) * aTangent);
+  vTangent = vec4(normalize(mat3(uModel) * aTangent.xyz), aTangent.w);
   vUV = aUV;
   gl_Position = uProjection * uView * world;
 }`;
 
-/* The native PbrSkin.frag — full Cook-Torrance + subsurface + ACES. */
+/* The native PbrSkin.frag — full Cook-Torrance + texture maps +
+ * subsurface + ACES. Texture sampling mirrors native HdPbrShader:
+ * units 0..4, uHas*Map flags, baseColor pow-2.2 linearized, mr map
+ * G=roughness/B=metallic, TBN normal mapping with vTangent.w. */
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 in vec3 vWorldPosition;
 in vec3 vNormal;
 in vec2 vUV;
-in vec3 vTangent;
+in vec4 vTangent;
 layout(location = 0) out vec4 outColor;
 uniform vec3 uCameraPosition;
 uniform vec3 uLightPosition;
 uniform vec3 uLightColor;
 uniform vec3 uAmbientColor;
+uniform vec4 uBaseColor;
 uniform float uMetallic;
 uniform float uRoughness;
 uniform float uExposure;
 uniform float uSubsurface;
 uniform vec3 uSubsurfaceColor;
+
+uniform sampler2D uBaseColorMap;
+uniform sampler2D uNormalMap;
+uniform sampler2D uMetallicRoughnessMap;
+uniform sampler2D uOcclusionMap;
+uniform sampler2D uEmissiveMap;
+uniform int uHasBaseColorMap;
+uniform int uHasNormalMap;
+uniform int uHasMetallicRoughnessMap;
+uniform int uHasOcclusionMap;
+uniform int uHasEmissiveMap;
+
 const float PI = 3.14159265359;
+
+vec3 getNormal() {
+  vec3 N = normalize(vNormal);
+  if (uHasNormalMap == 0) {
+    return N;
+  }
+  vec3 T = normalize(vTangent.xyz);
+  T = normalize(T - dot(T, N) * N);
+  vec3 B = normalize(cross(N, T)) * vTangent.w;
+  mat3 TBN = mat3(T, B, N);
+  vec3 normalSample = texture(uNormalMap, vUV).xyz * 2.0 - 1.0;
+  return normalize(TBN * normalSample);
+}
 
 vec3 fresnelSchlick(float cosTheta, vec3 F0) {
   return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
@@ -87,44 +122,71 @@ vec3 acesToneMap(vec3 x) {
   return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
 }
 void main() {
-  vec3 N = normalize(vNormal);
+  vec4 base = uBaseColor;
+  if (uHasBaseColorMap == 1) {
+    base *= texture(uBaseColorMap, vUV);
+  }
+  vec3 albedo = pow(base.rgb, vec3(2.2));
+
+  float metallic = uMetallic;
+  float roughness = uRoughness;
+  if (uHasMetallicRoughnessMap == 1) {
+    vec4 mr = texture(uMetallicRoughnessMap, vUV);
+    roughness *= mr.g;
+    metallic *= mr.b;
+  }
+  roughness = clamp(roughness, 0.04, 1.0);
+
+  vec3 N = getNormal();
   vec3 V = normalize(uCameraPosition - vWorldPosition);
   vec3 L = normalize(uLightPosition - vWorldPosition);
   vec3 H = normalize(V + L);
-  /* native skin approximation (texture-driven albedo comes with the GLB loader) */
-  vec3 albedo = vec3(0.66, 0.34, 0.24);
-  vec3 F0 = mix(vec3(0.04), albedo, uMetallic);
   float distanceToLight = length(uLightPosition - vWorldPosition);
   float attenuation = 1.0 / max(distanceToLight * distanceToLight, 0.01);
   vec3 radiance = uLightColor * attenuation * 12.0;
   float NdotL = max(dot(N, L), 0.0);
   float NdotV = max(dot(N, V), 0.0);
-  float D = distributionGGX(N, H, uRoughness);
-  float G = geometrySmith(N, V, L, uRoughness);
+  vec3 F0 = mix(vec3(0.04), albedo, metallic);
+  float D = distributionGGX(N, H, roughness);
+  float G = geometrySmith(N, V, L, roughness);
   vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
   vec3 specular = D * G * F / max(4.0 * NdotV * NdotL, 0.001);
   vec3 kS = F;
-  vec3 kD = (vec3(1.0) - kS) * (1.0 - uMetallic);
+  vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
   vec3 direct = (kD * albedo / PI + specular) * radiance * NdotL;
-  vec3 ambient = uAmbientColor * albedo * 0.55;
+
+  float ao = 1.0;
+  if (uHasOcclusionMap == 1) {
+    ao = texture(uOcclusionMap, vUV).r;
+  }
+  vec3 ambient = uAmbientColor * albedo * 0.55 * ao;
+
+  vec3 emissive = vec3(0.0);
+  if (uHasEmissiveMap == 1) {
+    emissive = pow(texture(uEmissiveMap, vUV).rgb, vec3(2.2));
+  }
+
   /* fake subsurface: red scatter on back-lit edges */
   float backLight = pow(max(dot(-L, N), 0.0), 2.5);
   vec3 subsurface = uSubsurfaceColor * backLight * uSubsurface;
-  vec3 color = ambient + direct + subsurface;
+  vec3 color = ambient + direct + subsurface + emissive;
   color = vec3(1.0) - exp(-color * uExposure);
   color = acesToneMap(color);
   color = pow(color, vec3(1.0 / 2.2));
-  outColor = vec4(color, 1.0);
+  outColor = vec4(color, base.a);
 }`;
 
-/* avatar_skin.vert — GPU skinning (4 weights, uBones[128]) */
+/* avatar_skin.vert — GPU skinning (4 weights, uBones[128]).
+ * Native attribute layout: 0 pos, 1 normal, 2 uv, 3 tangent, 4 bone
+ * indices (uvec4), 5 weights. */
 const SKIN_VERTEX_SHADER = `#version 300 es
 precision highp float;
 layout(location = 0) in vec3 aPosition;
 layout(location = 1) in vec3 aNormal;
 layout(location = 2) in vec2 aUv;
-layout(location = 3) in uvec4 aBoneIndices;
-layout(location = 4) in vec4 aBoneWeights;
+layout(location = 3) in vec4 aTangent;
+layout(location = 4) in uvec4 aBoneIndices;
+layout(location = 5) in vec4 aBoneWeights;
 const int MAX_BONES = 128;
 uniform mat4 uBones[MAX_BONES];
 uniform mat4 uModel;
@@ -132,7 +194,8 @@ uniform mat4 uView;
 uniform mat4 uProjection;
 out vec3 vWorldPosition;
 out vec3 vNormal;
-out vec2 vUv;
+out vec2 vUV;
+out vec4 vTangent;
 void main() {
   mat4 skin = uBones[aBoneIndices.x] * aBoneWeights.x;
   skin += uBones[aBoneIndices.y] * aBoneWeights.y;
@@ -143,7 +206,8 @@ void main() {
   vec4 worldPosition = uModel * skinnedPosition;
   vWorldPosition = worldPosition.xyz;
   vNormal = normalize(mat3(uModel) * skinnedNormal);
-  vUv = aUv;
+  vTangent = vec4(normalize(mat3(uModel) * aTangent.xyz), aTangent.w);
+  vUV = aUv;
   gl_Position = uProjection * uView * worldPosition;
 }`;
 
@@ -197,6 +261,7 @@ export class HdAvatarRenderer {
   private skeleton: Skeleton | null;
   private parameters: AvatarParameters;
   private material: AvatarMaterial;
+  private skinMaps: ProceduralSkinMaps | null = null;
   private frameRenderer: HDFrameRenderer | null = null;
   private autoRotate = true;
   private angle = 0;
@@ -213,6 +278,9 @@ export class HdAvatarRenderer {
     this.material = { ...DEFAULT_AVATAR_MATERIAL, ...(opts.material ?? {}) };
     this.program = link(gl, VERTEX_SHADER, FRAGMENT_SHADER);
     this.skinProgram = link(gl, SKIN_VERTEX_SHADER, FRAGMENT_SHADER);
+
+    // procedural skin maps (mirrors native PbrTexture + HdPbrShader units)
+    this.skinMaps = createProceduralSkinMaps(gl);
 
     // native onSurfaceCreated
     gl.enable(gl.DEPTH_TEST);
@@ -291,6 +359,10 @@ export class HdAvatarRenderer {
   }
   release(): void {
     cancelAnimationFrame(this.raf);
+    if (this.skinMaps) {
+      destroyProceduralSkinMaps(this.gl, this.skinMaps);
+      this.skinMaps = null;
+    }
     this.mesh.destroy(this.gl);
     this.frameRenderer?.destroy();
     this.gl.deleteProgram(this.program);
@@ -386,11 +458,35 @@ export class HdAvatarRenderer {
     gl.uniform3fv(gl.getUniformLocation(program, 'uLightPosition'), new Float32Array(this.lightPosition));
     gl.uniform3fv(gl.getUniformLocation(program, 'uLightColor'), new Float32Array(this.lightColor));
     gl.uniform3fv(gl.getUniformLocation(program, 'uAmbientColor'), new Float32Array(this.ambientColor));
+    gl.uniform4f(gl.getUniformLocation(program, 'uBaseColor'), this.material.baseColorR ?? 1, this.material.baseColorG ?? 1, this.material.baseColorB ?? 1, 1);
     gl.uniform1f(gl.getUniformLocation(program, 'uExposure'), this.exposure);
     gl.uniform1f(gl.getUniformLocation(program, 'uMetallic'), this.metallic);
     gl.uniform1f(gl.getUniformLocation(program, 'uRoughness'), this.material.roughness ?? this.roughness);
     gl.uniform1f(gl.getUniformLocation(program, 'uSubsurface'), this.material.subsurface ?? 0.18);
     gl.uniform3fv(gl.getUniformLocation(program, 'uSubsurfaceColor'), new Float32Array(this.subsurfaceColor));
+
+    // procedural skin maps on native HdPbrShader units 0..4
+    const maps = this.skinMaps;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, maps ? maps.baseColor : null);
+    gl.uniform1i(gl.getUniformLocation(program, 'uBaseColorMap'), 0);
+    gl.uniform1i(gl.getUniformLocation(program, 'uHasBaseColorMap'), maps ? 1 : 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, maps ? maps.normal : null);
+    gl.uniform1i(gl.getUniformLocation(program, 'uNormalMap'), 1);
+    gl.uniform1i(gl.getUniformLocation(program, 'uHasNormalMap'), maps ? 1 : 0);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, maps ? maps.metallicRoughness : null);
+    gl.uniform1i(gl.getUniformLocation(program, 'uMetallicRoughnessMap'), 2);
+    gl.uniform1i(gl.getUniformLocation(program, 'uHasMetallicRoughnessMap'), maps ? 1 : 0);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.uniform1i(gl.getUniformLocation(program, 'uOcclusionMap'), 3);
+    gl.uniform1i(gl.getUniformLocation(program, 'uHasOcclusionMap'), 0);
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.uniform1i(gl.getUniformLocation(program, 'uEmissiveMap'), 4);
+    gl.uniform1i(gl.getUniformLocation(program, 'uHasEmissiveMap'), 0);
   }
 
   /** native createAvatarMesh(): the placeholder sphere.
@@ -404,7 +500,12 @@ export class HdAvatarRenderer {
 
 /** Build the avatar sphere with skinning attributes (bone 0, weight 1)
  *  — the native renderer draws ONE mesh through the skinned shader; the
- *  sphere carries bone data so uBones can deform it. */
+ *  sphere carries bone data so uBones can deform it. Vertex layout is
+ *  the native one: pos3 normal3 uv2 tangent4(u,v + handedness w)
+ *  boneIdx4(u8) boneW4 (17 floats). Tangents are the analytic sphere
+ *  parameterization: T = dP/d(theta) (u direction), handedness w from
+ *  cross(N,T) vs dP/d(phi) (v direction), so the procedural normal map
+ *  (canvas +x = T, canvas +y = B) decodes correctly in the TBN basis. */
 function buildSphereMesh(segments: number, rings: number): AvatarMesh {
   const verts: number[] = [];
   const idx: number[] = [];
@@ -421,8 +522,29 @@ function buildSphereMesh(segments: number, rings: number): AvatarMesh {
       const px = sinPhi * cosTheta;
       const py = cosPhi;
       const pz = sinPhi * sinTheta;
-      // pos3 normal3 uv2 boneIdx4 boneW4 (16 floats, all bone 0)
-      verts.push(px, py, pz, px, py, pz, u, v, 0, 0, 0, 0, 1, 0, 0, 0);
+      // T = dP/d(theta), B = dP/d(phi), w = sign(dot(cross(N,T), B))
+      let tx = -sinPhi * sinTheta;
+      let tz = sinPhi * cosTheta;
+      let tl = Math.hypot(tx, tz);
+      if (tl < 1e-6) {
+        tx = 1;
+        tz = 0;
+        tl = 1;
+      }
+      tx /= tl;
+      tz /= tl;
+      const bx = cosPhi * cosTheta;
+      const by = -sinPhi;
+      const bz = cosPhi * sinTheta;
+      // cross(N, T) = (py*tz - pz*0, pz*tx - px*tz, px*0 - py*tx)
+      const cx = py * tz;
+      const cy = pz * tx - px * tz;
+      const cz = -py * tx;
+      let w = Math.sign(cx * bx + cy * by + cz * bz);
+      if (w === 0) w = 1;
+      // pos3 normal3 uv2 tangent4 boneIdx4(u8, zeroed) boneW4
+      // (17 floats, all bone 0)
+      verts.push(px, py, pz, px, py, pz, u, v, tx, 0, tz, w, 0, 1, 0, 0, 0);
     }
   }
   const rowSize = segments + 1;

@@ -24,6 +24,7 @@ import { AvatarParameters, DEFAULT_AVATAR_PARAMETERS } from './renderer/avatar/A
 import { Skeleton, Bone } from './renderer/avatar/Skeleton';
 import { MorphController } from './renderer/avatar/MorphTarget';
 import { DEFAULT_AVATAR_MATERIAL } from './renderer/avatar/AvatarMaterial';
+import { createProceduralSkinMaps, destroyProceduralSkinMaps } from './renderer/ProceduralTextures';
 import { HDFrameRenderer } from './renderer/HDFrameRenderer';
 import { RenderResolution, RENDER_RESOLUTIONS } from './renderer/RenderResolution';
 import { HDRenderTarget } from './renderer/HDRenderTarget';
@@ -41,7 +42,9 @@ if (typeof window !== 'undefined') {
     Bone,
     MorphController,
     DEFAULT_AVATAR_PARAMETERS,
-    DEFAULT_AVATAR_MATERIAL
+    DEFAULT_AVATAR_MATERIAL,
+    createProceduralSkinMaps,
+    destroyProceduralSkinMaps
   };
 }
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';

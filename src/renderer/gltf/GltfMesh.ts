@@ -9,6 +9,7 @@ export interface GltfGpuPrimitive {
   indexType: number;
   mode: number;
   materialIndex: number;
+  skinIndex: number | null;
   skinOffset: number;
   morphTargets: GltfMorphTarget[];
 }
@@ -52,7 +53,7 @@ function morphData(asset: GltfAsset, primitive: GltfPrimitive): GltfMorphTarget[
   }));
 }
 
-export function uploadGltfPrimitive(gl: WebGL2RenderingContext, asset: GltfAsset, primitive: GltfPrimitive): GltfGpuPrimitive {
+export function uploadGltfPrimitive(gl: WebGL2RenderingContext, asset: GltfAsset, primitive: GltfPrimitive, skinIndex: number | null = null, skinOffset = 0): GltfGpuPrimitive {
   const vao = gl.createVertexArray();
   if (!vao) throw new Error('Unable to create glTF VAO');
   gl.bindVertexArray(vao);
@@ -81,7 +82,7 @@ export function uploadGltfPrimitive(gl: WebGL2RenderingContext, asset: GltfAsset
     indexCount = asset.json.accessors?.[positionAccessor]?.count ?? 0;
   }
   gl.bindVertexArray(null);
-  return { vao, vertexBuffers: buffers, indexBuffer, indexCount, indexType, mode: primitive.mode ?? gl.TRIANGLES, materialIndex: primitive.material ?? 0, skinOffset: 0, morphTargets: morphData(asset, primitive) };
+  return { vao, vertexBuffers: buffers, indexBuffer, indexCount, indexType, mode: primitive.mode ?? gl.TRIANGLES, materialIndex: primitive.material ?? 0, skinIndex, skinOffset, morphTargets: morphData(asset, primitive) };
 }
 
 export function destroyGltfPrimitive(gl: WebGL2RenderingContext, primitive: GltfGpuPrimitive): void {

@@ -27,7 +27,12 @@ at startup).
 > slope-scaled bias, strength) is milestone 3. HDR + IBL
 > (`IblPipeline.ts` — RGBA16F studio cubemaps, irradiance/prefiltered/
 > BRDF LUT, exposure + ACES) is milestone 4; production path is real HDR
-> equirectangular import + GPU convolution.
+> equirectangular import + GPU convolution. Advanced skin
+> (`AdvancedSkinMaterial.ts` — multi-channel scatter, pores, oil layer,
+> skin-tuned IBL) is milestone 5; the face/expression system
+> (`avatar/MorphTargets.ts`, `avatar/FaceControls.ts`, `avatar/Correctives.ts`,
+> `MorphShader.ts` — morph deltas, corrective shapes, wrinkle masks, blink)
+> is milestone 6.
 
 ## Wired into the Capacitor app
 

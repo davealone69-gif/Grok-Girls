@@ -37,8 +37,8 @@ import { AvatarMesh, createAvatarMesh } from './avatar/AvatarMesh';
 import { Bone, Skeleton } from './avatar/Skeleton';
 import { AvatarParameters, DEFAULT_AVATAR_PARAMETERS } from './avatar/AvatarParameters';
 import { AvatarMaterial, DEFAULT_AVATAR_MATERIAL } from './avatar/AvatarMaterial';
-import { createProceduralSkinTextures, destroyProceduralSkinTextures, createThicknessTexture, destroyThicknessTexture, ProceduralSkinTextures } from './ProceduralSkinTextures';
-import { DEFAULT_SUBSURFACE_RADIUS, DEFAULT_SUBSURFACE_STRENGTH, SkinMaterial } from './SkinMaterial';
+import { createProceduralSkinTextures, destroyProceduralSkinTextures, createThicknessTexture, destroyThicknessTexture, createSpecularTexture, destroySpecularTexture, createPoreTexture, destroyPoreTexture, createWrinkleTexture, destroyWrinkleTexture, ProceduralSkinTextures } from './ProceduralSkinTextures';
+import { DEFAULT_ADVANCED_SKIN_MATERIAL } from './AdvancedSkinMaterial';
 import { createEyeTextures, destroyEyeTextures, EyeTextures } from './EyeTextures';
 import { EyeShader } from './EyeShader';
 import { DEFAULT_EYE_PARAMETERS, DEFAULT_IRIS_COLOR } from './EyeMaterial';
@@ -82,12 +82,21 @@ layout(location = 0) out vec4 outColor;
 uniform sampler2D uBaseColorTexture;
 uniform sampler2D uRoughnessTexture;
 uniform sampler2D uNormalTexture;
-uniform sampler2D uThicknessTexture;
+uniform sampler2D uSkinThickness;
+uniform sampler2D uSkinSpecularMap;
+uniform sampler2D uSkinPore;
+uniform sampler2D uWrinkleMap;
 uniform vec4 uBaseColorFactor;
 uniform float uMetallicFactor;
 uniform float uRoughnessFactor;
 uniform float uSubsurfaceStrength;
-uniform vec3 uSubsurfaceRadius;
+uniform vec3 uScatterRadius;
+uniform float uEpidermalStrength;
+uniform float uOilStrength;
+uniform float uPoreStrength;
+uniform float uSkinSpecular;
+uniform float uWrinkleStrength;
+uniform float uExpressionIntensity;
 uniform vec3 uCameraPosition;
 uniform vec3 uLightPosition;
 uniform vec3 uLightColor;
@@ -105,9 +114,11 @@ uniform float uExposure;
 uniform vec3 uEmissiveFactor;
 const float PI = 3.14159265359;
 
-vec3 sampleNormal() {
+vec3 sampleNormal(float detailStrength) {
   vec3 N = normalize(vWorldNormal);
   vec3 tangentNormal = texture(uNormalTexture, vTexCoord).xyz * 2.0 - 1.0;
+  tangentNormal.xy *= detailStrength;
+  tangentNormal = normalize(tangentNormal);
   vec3 dp1 = dFdx(vWorldPosition);
   vec3 dp2 = dFdy(vWorldPosition);
   vec2 duv1 = dFdx(vTexCoord);
@@ -116,14 +127,6 @@ vec3 sampleNormal() {
   vec3 B = normalize(-dp1 * duv2.x + dp2 * duv1.x);
   mat3 TBN = mat3(T, B, N);
   return normalize(TBN * tangentNormal);
-}
-
-float distributionGGX(vec3 N, vec3 H, float roughness) {
-  float a = roughness * roughness;
-  float a2 = a * a;
-  float NdotH = max(dot(N, H), 0.0);
-  float d = NdotH * NdotH * (a2 - 1.0) + 1.0;
-  return a2 / max(PI * d * d, 0.000001);
 }
 
 
@@ -152,26 +155,40 @@ float calculateShadow(vec3 worldPosition, vec3 normal, vec3 lightDirection) {
   return mix(1.0, visibility, uShadowStrength);
 }
 
-vec3 calculateSubsurface(vec3 N, vec3 L, vec3 V, vec3 baseColor, float thickness) {
+vec3 skinScatter(vec3 N, vec3 L, vec3 V, vec3 albedo, float thickness) {
   float NdotL = dot(N, L);
-  float wrap = 0.35;
-  float wrapped = clamp((NdotL + wrap) / (1.0 + wrap), 0.0, 1.0);
-  vec3 viewLight = normalize(L + N * 0.35);
-  float backScatter = pow(max(dot(-V, viewLight), 0.0), 2.0);
-  float transmission = wrapped * backScatter * thickness;
-  vec3 scatterColor = baseColor * uSubsurfaceRadius;
-  return scatterColor * transmission * uSubsurfaceStrength;
+  // Wrapped diffuse lets light affect shallow skin angles.
+  float wrapped = clamp((NdotL + 0.45) / 1.45, 0.0, 1.0);
+  // Back-scattering term.
+  vec3 backLight = normalize(-L + N * 0.35);
+  float transmission = pow(max(dot(V, backLight), 0.0), 2.5);
+  // Multi-channel (red/green/blue) subsurface response.
+  vec3 redScatter = vec3(1.0, 0.28, 0.16);
+  vec3 greenScatter = vec3(0.45, 0.12, 0.08);
+  vec3 blueScatter = vec3(0.16, 0.035, 0.025);
+  vec3 scatter = redScatter * uScatterRadius.r;
+  scatter += greenScatter * uScatterRadius.g;
+  scatter += blueScatter * uScatterRadius.b;
+  return scatter * (wrapped * 0.45 + transmission * thickness) * albedo * uSubsurfaceStrength;
 }
 
-float geometrySchlickGGX(float NdotV, float roughness) {
-  float r = roughness + 1.0;
-  float k = r * r / 8.0;
-  return NdotV / max(NdotV * (1.0 - k) + k, 0.000001);
-}
-
-float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
-  return geometrySchlickGGX(max(dot(N, V), 0.0), roughness) *
-         geometrySchlickGGX(max(dot(N, L), 0.0), roughness);
+vec3 skinSpecular(vec3 N, vec3 V, vec3 L, float roughness, float specularStrength) {
+  vec3 H = normalize(V + L);
+  float NoV = max(dot(N, V), 0.0);
+  float NoL = max(dot(N, L), 0.0);
+  float NoH = max(dot(N, H), 0.0);
+  float VoH = max(dot(V, H), 0.0);
+  float a = roughness * roughness;
+  float a2 = a * a;
+  float denominator = NoH * NoH * (a2 - 1.0) + 1.0;
+  float D = a2 / max(PI * denominator * denominator, 0.00001);
+  float k = (roughness + 1.0);
+  k = k * k / 8.0;
+  float G = (NoV / max(NoV * (1.0 - k) + k, 0.00001)) *
+            (NoL / max(NoL * (1.0 - k) + k, 0.00001));
+  float F0 = 0.04 * specularStrength;
+  float F = F0 + (1.0 - F0) * pow(1.0 - VoH, 5.0);
+  return vec3(D * G * F / max(4.0 * NoV * NoL, 0.001));
 }
 
 vec3 fresnelSchlick(float cosTheta, vec3 F0) {
@@ -215,42 +232,59 @@ vec3 toneMapACES(vec3 x) {
 
 void main() {
   vec4 baseColor = texture(uBaseColorTexture, vTexCoord) * uBaseColorFactor;
-  float roughness = texture(uRoughnessTexture, vTexCoord).r * uRoughnessFactor;
-  roughness = clamp(roughness, 0.045, 1.0);
+  vec3 baseSkin = baseColor.rgb;
+
+  float baseRough = texture(uRoughnessTexture, vTexCoord).r * uRoughnessFactor;
+
+  float thickness = texture(uSkinThickness, vTexCoord).r;
+  float specularMap = texture(uSkinSpecularMap, vTexCoord).r;
+
+  // Pore microdetail — uniformly smooth skin reads as CG mannequin.
+  float pore = texture(uSkinPore, vTexCoord * 4.0).r;
+  float poreVariation = (pore - 0.5) * uPoreStrength;
+  float skinRoughness = clamp(baseRough + poreVariation, 0.04, 1.0);
+
+  // Expression-driven wrinkles (driven by uExpressionIntensity).
+  float wrinkleMask = texture(uWrinkleMap, vTexCoord).r;
+  float expressionWrinkle = wrinkleMask * uWrinkleStrength * uExpressionIntensity;
+  skinRoughness = clamp(skinRoughness + expressionWrinkle * 0.12, 0.04, 1.0);
+  float facialDetailStrength = 1.0 + expressionWrinkle * 0.35;
+
   float metallic = clamp(uMetallicFactor, 0.0, 1.0);
 
-  vec3 N = sampleNormal();
+  vec3 N = sampleNormal(facialDetailStrength);
   vec3 V = normalize(uCameraPosition - vWorldPosition);
   vec3 L = normalize(uLightPosition - vWorldPosition);
   vec3 H = normalize(V + L);
   float distanceToLight = length(uLightPosition - vWorldPosition);
   float attenuation = 1.0 / max(distanceToLight * distanceToLight, 0.01);
   vec3 radiance = uLightColor * uLightIntensity * attenuation;
-
-  vec3 F0 = mix(vec3(0.04), baseColor.rgb, metallic);
-  vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
-  float NDF = distributionGGX(N, H, roughness);
-  float G = geometrySmith(N, V, L, roughness);
-  vec3 specular = (NDF * G * F) / max(4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0), 0.001);
-
-  vec3 kS = F;
-  vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
   float NdotL = max(dot(N, L), 0.0);
-  vec3 diffuse = kD * baseColor.rgb / PI;
+
+  // Dielectric diffuse (skin is not a metal).
+  vec3 F0 = mix(vec3(0.04), baseSkin, metallic);
+  vec3 F = fresnelSchlick(max(dot(N, V), 0.0), F0);
+  vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+  vec3 diffuse = kD * baseSkin / PI;
+
   float shadow = calculateShadow(vWorldPosition, N, L);
 
-  vec3 lighting = (diffuse + specular) * radiance * NdotL * shadow;
+  // Multi-channel subsurface + broad specular + tight oil highlight.
+  vec3 scatter = skinScatter(N, L, V, baseSkin, thickness);
+  vec3 broadSpecular = skinSpecular(N, V, L, skinRoughness, uSkinSpecular * specularMap);
+  vec3 oilHighlight = skinSpecular(N, V, L, 0.12, uOilStrength);
 
-  vec3 diffuseIbl = calculateDiffuseIbl(N, baseColor.rgb, metallic);
-  vec3 specularIbl = calculateSpecularIbl(N, V, baseColor.rgb, metallic, roughness);
-  vec3 ambient = (diffuseIbl + specularIbl) * uIblIntensity;
+  vec3 skinLighting = (diffuse + broadSpecular + oilHighlight) * radiance * NdotL * shadow;
+  skinLighting += scatter * radiance;
+
+  // Skin-tuned IBL response.
+  vec3 diffuseIbl = calculateDiffuseIbl(N, baseSkin, metallic);
+  vec3 specularIbl = calculateSpecularIbl(N, V, baseSkin, metallic, skinRoughness);
+  vec3 skinIbl = (diffuseIbl * 0.72 + specularIbl * 1.15) * uIblIntensity;
 
   vec3 emissive = uEmissiveFactor;
 
-  float thickness = texture(uThicknessTexture, vTexCoord).r;
-  vec3 subsurface = calculateSubsurface(N, L, V, baseColor.rgb, thickness);
-
-  vec3 color = ambient + lighting + emissive + subsurface;
+  vec3 color = skinIbl + skinLighting + emissive;
 
   color *= pow(2.0, uExposure);
   color = toneMapACES(color);
@@ -298,7 +332,10 @@ const UNIFORM_NAMES = [
   'uLightPosition', 'uLightColor', 'uLightIntensity',
   'uBaseColorFactor', 'uMetallicFactor', 'uRoughnessFactor',
   'uBones', 'uBaseColorTexture', 'uRoughnessTexture', 'uNormalTexture',
-  'uThicknessTexture', 'uSubsurfaceStrength', 'uSubsurfaceRadius',
+  'uSkinThickness', 'uSkinSpecularMap', 'uSkinPore', 'uWrinkleMap',
+  'uSubsurfaceStrength', 'uScatterRadius',
+  'uEpidermalStrength', 'uOilStrength', 'uPoreStrength', 'uSkinSpecular',
+  'uWrinkleStrength', 'uExpressionIntensity',
   'uShadowMap', 'uLightViewProjection', 'uShadowBias', 'uShadowStrength',
   'uIrradianceMap', 'uPrefilteredMap', 'uBrdfLut',
   'uIblIntensity', 'uEnvironmentRotation', 'uExposure', 'uEmissiveFactor'
@@ -366,8 +403,17 @@ export class HdAvatarRenderer {
   private material: AvatarMaterial;
   private skinTextures: ProceduralSkinTextures | null = null;
   private thicknessTexture: WebGLTexture | null = null;
-  private subsurfaceStrength = DEFAULT_SUBSURFACE_STRENGTH;
-  private subsurfaceRadius: [number, number, number] = DEFAULT_SUBSURFACE_RADIUS;
+  private subsurfaceStrength = DEFAULT_ADVANCED_SKIN_MATERIAL.subsurfaceStrength;
+  private scatterRadius: [number, number, number] = [...DEFAULT_ADVANCED_SKIN_MATERIAL.scatterRadius] as [number, number, number];
+  private epidermalStrength = DEFAULT_ADVANCED_SKIN_MATERIAL.epidermalStrength;
+  private oilStrength = DEFAULT_ADVANCED_SKIN_MATERIAL.oilStrength;
+  private poreStrength = DEFAULT_ADVANCED_SKIN_MATERIAL.poreStrength;
+  private skinSpecular = DEFAULT_ADVANCED_SKIN_MATERIAL.specular;
+  private wrinkleStrength = 0.3;
+  private expressionIntensity = 0.0;
+  private specularTexture: WebGLTexture | null = null;
+  private poreTexture: WebGLTexture | null = null;
+  private wrinkleTexture: WebGLTexture | null = null;
   // eye system (milestone 1)
   private eyeTextures: EyeTextures | null = null;
   private eyeShader: EyeShader | null = null;
@@ -425,6 +471,11 @@ export class HdAvatarRenderer {
     this.skinTextures = createProceduralSkinTextures(gl, 1024);
     this.thicknessTexture = createThicknessTexture(gl, 1024);
 
+    // skin detail maps (milestone 5): specular, pore, wrinkle
+    this.specularTexture = createSpecularTexture(gl, 512);
+    this.poreTexture = createPoreTexture(gl, 512);
+    this.wrinkleTexture = createWrinkleTexture(gl, 512);
+
     // eye system: procedural eye maps + dedicated eye program + eye pair
     this.eyeTextures = createEyeTextures(gl, 1024);
     this.eyeShader = new EyeShader(gl);
@@ -478,6 +529,16 @@ export class HdAvatarRenderer {
   /** Exposure in EV (applied as 2^exposure before ACES tone mapping). */
   setExposure(value: number): void {
     this.exposure = Math.min(8, Math.max(0, value));
+  }
+
+  /** Expression intensity drives the wrinkle response in the skin shader. */
+  setExpressionIntensity(value: number): void {
+    this.expressionIntensity = Math.min(1, Math.max(0, value));
+  }
+
+  /** Wrinkle mask strength in the skin shader. */
+  setWrinkleStrength(value: number): void {
+    this.wrinkleStrength = Math.min(1, Math.max(0, value));
   }
   setKeyLight(x: number, y: number, z: number): void {
     this.lightPosition = [x, y, z];
@@ -537,6 +598,18 @@ export class HdAvatarRenderer {
     if (this.thicknessTexture) {
       destroyThicknessTexture(this.gl, this.thicknessTexture);
       this.thicknessTexture = null;
+    }
+    if (this.specularTexture) {
+      destroySpecularTexture(this.gl, this.specularTexture);
+      this.specularTexture = null;
+    }
+    if (this.poreTexture) {
+      destroyPoreTexture(this.gl, this.poreTexture);
+      this.poreTexture = null;
+    }
+    if (this.wrinkleTexture) {
+      destroyWrinkleTexture(this.gl, this.wrinkleTexture);
+      this.wrinkleTexture = null;
     }
     if (this.eyeTextures) {
       destroyEyeTextures(this.gl, this.eyeTextures);
@@ -814,11 +887,28 @@ export class HdAvatarRenderer {
     gl.uniform1i(u.uNormalTexture, 2);
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, this.thicknessTexture);
-    gl.uniform1i(u.uThicknessTexture, 3);
+    gl.uniform1i(u.uSkinThickness, 3);
 
-    // subsurface scattering (wrap light + thickness map)
+    // skin detail maps on units 8/9/10 (milestone 5)
+    gl.activeTexture(gl.TEXTURE8);
+    gl.bindTexture(gl.TEXTURE_2D, this.specularTexture);
+    gl.uniform1i(u.uSkinSpecularMap, 8);
+    gl.activeTexture(gl.TEXTURE9);
+    gl.bindTexture(gl.TEXTURE_2D, this.poreTexture);
+    gl.uniform1i(u.uSkinPore, 9);
+    gl.activeTexture(gl.TEXTURE10);
+    gl.bindTexture(gl.TEXTURE_2D, this.wrinkleTexture);
+    gl.uniform1i(u.uWrinkleMap, 10);
+
+    // skin scattering + oil/pore/specular + expression controls
     gl.uniform1f(u.uSubsurfaceStrength, this.subsurfaceStrength);
-    gl.uniform3f(u.uSubsurfaceRadius, this.subsurfaceRadius[0], this.subsurfaceRadius[1], this.subsurfaceRadius[2]);
+    gl.uniform3f(u.uScatterRadius, this.scatterRadius[0], this.scatterRadius[1], this.scatterRadius[2]);
+    gl.uniform1f(u.uEpidermalStrength, this.epidermalStrength);
+    gl.uniform1f(u.uOilStrength, this.oilStrength);
+    gl.uniform1f(u.uPoreStrength, this.poreStrength);
+    gl.uniform1f(u.uSkinSpecular, this.skinSpecular);
+    gl.uniform1f(u.uWrinkleStrength, this.wrinkleStrength);
+    gl.uniform1f(u.uExpressionIntensity, this.expressionIntensity);
 
     // shadow map on unit 7 (skin PBR pass only)
     const shadow = this.shadowMap;

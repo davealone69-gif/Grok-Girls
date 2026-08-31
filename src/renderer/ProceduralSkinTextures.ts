@@ -215,3 +215,101 @@ export function destroyThicknessTexture(
 ): void {
   gl.deleteTexture(texture);
 }
+
+/* ---- skin detail maps (milestone 5): specular / pore / wrinkle ---- */
+
+/** Specular map: mid-gray base with soft variation (scaled by uSkinSpecular). */
+function createSpecularCanvas(size: number): HTMLCanvasElement {
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Unable to create specular context');
+  ctx.fillStyle = '#8f8f8f';
+  ctx.fillRect(0, 0, size, size);
+  noise(ctx, size, 18);
+  return canvas;
+}
+
+export function createSpecularTexture(
+  gl: WebGL2RenderingContext,
+  size = 512
+): WebGLTexture {
+  return upload(gl, createSpecularCanvas(size));
+}
+
+export function destroySpecularTexture(
+  gl: WebGL2RenderingContext,
+  texture: WebGLTexture
+): void {
+  gl.deleteTexture(texture);
+}
+
+/** Pore map: dense fine dark speckle (sampled at 4x UV for microdetail). */
+function createPoreCanvas(size: number): HTMLCanvasElement {
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Unable to create pore context');
+  ctx.fillStyle = '#808080';
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 5000; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    ctx.fillStyle = `rgba(0,0,0,${0.05 + Math.random() * 0.16})`;
+    ctx.fillRect(x, y, 1 + Math.random() * 2, 1 + Math.random() * 2);
+  }
+  return canvas;
+}
+
+export function createPoreTexture(
+  gl: WebGL2RenderingContext,
+  size = 512
+): WebGLTexture {
+  return upload(gl, createPoreCanvas(size));
+}
+
+export function destroyPoreTexture(
+  gl: WebGL2RenderingContext,
+  texture: WebGLTexture
+): void {
+  gl.deleteTexture(texture);
+}
+
+/** Wrinkle mask: faint curved streak detail (driven by expression). */
+function createWrinkleCanvas(size: number): HTMLCanvasElement {
+  const canvas = makeCanvas(size);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Unable to create wrinkle context');
+  ctx.fillStyle = '#2e2e2e';
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 90; i++) {
+    const x0 = Math.random() * size;
+    const y0 = Math.random() * size;
+    const len = 30 + Math.random() * 90;
+    const angle = Math.random() * Math.PI;
+    ctx.strokeStyle = `rgba(255,255,255,${0.04 + Math.random() * 0.08})`;
+    ctx.lineWidth = 0.8 + Math.random() * 1.6;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.quadraticCurveTo(
+      x0 + Math.cos(angle) * len * 0.5 + (Math.random() - 0.5) * 24,
+      y0 + Math.sin(angle) * len * 0.5 + (Math.random() - 0.5) * 24,
+      x0 + Math.cos(angle) * len,
+      y0 + Math.sin(angle) * len
+    );
+    ctx.stroke();
+  }
+  return canvas;
+}
+
+export function createWrinkleTexture(
+  gl: WebGL2RenderingContext,
+  size = 512
+): WebGLTexture {
+  return upload(gl, createWrinkleCanvas(size));
+}
+
+export function destroyWrinkleTexture(
+  gl: WebGL2RenderingContext,
+  texture: WebGLTexture
+): void {
+  gl.deleteTexture(texture);
+}

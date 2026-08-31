@@ -25,7 +25,12 @@ import { Skeleton, Bone } from './renderer/avatar/Skeleton';
 import { MorphController } from './renderer/avatar/MorphTarget';
 import { DEFAULT_AVATAR_MATERIAL } from './renderer/avatar/AvatarMaterial';
 import { createProceduralSkinTextures, destroyProceduralSkinTextures, createThicknessTexture, destroyThicknessTexture } from './renderer/ProceduralSkinTextures';
-import { DEFAULT_SUBSURFACE_RADIUS, DEFAULT_SUBSURFACE_STRENGTH } from './renderer/SkinMaterial';
+import { DEFAULT_ADVANCED_SKIN_MATERIAL } from './renderer/AdvancedSkinMaterial';
+import { createSpecularTexture, destroySpecularTexture, createPoreTexture, destroyPoreTexture, createWrinkleTexture, destroyWrinkleTexture } from './renderer/ProceduralSkinTextures';
+import { MorphShader } from './renderer/MorphShader';
+import { createFaceControls, applyFaceControls, FaceExpressionController, BlinkController } from './renderer/avatar/FaceControls';
+import { correctiveRules, evaluateCorrectives } from './renderer/avatar/Correctives';
+import { uploadMorphWeights } from './renderer/avatar/MorphTargets';
 import { createEyeTextures, destroyEyeTextures } from './renderer/EyeTextures';
 import { EyeShader } from './renderer/EyeShader';
 import { DEFAULT_EYE_PARAMETERS, DEFAULT_IRIS_COLOR } from './renderer/EyeMaterial';
@@ -57,8 +62,21 @@ if (typeof window !== 'undefined') {
     destroyProceduralSkinTextures,
     createThicknessTexture,
     destroyThicknessTexture,
-    DEFAULT_SUBSURFACE_STRENGTH,
-    DEFAULT_SUBSURFACE_RADIUS,
+    DEFAULT_ADVANCED_SKIN_MATERIAL,
+    createSpecularTexture,
+    destroySpecularTexture,
+    createPoreTexture,
+    destroyPoreTexture,
+    createWrinkleTexture,
+    destroyWrinkleTexture,
+    MorphShader,
+    createFaceControls,
+    applyFaceControls,
+    FaceExpressionController,
+    BlinkController,
+    correctiveRules,
+    evaluateCorrectives,
+    uploadMorphWeights,
     createEyeTextures,
     destroyEyeTextures,
     EyeShader,
@@ -478,6 +496,8 @@ export default function App() {
       setRotation: (x: number, y: number) => avatar3dRef.current?.setRotation(x, y),
       setMaterial: (m: number, r: number) => avatar3dRef.current?.setMaterial(m, r),
       setExposure: (v: number) => avatar3dRef.current?.setExposure(v),
+      setExpressionIntensity: (v: number) => avatar3dRef.current?.setExpressionIntensity(v),
+      setWrinkleStrength: (v: number) => avatar3dRef.current?.setWrinkleStrength(v),
       setKeyLight: (x: number, y: number, z: number) => avatar3dRef.current?.setKeyLight(x, y, z),
       setParameters: (p: AvatarParameters) => avatar3dRef.current?.setParameters(p),
       setAutoRotate: (v: boolean) => avatar3dRef.current?.setAutoRotate(v),

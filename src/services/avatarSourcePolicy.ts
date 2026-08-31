@@ -1,0 +1,2 @@
+export type AvatarSourcePolicy='agent-id'|'public-image'|'memory-image';
+export function validateAvatarSource(policy:AvatarSourcePolicy,value:unknown):void{if(typeof value!=='string'&&policy!=='memory-image')throw new Error('Avatar source is required');if(policy==='agent-id'&&typeof value==='string'&&!value.trim())throw new Error('Agent ID is empty');if(policy==='public-image'&&typeof value==='string'&&!/^https?:\/\//i.test(value))throw new Error('Avatar image must be an HTTP(S) URL');}

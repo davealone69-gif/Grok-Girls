@@ -7,8 +7,8 @@ precision highp float;
 layout(location=0) in vec3 aPosition;
 layout(location=1) in vec3 aNormal;
 layout(location=2) in vec2 aUV;
-layout(location=3) in uvec4 aJoints;
-layout(location=4) in vec4 aWeights;
+layout(location=4) in uvec4 aJoints;
+layout(location=5) in vec4 aWeights;
 uniform mat4 uModel,uView,uProjection;
 uniform mat4 uBones[128];
 uniform int uSkinOffset;
@@ -65,7 +65,8 @@ void main(){
   vec3 N=normalize(vNormal);
   if(uHasNormal){
     vec3 map=texture(uNormal,vUV).xyz*2.0-1.0;
-    vec3 dp1=dFdx(vWorld),dp2=dFdy(vWorld),duv1=dFdx(vUV),duv2=dFdy(vUV);
+    vec3 dp1=dFdx(vWorld),dp2=dFdy(vWorld);
+    vec2 duv1=dFdx(vUV),duv2=dFdy(vUV);
     vec3 T=normalize(dp1*duv2.y-dp2*duv1.y);
     vec3 B=normalize(cross(N,T));
     N=normalize(mat3(T,B,N)*vec3(map.xy*uNormalScale,map.z));
@@ -89,7 +90,7 @@ void main(){
   outColor=vec4(pow(max(color,0.0),vec3(1.0/2.2)),base.a);
 }`;
 
-function shader(gl: WebGL2RenderingContext,type:number,src:string):WebGLShader{
+function shader(gl:WebGL2RenderingContext,type:number,src:string):WebGLShader{
   const s=gl.createShader(type); if(!s) throw new Error('GL shader allocation failed');
   gl.shaderSource(s,src); gl.compileShader(s);
   if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)??'GL shader compile failed');
@@ -158,7 +159,7 @@ export class GltfHdPbrRenderer {
       const bind=(name:string,unit:number,index:number|null)=>{const tex=index===null?null:this.avatar?.textures.get(index);gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,tex??null);gl.uniform1i(gl.getUniformLocation(this.program,name),unit);return tex!==undefined&&tex!==null;};
       const hasBase=bind('uBaseColor',0,m?.baseColorTextureIndex??null),hasMR=bind('uMetallicRoughness',1,m?.metallicRoughnessTextureIndex??null),hasNormal=bind('uNormal',2,m?.normalTextureIndex??null),hasAo=bind('uOcclusion',3,m?.occlusionTextureIndex??null);
       gl.uniformMatrix4fv(gl.getUniformLocation(this.program,'uModel'),false,node);
-      gl.uniform1i(gl.getUniformLocation(this.program,'uSkinned'),item.skinIndex===null?0:1);
+      gl.uniform1i(gl.getUniformLocation(this.program,'uSkinned'),item.primitive.skinIndex===null?0:1);
       gl.uniform1i(gl.getUniformLocation(this.program,'uSkinOffset'),item.primitive.skinOffset);
       gl.uniform1i(gl.getUniformLocation(this.program,'uHasBase'),hasBase?1:0);gl.uniform1i(gl.getUniformLocation(this.program,'uHasMR'),hasMR?1:0);gl.uniform1i(gl.getUniformLocation(this.program,'uHasNormal'),hasNormal?1:0);gl.uniform1i(gl.getUniformLocation(this.program,'uHasOcclusion'),hasAo?1:0);
       gl.uniform4fv(gl.getUniformLocation(this.program,'uBaseFactor'),new Float32Array(m?.baseColorFactor??[1,1,1,1]));

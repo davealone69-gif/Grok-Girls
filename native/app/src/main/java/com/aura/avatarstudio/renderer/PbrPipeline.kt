@@ -490,19 +490,23 @@ object PbrPipeline {
         return shader
     }
 
-    private fun floatBuffer(data: FloatArray): FloatBuffer =
-        ByteBuffer.allocateDirect(data.size * 4)
+    private fun floatBuffer(data: FloatArray): FloatBuffer {
+        val buffer = ByteBuffer.allocateDirect(data.size * 4)
             .order(ByteOrder.nativeOrder())
             .asFloatBuffer()
-            .put(data)
-            .position(0)
+        buffer.put(data)
+        buffer.position(0)  // returns Buffer on the Android stubs — ignore
+        return buffer
+    }
 
-    private fun intBuffer(data: IntArray): IntBuffer =
-        ByteBuffer.allocateDirect(data.size * 4)
+    private fun intBuffer(data: IntArray): IntBuffer {
+        val buffer = ByteBuffer.allocateDirect(data.size * 4)
             .order(ByteOrder.nativeOrder())
             .asIntBuffer()
-            .put(data)
-            .position(0)
+        buffer.put(data)
+        buffer.position(0)  // returns Buffer on the Android stubs — ignore
+        return buffer
+    }
 
     private const val TAG = "PbrPipeline"
 }

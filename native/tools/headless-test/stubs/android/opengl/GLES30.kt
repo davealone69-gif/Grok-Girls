@@ -61,6 +61,9 @@ object GLES30 {
     fun glBindVertexArray(array: Int) {}
     fun glBlendFunc(sfactor: Int, dfactor: Int) {}
     fun glBufferData(target: Int, size: Int, data: java.nio.Buffer?, usage: Int) {}
+    fun glBufferData(target: Int, size: Int, data: java.nio.FloatBuffer?, usage: Int) {}
+    fun glBufferData(target: Int, size: Int, data: java.nio.IntBuffer?, usage: Int) {}
+    fun glBufferData(target: Int, size: Int, data: java.nio.ShortBuffer?, usage: Int) {}
     fun glClear(mask: Int) {}
     fun glClearColor(red: Float, green: Float, blue: Float, alpha: Float) {}
     fun glCompileShader(shader: Int) {}

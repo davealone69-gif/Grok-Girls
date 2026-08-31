@@ -7,6 +7,14 @@ import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, Gallery
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
 import { DEFAULT_MENU, loadMenuXml, MenuItem, menuSection } from './services/menuXml';
+import {
+  DEFAULT_AVATAR_DEFINITION,
+  applyAvatarDefinition,
+  loadAvatarDefinition,
+  saveAvatarDefinition,
+  toAvatarDefinition,
+  AvatarDefinition
+} from './models/avatarDefinition';
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
 import { isAgeConfirmed, confirmAdultAge } from './services/ageGate';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
@@ -384,6 +392,39 @@ export default function App() {
     menuItems.find(i => i.id === id)?.label ?? DEFAULT_MENU.find(i => i.id === id)?.label ?? id;
   const menuTitle = (id: string) =>
     menuItems.find(i => i.id === id)?.title ?? DEFAULT_MENU.find(i => i.id === id)?.title ?? '';
+
+  // ---- canonical AvatarDefinition (Kotlin data-class mirror) ----
+  const [avatarIdInput, setAvatarIdInput] = useState('default');
+  const identityId = () => avatarIdInput.trim() || 'default';
+  const saveIdentity = () => {
+    const def = toAvatarDefinition(draft);
+    saveAvatarDefinition(identityId(), def);
+    showToast(`Identity saved as "${identityId()}"`);
+  };
+  const loadOutfit = () => {
+    const def = loadAvatarDefinition(identityId()) ?? DEFAULT_AVATAR_DEFINITION;
+    setDraft(d => ({ ...d, outfit: applyAvatarDefinition(d, def).outfit }));
+    showToast(def === DEFAULT_AVATAR_DEFINITION ? 'No saved identity — applied Casual outfit' : `Outfit loaded from "${identityId()}"`);
+  };
+  const toggleTattoos = () => {
+    setDraft(d => {
+      const on = !!d.tattooStyle && d.tattooStyle !== 'none';
+      return {
+        ...d,
+        tattooStyle: on ? 'none' : 'floral noir',
+        tattoosCount: on ? 0 : 6
+      };
+    });
+  };
+  const toggleAugments = () => {
+    setDraft(d => ({ ...d, augmentStyle: d.augmentStyle ? undefined : 'subtle cyber seams' }));
+  };
+  const optionsAction = (id: string) => {
+    if (id === 'save') saveIdentity();
+    else if (id === 'load_outfit') loadOutfit();
+    else if (id === 'toggle_tattoos') toggleTattoos();
+    else if (id === 'toggle_augments') toggleAugments();
+  };
 
   // ---- menu-driven actions (ids come from menu.xml) ----
   const RAIL_ICONS: Record<string, string> = {
@@ -2121,6 +2162,38 @@ export default function App() {
           </div>
 
         <div className="lower-dock">
+          {/* Identity card (canonical AvatarDefinition, menu.xml options panel) */}
+          <div className="identity-strip">
+            <span className="identity-strip-title">IDENTITY</span>
+            <input
+              className="identity-avatar-id"
+              value={avatarIdInput}
+              onChange={e => setAvatarIdInput(e.target.value)}
+              placeholder={menuSection(menuItems, 'options').find(i => i.id === 'avatar_id')?.hint || 'Avatar ID'}
+              aria-label="Avatar ID"
+            />
+            <button className="identity-btn" onClick={() => optionsAction('load_outfit')} title={menuTitle('load_outfit')}>
+              {menuLabel('load_outfit')}
+            </button>
+            <button
+              className={`identity-btn ${draft.tattooStyle && draft.tattooStyle !== 'none' ? 'identity-on' : ''}`}
+              onClick={() => optionsAction('toggle_tattoos')}
+              title={menuTitle('toggle_tattoos')}
+            >
+              {menuLabel('toggle_tattoos')}
+            </button>
+            <button
+              className={`identity-btn ${draft.augmentStyle ? 'identity-on' : ''}`}
+              onClick={() => optionsAction('toggle_augments')}
+              title={menuTitle('toggle_augments')}
+            >
+              {menuLabel('toggle_augments')}
+            </button>
+            <button className="identity-btn identity-save" onClick={() => optionsAction('save')} title={menuTitle('save')}>
+              {menuLabel('save')}
+            </button>
+          </div>
+
           {/* Left: Hair & Color Wheel */}
           <div className="dock-hair-section">
             <div className="dock-tabs">

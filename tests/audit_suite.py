@@ -263,6 +263,57 @@ with sync_playwright() as p:
     chk("faulty menu XML: no page errors", len(errs) == 0, errs[:1])
     ctx.close()
 
+    # --- 8) AVATAR DEFINITION (Kotlin data-class mirror) ---
+    ctx = b.new_context(viewport={"width": 1280, "height": 900})
+    pg = ctx.new_page()
+    pg.goto("http://localhost:8080/", wait_until="networkidle")
+    pg.wait_for_timeout(700)
+
+    # SAVE the current identity under the default Avatar ID -> the stored
+    # definition must carry exactly the 11 data-class fields, with the
+    # canonical defaults where the trait is untouched.
+    pg.locator(".identity-save").click()
+    pg.wait_for_timeout(500)
+    saved = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-avatar-defs-v1')||'{}')['default']")
+    keys_ok = bool(saved) and sorted(saved.keys()) == sorted(
+        ["gender", "skin", "head", "age", "hair", "eyes", "face", "body", "tattoos", "augmentations", "outfit"])
+    chk("avatar definition: all 11 data-class fields stored", keys_ok, str(sorted(saved.keys()))[:120] if saved else "none")
+    chk("avatar definition: gender follows the allowed set", saved and saved.get("gender") in ("Female", "Non-binary", "Android"), str(saved and saved.get("gender")))
+    import re as _re
+    chk("avatar definition: canonical defaults (skin/head)",
+        saved and saved.get("skin") == "Tone 01" and bool(_re.match(r"Head \d{2}", saved.get("head", ""))),
+        str(saved)[:120])
+
+    # custom stored definition -> Load Outfit applies the canonical outfit
+    pg.evaluate("""() => {
+      const store = JSON.parse(localStorage.getItem('grok-girls-avatar-defs-v1')||'{}');
+      store['default'] = {"gender":"Female","skin":"Tone 02","head":"Head 02","age":"Adult","hair":"Long","eyes":"Cyber","face":"Sharp","body":"Curvy","tattoos":"Floral","augmentations":"None","outfit":"Cyber"};
+      localStorage.setItem('grok-girls-avatar-defs-v1', JSON.stringify(store));
+    }""")
+    pg.locator(".identity-btn", has_text="Load Outfit").click()
+    pg.wait_for_timeout(500)
+    after = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}')")
+    chk("avatar definition: Load Outfit applies saved outfit", after.get("outfit", "").startswith("cyberpunk"), after.get("outfit", "")[:60])
+
+    # tattoos toggle flips the canonical field on the draft (Ruby boots
+    # with tattooStyle 'none' — one click must switch it ON)
+    before_ts = pg.evaluate("() => (JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}')).tattooStyle")
+    pg.locator(".identity-btn", has_text="Tattoos").click()
+    pg.wait_for_timeout(500)
+    t = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}')")
+    chk("avatar definition: tattoos toggle sets canonical style",
+        before_ts != t.get("tattooStyle") and t.get("tattooStyle") == "floral noir",
+        f"{before_ts} -> {t.get('tattooStyle')}")
+
+    # unknown Avatar ID -> Load Outfit falls back to the DEFAULT definition
+    pg.locator(".identity-avatar-id").fill("zzz_none")
+    pg.wait_for_timeout(200)
+    pg.locator(".identity-btn", has_text="Load Outfit").click()
+    pg.wait_for_timeout(500)
+    fb = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}')")
+    chk("avatar definition: missing ID falls back to Casual", "silk robe" in fb.get("outfit", ""), fb.get("outfit", "")[:60])
+    ctx.close()
+
     b.close()
 
 print(json.dumps(results, indent=1))

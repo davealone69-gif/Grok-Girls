@@ -40,6 +40,11 @@ import { DEFAULT_HAIR_PARAMETERS } from './renderer/HairMaterial';
 import { createShadowMap, destroyShadowMap } from './renderer/ShadowMap';
 import { ShadowShader } from './renderer/ShadowShader';
 import { createIblPipeline, destroyIblPipeline, generateStudioEnvironment, DEFAULT_IBL_SETTINGS } from './renderer/IblPipeline';
+import { CinematicPipeline, CinematicRenderer, createFullscreenTriangle } from './renderer/CinematicPipeline';
+import { parseGlb } from './renderer/avatar/GlbLoader';
+import { readAccessor } from './renderer/avatar/GltfAccessor';
+import { loadAvatarGlb, disposeAvatarAsset, updateSkeleton } from './renderer/avatar/GltfAvatar';
+import { computeGlobalTransforms, evaluateSkins } from './renderer/avatar/GltfSkeleton';
 import { HDFrameRenderer } from './renderer/HDFrameRenderer';
 import { RenderResolution, RENDER_RESOLUTIONS } from './renderer/RenderResolution';
 import { HDRenderTarget } from './renderer/HDRenderTarget';
@@ -92,7 +97,17 @@ if (typeof window !== 'undefined') {
     createIblPipeline,
     destroyIblPipeline,
     generateStudioEnvironment,
-    DEFAULT_IBL_SETTINGS
+    DEFAULT_IBL_SETTINGS,
+    CinematicPipeline,
+    CinematicRenderer,
+    createFullscreenTriangle,
+    parseGlb,
+    readAccessor,
+    loadAvatarGlb,
+    disposeAvatarAsset,
+    updateSkeleton,
+    computeGlobalTransforms,
+    evaluateSkins
   };
 }
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
@@ -498,6 +513,7 @@ export default function App() {
       setExposure: (v: number) => avatar3dRef.current?.setExposure(v),
       setExpressionIntensity: (v: number) => avatar3dRef.current?.setExpressionIntensity(v),
       setWrinkleStrength: (v: number) => avatar3dRef.current?.setWrinkleStrength(v),
+      loadGlb: (data: ArrayBuffer) => avatar3dRef.current?.loadGlb(data),
       setKeyLight: (x: number, y: number, z: number) => avatar3dRef.current?.setKeyLight(x, y, z),
       setParameters: (p: AvatarParameters) => avatar3dRef.current?.setParameters(p),
       setAutoRotate: (v: boolean) => avatar3dRef.current?.setAutoRotate(v),

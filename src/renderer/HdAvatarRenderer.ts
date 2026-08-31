@@ -22,6 +22,12 @@
 /*  - HDR + IBL (milestone 4): bootstrap studio cubemaps (irradiance   */
 /*    64², prefiltered 512², BRDF LUT 256²) on units 4/5/6, diffuse +  */
 /*    specular IBL in the skin pass, exposure (2^ev) + ACES tone map   */
+/*  - CINEMATIC (milestone 7): single output pipeline — HDR scene ->   */
+/*    bloom extract/blur -> DOF -> TAA -> exposure -> ACES -> display  */
+/*  - GLB PARITY (milestone 8): GLB loader (parser/accessors/meshes/   */
+/*    images/materials/skins/morphs) rendering through the existing    */
+/*    skin program + shadow + cinematic passes (uSkinned + morph       */
+/*    uniforms in the skin vertex shader)                              */
 /*  - GPU skinning path: when a Skeleton is bound, uBones[128] drive   */
 /*    a 17-float/vertex skinned mesh (avatar_skin.vert layout)        */
 /*  - AvatarParameters modulate bone scales (height/chest/waist/hips/  */
@@ -48,6 +54,9 @@ import { DEFAULT_HAIR_PARAMETERS } from './HairMaterial';
 import { createShadowMap, destroyShadowMap, ShadowMap } from './ShadowMap';
 import { ShadowShader } from './ShadowShader';
 import { createIblPipeline, destroyIblPipeline, DEFAULT_IBL_SETTINGS, IblPipeline } from './IblPipeline';
+import { CinematicRenderer } from './CinematicPipeline';
+import { loadAvatarGlb, AvatarAsset, disposeAvatarAsset } from './avatar/GltfAvatar';
+import { WebPbrMaterial } from './avatar/GltfMaterial';
 
 /* 300 es — vertex shader for the non-skinned path. Native attribute
  * layout: 0 pos, 1 normal, 2 uv, 3 tangent (vec4, w = handedness). */
@@ -296,6 +305,9 @@ void main() {
 
 /* avatar_skin.vert — GPU skinning (4 weights, uBones[128]).
  * Shares the fragment's varyings with the plain vertex shader. */
+/* avatar_skin.vert — GPU skinning (4 weights, uBones[128]) + GPU morph
+ * blending (uMorph*[64], weight-guarded) + uSkinned switch so GLB
+ * primitives (skinned or not) share this vertex stage. */
 const SKIN_VERTEX_SHADER = `#version 300 es
 precision highp float;
 layout(location = 0) in vec3 aPosition;
@@ -304,7 +316,12 @@ layout(location = 2) in vec2 aTexCoord;
 layout(location = 4) in uvec4 aBoneIndices;
 layout(location = 5) in vec4 aBoneWeights;
 const int MAX_BONES = 128;
+const int MAX_MORPHS = 64;
 uniform mat4 uBones[MAX_BONES];
+uniform bool uSkinned;
+uniform vec3 uMorphPosition[MAX_MORPHS];
+uniform vec3 uMorphNormal[MAX_MORPHS];
+uniform float uMorphWeight[MAX_MORPHS];
 uniform mat4 uModel;
 uniform mat4 uView;
 uniform mat4 uProjection;
@@ -312,12 +329,32 @@ out vec3 vWorldPosition;
 out vec3 vWorldNormal;
 out vec2 vTexCoord;
 void main() {
-  mat4 skin = uBones[aBoneIndices.x] * aBoneWeights.x;
-  skin += uBones[aBoneIndices.y] * aBoneWeights.y;
-  skin += uBones[aBoneIndices.z] * aBoneWeights.z;
-  skin += uBones[aBoneIndices.w] * aBoneWeights.w;
-  vec4 skinnedPosition = skin * vec4(aPosition, 1.0);
-  vec3 skinnedNormal = mat3(skin) * aNormal;
+  vec3 position = aPosition;
+  vec3 normal = aNormal;
+  float morphTotal = 0.0;
+  for (int i = 0; i < MAX_MORPHS; i++) {
+    morphTotal += uMorphWeight[i];
+  }
+  if (morphTotal > 0.0001) {
+    for (int i = 0; i < MAX_MORPHS; i++) {
+      position += uMorphPosition[i] * uMorphWeight[i];
+      normal += uMorphNormal[i] * uMorphWeight[i];
+    }
+    normal = normalize(normal);
+  }
+  vec4 skinnedPosition = vec4(position, 1.0);
+  vec3 skinnedNormal = normal;
+  if (uSkinned) {
+    mat4 skin = uBones[aBoneIndices.x] * aBoneWeights.x;
+    skin += uBones[aBoneIndices.y] * aBoneWeights.y;
+    skin += uBones[aBoneIndices.z] * aBoneWeights.z;
+    skin += uBones[aBoneIndices.w] * aBoneWeights.w;
+    float total = aBoneWeights.x + aBoneWeights.y + aBoneWeights.z + aBoneWeights.w;
+    if (total > 0.0001) {
+      skinnedPosition = skin * skinnedPosition;
+      skinnedNormal = mat3(skin) * skinnedNormal;
+    }
+  }
   vec4 worldPosition = uModel * skinnedPosition;
   vWorldPosition = worldPosition.xyz;
   vWorldNormal = normalize(mat3(uModel) * skinnedNormal);
@@ -338,7 +375,8 @@ const UNIFORM_NAMES = [
   'uWrinkleStrength', 'uExpressionIntensity',
   'uShadowMap', 'uLightViewProjection', 'uShadowBias', 'uShadowStrength',
   'uIrradianceMap', 'uPrefilteredMap', 'uBrdfLut',
-  'uIblIntensity', 'uEnvironmentRotation', 'uExposure', 'uEmissiveFactor'
+  'uIblIntensity', 'uEnvironmentRotation', 'uExposure', 'uEmissiveFactor',
+  'uSkinned', 'uMorphPosition', 'uMorphNormal', 'uMorphWeight'
 ];
 
 function cacheUniforms(
@@ -380,6 +418,42 @@ export interface HdAvatarRendererOptions {
   parameters?: AvatarParameters;
   material?: AvatarMaterial;
 }
+
+/** Bind a GLB PBR material onto the skin program's factor + texture
+ *  uniforms (slots that exist in the fragment; occlusion/emissive
+ *  samplers are deferred to the unified material pass). */
+function bindGlbMaterial(
+  gl: WebGL2RenderingContext,
+  u: UniformCache,
+  material: WebPbrMaterial
+): void {
+  gl.uniform4f(u.uBaseColorFactor, material.baseColor[0], material.baseColor[1], material.baseColor[2], material.baseColor[3]);
+  gl.uniform1f(u.uMetallicFactor, material.metallic);
+  gl.uniform1f(u.uRoughnessFactor, material.roughness);
+  gl.uniform3f(u.uEmissiveFactor, material.emissive[0], material.emissive[1], material.emissive[2]);
+
+  if (material.baseColorTexture) {
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, material.baseColorTexture);
+    gl.uniform1i(u.uBaseColorTexture, 0);
+  }
+  // glTF MR map: G=roughness, B=metallic — bound to uRoughnessTexture;
+  // channel mapping documented for the unified material pass.
+  if (material.metallicRoughnessTexture) {
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, material.metallicRoughnessTexture);
+    gl.uniform1i(u.uRoughnessTexture, 1);
+  }
+  if (material.normalTexture) {
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, material.normalTexture);
+    gl.uniform1i(u.uNormalTexture, 2);
+  }
+}
+
+/** Zero-filled morph slots for primitives without morph targets. */
+const ZERO_MORPH_POSITION = new Float32Array(64 * 3);
+const ZERO_MORPH_WEIGHT = new Float32Array(64);
 
 export class HdAvatarRenderer {
   private gl: WebGL2RenderingContext;
@@ -449,6 +523,10 @@ export class HdAvatarRenderer {
   private iblIntensity = DEFAULT_IBL_SETTINGS.intensity;
   private environmentRotation = DEFAULT_IBL_SETTINGS.rotation;
   private exposure = DEFAULT_IBL_SETTINGS.exposure;
+  // cinematic output pipeline (milestone 7)
+  private cinematic: CinematicRenderer | null = null;
+  // GLB parity (milestone 8)
+  private glbAsset: AvatarAsset | null = null;
   private uniforms = new Map<WebGLProgram, UniformCache>();
   private frameRenderer: HDFrameRenderer | null = null;
   private autoRotate = true;
@@ -495,6 +573,9 @@ export class HdAvatarRenderer {
 
     // HDR + IBL: bootstrap studio environment (irradiance/prefiltered/BRDF)
     this.ibl = createIblPipeline(gl, 512);
+
+    // cinematic output pipeline (milestone 7)
+    this.cinematic = new CinematicRenderer(gl);
 
     // uniform location cache (one entry set per program; both programs
     // share the same fragment uniforms)
@@ -637,6 +718,12 @@ export class HdAvatarRenderer {
       destroyIblPipeline(this.gl, this.ibl);
       this.ibl = null;
     }
+    this.cinematic?.dispose();
+    this.cinematic = null;
+    if (this.glbAsset) {
+      disposeAvatarAsset(this.gl, this.glbAsset);
+      this.glbAsset = null;
+    }
     this.mesh.destroy(this.gl);
     this.frameRenderer?.destroy();
     this.gl.deleteProgram(this.program);
@@ -662,17 +749,24 @@ export class HdAvatarRenderer {
     // ---- 1. shadow depth pass (once per frame) ----
     this.renderShadowPass();
 
-    // ---- HD off-screen pass (native onDrawFrame) ----
-    this.frameRenderer?.beginFrame();
-    this.renderScene(w, h, false);
-    this.frameRenderer?.endFrame(w, h);
+    if (this.cinematic) {
+      // cinematic pipeline: HDR scene -> bloom -> DOF -> TAA -> ACES
+      this.cinematic.render(() => {
+        this.renderScene(w, h, true);
+      });
+    } else {
+      // ---- HD off-screen pass (native onDrawFrame) ----
+      this.frameRenderer?.beginFrame();
+      this.renderScene(w, h, false);
+      this.frameRenderer?.endFrame(w, h);
 
-    // ---- screen preview ----
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, w, h);
-    gl.clearColor(0.015, 0.018, 0.024, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    this.renderScene(w, h, true);
+      // ---- screen preview ----
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, w, h);
+      gl.clearColor(0.015, 0.018, 0.024, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      this.renderScene(w, h, true);
+    }
 
     const err = gl.getError();
     if (err !== 0) this.glErrors.push(err);
@@ -727,6 +821,7 @@ export class HdAvatarRenderer {
 
     this.drawEyes(gl);
     this.drawHair(gl);
+    this.drawGlb(gl);
   }
 
   /** HAIR — strand anisotropic material over the skull region. */
@@ -816,6 +911,62 @@ export class HdAvatarRenderer {
       shader.setModel(this.hairModelMatrix());
       this.hairMesh.draw(this.gl);
     }
+    const asset = this.glbAsset;
+    if (asset) {
+      for (const prim of asset.primitives) {
+        shader.setModel(asset.meshModels[prim.meshIndex] ?? mat4Identity());
+        const gl = this.gl;
+        gl.bindVertexArray(prim.vao);
+        if (prim.indexBuffer) {
+          gl.drawElements(gl.TRIANGLES, prim.indexCount, prim.indexType, 0);
+        } else {
+          gl.drawArrays(gl.TRIANGLES, 0, prim.vertexCount);
+        }
+        gl.bindVertexArray(null);
+      }
+    }
+  }
+
+  /** Load a GLB avatar and draw it through the existing skin pipeline. */
+  async loadGlb(data: ArrayBuffer): Promise<void> {
+    this.glbAsset = await loadAvatarGlb(this.gl, data);
+  }
+
+  /** GLB parity: draw all primitives through the skin program/fragment. */
+  private drawGlb(gl: WebGL2RenderingContext): void {
+    const asset = this.glbAsset;
+    if (!asset) return;
+    const u = this.uniforms.get(this.skinProgram) ?? {};
+    gl.useProgram(this.skinProgram);
+    this.applyCommonUniforms(gl, this.skinProgram);
+    if (u.uBones) gl.uniformMatrix4fv(u.uBones, false, asset.jointMatrices);
+
+    for (const prim of asset.primitives) {
+      gl.uniform1i(u.uSkinned, prim.skinned ? 1 : 0);
+
+      // GPU morph deltas (milestone 8 -> milestone 6 face system)
+      if (prim.morphs) {
+        if (u.uMorphPosition) gl.uniform3fv(u.uMorphPosition, prim.morphs.positionDeltas);
+        if (u.uMorphNormal) gl.uniform3fv(u.uMorphNormal, prim.morphs.normalDeltas);
+        if (u.uMorphWeight) gl.uniform1fv(u.uMorphWeight, prim.morphs.weights);
+      } else {
+        if (u.uMorphPosition) gl.uniform3fv(u.uMorphPosition, ZERO_MORPH_POSITION);
+        if (u.uMorphNormal) gl.uniform3fv(u.uMorphNormal, ZERO_MORPH_POSITION);
+        if (u.uMorphWeight) gl.uniform1fv(u.uMorphWeight, ZERO_MORPH_WEIGHT);
+      }
+
+      const material = asset.materials[prim.materialIndex] ?? asset.materials[0];
+      if (material) bindGlbMaterial(gl, u, material);
+
+      gl.uniformMatrix4fv(u.uModel, false, asset.meshModels[prim.meshIndex] ?? mat4Identity());
+      gl.bindVertexArray(prim.vao);
+      if (prim.indexBuffer) {
+        gl.drawElements(gl.TRIANGLES, prim.indexCount, prim.indexType, 0);
+      } else {
+        gl.drawArrays(gl.TRIANGLES, 0, prim.vertexCount);
+      }
+      gl.bindVertexArray(null);
+    }
   }
 
   /** EYE MESH pair — sclera/iris/pupil/cornea via the dedicated shader. */
@@ -873,6 +1024,7 @@ export class HdAvatarRenderer {
     gl.uniform4f(u.uBaseColorFactor, this.material.baseColorR ?? 1, this.material.baseColorG ?? 1, this.material.baseColorB ?? 1, 1);
     gl.uniform1f(u.uMetallicFactor, this.metallic);
     gl.uniform1f(u.uRoughnessFactor, this.material.roughness ?? this.roughness);
+    gl.uniform1i(u.uSkinned, 1);
 
     // procedural skin textures on units 0..2
     const textures = this.skinTextures;

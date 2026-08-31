@@ -32,7 +32,13 @@ at startup).
 > skin-tuned IBL) is milestone 5; the face/expression system
 > (`avatar/MorphTargets.ts`, `avatar/FaceControls.ts`, `avatar/Correctives.ts`,
 > `MorphShader.ts` — morph deltas, corrective shapes, wrinkle masks, blink)
-> is milestone 6.
+> is milestone 6. Cinematic output (`CinematicPipeline.ts` — HDR scene,
+> bloom, DOF, TAA, exposure, ACES) is milestone 7; GLB parity is
+> milestone 8: `avatar/GltfTypes.ts`, `GlbLoader.ts`, `GltfAccessor.ts`,
+> `GltfMesh.ts`, `GltfImages.ts`, `GltfMaterial.ts`, `GltfMorphs.ts`,
+> `GltfSkeleton.ts`, `GltfAvatar.ts` — GLB assets render through the
+> existing skin program + shadow + cinematic passes (uSkinned + GPU
+> morph uniforms), no second rendering path.
 
 ## Wired into the Capacitor app
 

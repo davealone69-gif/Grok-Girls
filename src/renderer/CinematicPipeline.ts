@@ -232,19 +232,70 @@ interface Target {
   fbo: WebGLFramebuffer;
   color: WebGLTexture;
   depth: WebGLTexture | null;
+  /** GL internal format actually used for the color attachment. */
+  colorFormat: number;
 }
 
+/**
+ * Renderable-format probing with fallback: prefer RGBA16F (HDR), but some
+ * GL implementations (notably the WebKit software GL used by headless CI
+ * browsers) advertise EXT_color_buffer_float while refusing float color
+ * attachments — those get RGBA8 automatically. Float depth works
+ * everywhere; DEPTH_COMPONENT24/16 are the fallbacks.
+ */
 function createTarget(gl: WebGL2RenderingContext, w: number, h: number, depth = false): Target {
   const fbo = gl.createFramebuffer();
   if (!fbo) throw new Error('Cinematic: createFramebuffer failed');
-  const color = createTexture2D(gl, w, h, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT);
-  const depthTex = depth ? createTexture2D(gl, w, h, gl.DEPTH_COMPONENT32F, gl.DEPTH_COMPONENT, gl.FLOAT) : null;
+
+  const colorFormats: Array<[number, number, number]> = [
+    [gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT],
+    [gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE]
+  ];
+  const depthFormats: Array<[number, number]> = [
+    [gl.DEPTH_COMPONENT32F, gl.FLOAT],
+    [gl.DEPTH_COMPONENT24, gl.UNSIGNED_INT],
+    [gl.DEPTH_COMPONENT16, gl.UNSIGNED_SHORT]
+  ];
+
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, color, 0);
-  if (depthTex) gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, depthTex, 0);
+  let color: WebGLTexture | null = null;
+  let depthTex: WebGLTexture | null = null;
+  let colorFormat = colorFormats[0][0];
+
+  for (const cf of colorFormats) {
+    if (color) {
+      gl.deleteTexture(color);
+      color = null;
+    }
+    color = createTexture2D(gl, w, h, cf[0], cf[1], cf[2]);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, color, 0);
+    let complete = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    if (complete && depth) {
+      for (const df of depthFormats) {
+        if (depthTex) {
+          gl.deleteTexture(depthTex);
+          depthTex = null;
+        }
+        depthTex = createTexture2D(gl, w, h, df[0], gl.DEPTH_COMPONENT, df[1]);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, depthTex, 0);
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE) {
+          complete = true;
+          break;
+        }
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, null, 0);
+        complete = false;
+      }
+    }
+    if (complete) {
+      colorFormat = cf[0];
+      break;
+    }
+  }
+
   gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  return { fbo, color, depth: depthTex };
+  if (!color) throw new Error('Cinematic: no renderable color format');
+  return { fbo, color, depth: depthTex, colorFormat };
 }
 
 export class CinematicRenderer {
@@ -262,6 +313,9 @@ export class CinematicRenderer {
   private historyA: Target | null = null;
   private historyB: Target | null = null;
   private historyActive = true;
+
+  /** Actual HDR color format in use ('rgba16f' or 'rgba8' fallback). */
+  hdrFormat = 'rgba16f';
 
   private brightProgram: WebGLProgram;
   private blurProgram: WebGLProgram;
@@ -313,8 +367,12 @@ export class CinematicRenderer {
       this.accumulateTemporal();
     }
 
-    // 5. Final display.
+    // 5. Final display (reads the pre-update history so the blend is
+    //    current frame vs. previous frame — a true accumulation chain).
     this.composite();
+
+    // Ping-pong flips after the composite read.
+    this.historyActive = !this.historyActive;
   }
 
   private syncSize(): void {
@@ -326,6 +384,7 @@ export class CinematicRenderer {
     this.height = h;
     const gl = this.gl;
     this.hdr = createTarget(gl, w, h, true);
+    this.hdrFormat = this.hdr.colorFormat === gl.RGBA16F ? 'rgba16f' : 'rgba8';
     const bw = Math.max(1, w >> 1);
     const bh = Math.max(1, h >> 1);
     this.bloomA = createTarget(gl, bw, bh);
@@ -434,7 +493,6 @@ export class CinematicRenderer {
     this.set1f(this.taaUniforms, 'uTaaBlend', this.pipeline.settings.taaBlend);
     this.drawFullscreen();
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this.historyActive = !this.historyActive;
   }
 
   private composite(): void {

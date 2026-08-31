@@ -2,7 +2,7 @@ import { GltfAsset, GltfNode, GltfSkin } from './GltfTypes';
 import { parseGlb, readAccessor } from './GlbLoader';
 import { GltfGpuPrimitive, uploadGltfPrimitive, destroyGltfPrimitive } from './GltfMesh';
 import { GltfMaterialBinding, materialFromGltf } from './GltfMaterial';
-import { uploadGltfTexture, destroyGltfTextures, GltfGpuTextures } from './GltfTexture';
+import { uploadGltfTexture, destroyGltfTextures } from './GltfTexture';
 
 export interface GltfAvatarPrimitive {
   nodeIndex: number;
@@ -42,7 +42,7 @@ function quatToMatrix(q: number[]): Float32Array {
 }
 
 function localMatrix(node: GltfNode): Float32Array {
-  if (node.matrix && node.matrix.length === 16) return new Float32Array(node.matrix);
+  if (node.matrix?.length === 16) return new Float32Array(node.matrix);
   const t = node.translation ?? [0, 0, 0];
   const s = node.scale ?? [1, 1, 1];
   const m = quatToMatrix(node.rotation ?? [0, 0, 0, 1]);
@@ -55,72 +55,40 @@ function localMatrix(node: GltfNode): Float32Array {
 
 function multiply(a: Float32Array, b: Float32Array): Float32Array {
   const out = new Float32Array(16);
-  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
-    out[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
-  }
-  return out;
-}
-
-function invert(m: Float32Array): Float32Array {
-  const out = new Float32Array(16);
-  const a00 = m[0], a01 = m[1], a02 = m[2], a03 = m[3];
-  const a10 = m[4], a11 = m[5], a12 = m[6], a13 = m[7];
-  const a20 = m[8], a21 = m[9], a22 = m[10], a23 = m[11];
-  const a30 = m[12], a31 = m[13], a32 = m[14], a33 = m[15];
-  const b00 = a00 * a11 - a01 * a10, b01 = a00 * a12 - a02 * a10, b02 = a00 * a13 - a03 * a10;
-  const b03 = a01 * a12 - a02 * a11, b04 = a01 * a13 - a03 * a11, b05 = a02 * a13 - a03 * a12;
-  const b06 = a20 * a31 - a21 * a30, b07 = a20 * a32 - a22 * a30, b08 = a20 * a33 - a23 * a30;
-  const b09 = a21 * a32 - a22 * a31, b10 = a21 * a33 - a23 * a31, b11 = a22 * a33 - a23 * a32;
-  const det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
-  if (Math.abs(det) < 1e-10) return identity16();
-  const d = 1 / det;
-  out[0] = (a11 * b11 - a12 * b10 + a13 * b09) * d;
-  out[1] = (a02 * b10 - a01 * b11 - a03 * b09) * d;
-  out[2] = (a31 * b05 - a32 * b04 + a33 * b03) * d;
-  out[3] = (a22 * b04 - a21 * b05 - a23 * b03) * d;
-  out[4] = (a12 * b08 - a10 * b11 - a13 * b07) * d;
-  out[5] = (a00 * b11 - a02 * b08 + a03 * b07) * d;
-  out[6] = (a32 * b02 - a30 * b05 - a33 * b01) * d;
-  out[7] = (a20 * b05 - a22 * b02 + a23 * b01) * d;
-  out[8] = (a10 * b10 - a11 * b08 + a13 * b06) * d;
-  out[9] = (a01 * b08 - a00 * b10 - a03 * b06) * d;
-  out[10] = (a30 * b04 - a31 * b02 + a33 * b00) * d;
-  out[11] = (a21 * b02 - a20 * b04 - a23 * b00) * d;
-  out[12] = (a11 * b07 - a10 * b09 - a12 * b06) * d;
-  out[13] = (a00 * b09 - a01 * b07 + a02 * b06) * d;
-  out[14] = (a31 * b01 - a30 * b03 - a32 * b00) * d;
-  out[15] = (a20 * b03 - a21 * b01 + a22 * b00) * d;
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) out[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
   return out;
 }
 
 export function updateGltfJointMatrices(avatar: GltfAvatar): void {
   const nodes = avatar.nodes;
-  const world = nodes.map(() => identity16());
-  const visiting = new Set<number>();
+  const world: Array<Float32Array | undefined> = new Array(nodes.length);
+  const resolving = new Set<number>();
   const resolve = (index: number): Float32Array => {
-    if (visiting.has(index)) throw new Error(`glTF node cycle at ${index}`);
-    if (world[index] !== undefined && world[index][15] !== 0) return world[index];
-    visiting.add(index);
+    const cached = world[index];
+    if (cached) return cached;
+    if (resolving.has(index)) throw new Error(`glTF node cycle at ${index}`);
     const node = nodes[index];
+    if (!node) throw new Error(`Missing glTF node ${index}`);
+    resolving.add(index);
     const parent = nodes.findIndex(n => n.children?.includes(index));
     const local = localMatrix(node);
-    world[index] = parent >= 0 ? multiply(resolve(parent), local) : local;
-    visiting.delete(index);
-    return world[index];
+    const result = parent >= 0 ? multiply(resolve(parent), local) : local;
+    resolving.delete(index);
+    world[index] = result;
+    return result;
   };
   for (let i = 0; i < nodes.length; i++) resolve(i);
 
   avatar.jointMatrices.fill(0);
   let cursor = 0;
   for (const skin of avatar.skins) {
-    const ibm = skin.inverseBindMatrices !== undefined ? readAccessor(avatar.asset, skin.inverseBindMatrices) as Float32Array : null;
-    skin.joints.forEach((joint, i) => {
-      const jointWorld = world[joint] ?? identity16();
+    const ibm = skin.inverseBindMatrices === undefined ? null : readAccessor(avatar.asset, skin.inverseBindMatrices) as Float32Array;
+    for (let i = 0; i < skin.joints.length; i++) {
+      const jointWorld = world[skin.joints[i]] ?? identity16();
       const bind = ibm ? ibm.subarray(i * 16, i * 16 + 16) : identity16();
-      const matrix = multiply(jointWorld, bind);
-      if (cursor + 16 <= avatar.jointMatrices.length) avatar.jointMatrices.set(matrix, cursor);
+      avatar.jointMatrices.set(multiply(jointWorld, bind), cursor);
       cursor += 16;
-    });
+    }
   }
 }
 
@@ -131,7 +99,6 @@ export async function loadGltfAvatar(gl: WebGL2RenderingContext, data: ArrayBuff
   const materials = (asset.json.materials ?? []).map(materialFromGltf);
   const textures = new Map<number, WebGLTexture>();
   const primitives: GltfAvatarPrimitive[] = [];
-
   try {
     for (let i = 0; i < (asset.json.textures ?? []).length; i++) textures.set(i, await uploadGltfTexture(gl, asset, i));
     for (let ni = 0; ni < nodes.length; ni++) {
@@ -140,17 +107,23 @@ export async function loadGltfAvatar(gl: WebGL2RenderingContext, data: ArrayBuff
       const mesh = asset.json.meshes?.[node.mesh];
       if (!mesh) throw new Error(`Node ${ni} references missing mesh ${node.mesh}`);
       for (const primitive of mesh.primitives) {
-        if ((primitive.mode ?? 4) !== 4) throw new Error('Only TRIANGLES glTF primitives are supported by the HD avatar path');
+        if ((primitive.mode ?? 4) !== 4) throw new Error('Only TRIANGLES primitives are supported by the HD avatar path');
         primitives.push({ nodeIndex: ni, meshIndex: node.mesh, primitive: uploadGltfPrimitive(gl, asset, primitive) });
       }
     }
     const morphWeights = (asset.json.meshes ?? []).map(mesh => new Float32Array(mesh.weights ?? []));
     const avatar: GltfAvatar = {
-      asset, nodes, skins, primitives, materials, textures, morphWeights,
+      asset,
+      nodes,
+      skins,
+      primitives,
+      materials,
+      textures,
+      morphWeights,
       jointMatrices: new Float32Array(Math.max(16, skins.reduce((n, skin) => n + skin.joints.length, 0) * 16)),
       destroy() {
         for (const item of this.primitives) destroyGltfPrimitive(gl, item.primitive);
-        destroyGltfTextures(gl, Object.fromEntries(this.textures.entries()) as GltfGpuTextures);
+        for (const texture of this.textures.values()) gl.deleteTexture(texture);
         this.textures.clear();
       },
     };
@@ -158,7 +131,7 @@ export async function loadGltfAvatar(gl: WebGL2RenderingContext, data: ArrayBuff
     return avatar;
   } catch (error) {
     for (const item of primitives) destroyGltfPrimitive(gl, item.primitive);
-    destroyGltfTextures(gl, Object.fromEntries(textures.entries()) as GltfGpuTextures);
+    for (const texture of textures.values()) gl.deleteTexture(texture);
     throw error;
   }
 }

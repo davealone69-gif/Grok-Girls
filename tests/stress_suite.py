@@ -236,6 +236,7 @@ with sync_playwright() as p:
     })""")
     rec("migration", "gallery item migrated to assetKey", bool(gitem.get("assetKey")), json.dumps(gitem)[:140])
     rec("migration", "gallery localStorage has no data URL", not (gitem.get("assetUrl") or "").startswith("data:"), (gitem.get("assetUrl") or "none")[:40])
+    rec("migration", "gallery localStorage has no prompt text (M3)", "prompt" not in gitem, json.dumps(gitem)[:120])
     rec("migration", "persona photo migrated to previewAssetKey", bool(girl.get("previewAssetKey")), json.dumps(girl)[:140])
     rec("migration", "persona localStorage has no data URL", not (girl.get("previewUrl") or "").startswith("data:"), (girl.get("previewUrl") or "none")[:40])
     rec("migration", "IndexedDB image records", idb, "expect >= 3")

@@ -31,6 +31,7 @@ STRESS_CHECKS = {
     "persona rename survives reload": lambda v: v == "Persist Test",
     "gallery item migrated to assetKey": bool,
     "gallery localStorage has no data URL": bool,
+    "gallery localStorage has no prompt text (M3)": bool,
     "persona photo migrated to previewAssetKey": bool,
     "persona localStorage has no data URL": bool,
     "IndexedDB image records": lambda v: isinstance(v, int) and v >= 3,

@@ -459,6 +459,19 @@ export default function App() {
   const [roomId, setRoomId] = useState(rooms[0].id);
   const room: Room = useMemo(() => rooms.find(r => r.id === roomId) ?? rooms[0], [roomId]);
 
+  /* ------------------------------------- mixed-content guard */
+  useEffect(() => {
+    try {
+      const base = getServerBase();
+      if (base && window.location.protocol === 'https:' && /^http:\/\//i.test(base)) {
+        showToast(
+          '⚠ This app is served over HTTPS but your self-hosted engine uses http:// — browsers will block the connection. Host the app over http, or serve your engine over https.'
+        );
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* ------------------------------------- ComfyUI job resume (M7) */
   useEffect(() => {
     let alive = true;

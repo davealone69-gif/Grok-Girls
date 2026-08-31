@@ -1,5 +1,5 @@
 import { GalleryItem, saveGallery } from './gallery';
-import { getImageDataUrl } from './assetStore';
+import { getImageDataUrl, getImageMeta } from './assetStore';
 
 /** Export the gallery as JSON with real image data embedded (IndexedDB
  *  entries are resolved back to data URLs so the archive is portable). */
@@ -7,9 +7,15 @@ export async function exportGallery(items: GalleryItem[]) {
   const out: GalleryItem[] = [];
   for (const it of items) {
     const o = { ...it };
-    if (it.assetKey && !o.assetUrl) {
-      const dataUrl = await getImageDataUrl(it.assetKey);
-      if (dataUrl) o.assetUrl = dataUrl;
+    if (it.assetKey) {
+      if (!o.assetUrl) {
+        const dataUrl = await getImageDataUrl(it.assetKey);
+        if (dataUrl) o.assetUrl = dataUrl;
+      }
+      // M3: exported prompts come from the IDB record (in-memory items are
+      // already hydrated, but re-resolve to be safe for programmatic calls).
+      const meta = await getImageMeta(it.assetKey);
+      if (meta?.prompt != null) o.prompt = String(meta.prompt);
     }
     delete o.assetKey;
     out.push(o);

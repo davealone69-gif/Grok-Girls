@@ -90,6 +90,21 @@ with sync_playwright() as p:
     chk("quota: big render still completes near-full storage", render_ok, toast[:120])
     chk("quota: render persisted via IndexedDB assetKey", key_ok, str(gal[0])[:120] if gal else "none")
     chk("quota: gallery localStorage write is metadata-only", meta_small, "")
+    # M3: the prompt lives in the IDB record, not in localStorage
+    no_prompt_ls = len(gal) >= 1 and "prompt" not in gal[0]
+    chk("M3 prompt removed from localStorage", no_prompt_ls, str(gal[0])[:120] if gal else "none")
+    idb_prompt = pg.evaluate("""() => new Promise(res => {
+      const items = JSON.parse(localStorage.getItem('grok-girls-gallery-v1') || '[]');
+      if (!items[0] || !items[0].assetKey) return res(null);
+      const rq = indexedDB.open('grok-girls-assets');
+      rq.onsuccess = () => {
+        const g = rq.result.transaction('images', 'readonly').objectStore('images').get(items[0].assetKey);
+        g.onsuccess = () => res(g.result && g.result.meta ? String(g.result.meta.prompt || '') : null);
+        g.onerror = () => res(null);
+      };
+      rq.onerror = () => res(null);
+    })""")
+    chk("M3 prompt stored in IDB record", bool(idb_prompt) and len(idb_prompt) > 20, (idb_prompt or "")[:60])
     pg.evaluate("localStorage.removeItem('quota-filler')")
     pg.close()
 

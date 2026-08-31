@@ -1,4 +1,4 @@
-import { deleteImage, getImageUrl, isRasterDataUrl, putImage } from './assetStore';
+import { deleteImage, getImageDataUrl, getImageMeta, getImageUrl, isRasterDataUrl, putImage } from './assetStore';
 
 export interface GalleryItem {
   id: string;
@@ -28,7 +28,8 @@ function read(): GalleryItem[] {
 export function saveGallery(items: GalleryItem[]): boolean {
   const slim = items.slice(0, 500).map(it => ({
     ...it,
-    assetUrl: it.assetKey ? undefined : it.assetUrl
+    assetUrl: it.assetKey ? undefined : it.assetUrl,
+    prompt: it.assetKey ? undefined : it.prompt
   }));
   try {
     localStorage.setItem(KEY, JSON.stringify(slim));
@@ -62,8 +63,15 @@ export async function loadGallery(): Promise<GalleryItem[]> {
     if (it.assetKey) {
       const url = await getImageUrl(it.assetKey);
       if (url) out.assetUrl = url;
+      // M3: the prompt lives in the IDB record; hydrate it back and strip
+      // the redundant localStorage copy once it is safely stored.
+      const meta = await getImageMeta(it.assetKey);
+      if (meta?.prompt != null) {
+        out.prompt = String(meta.prompt);
+        if (it.prompt) changed = true;
+      }
     } else if (isRasterDataUrl(it.assetUrl)) {
-      const key = await putImage(it.assetUrl);
+      const key = await putImage(it.assetUrl, { prompt: it.prompt });
       if (key) {
         out.assetKey = key;
         out.assetUrl = (await getImageUrl(key)) ?? it.assetUrl;
@@ -87,7 +95,7 @@ export async function addGalleryItem(
   };
   let out = next;
   if (isRasterDataUrl(next.assetUrl)) {
-    const key = await putImage(next.assetUrl);
+    const key = await putImage(next.assetUrl, { prompt: next.prompt });
     if (key) {
       out = { ...next, assetKey: key, assetUrl: (await getImageUrl(key)) ?? next.assetUrl };
     }

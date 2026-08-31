@@ -108,7 +108,7 @@ export function evaluateSkins(asset: GltfAsset, globals: Mat4[]): Float32Array {
   if (!skin) return out;
 
   const joints = skin.joints ?? [];
-  let ibm = new Float32Array(0);
+  let ibm: Float32Array = new Float32Array(0);
 
   if (skin.inverseBindMatrices !== undefined) {
     ibm = toFloat32(readAccessor(asset, skin.inverseBindMatrices));

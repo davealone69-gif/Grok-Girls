@@ -233,7 +233,7 @@ export function createSpecularTexture(
   gl: WebGL2RenderingContext,
   size = 512
 ): WebGLTexture {
-  return upload(gl, createSpecularCanvas(size));
+  return createTexture(gl, createSpecularCanvas(size), gl.RGBA8, gl.RGBA);
 }
 
 export function destroySpecularTexture(
@@ -263,7 +263,7 @@ export function createPoreTexture(
   gl: WebGL2RenderingContext,
   size = 512
 ): WebGLTexture {
-  return upload(gl, createPoreCanvas(size));
+  return createTexture(gl, createPoreCanvas(size), gl.RGBA8, gl.RGBA);
 }
 
 export function destroyPoreTexture(
@@ -304,7 +304,7 @@ export function createWrinkleTexture(
   gl: WebGL2RenderingContext,
   size = 512
 ): WebGLTexture {
-  return upload(gl, createWrinkleCanvas(size));
+  return createTexture(gl, createWrinkleCanvas(size), gl.RGBA8, gl.RGBA);
 }
 
 export function destroyWrinkleTexture(

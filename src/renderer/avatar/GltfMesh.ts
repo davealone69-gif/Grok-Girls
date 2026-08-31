@@ -87,7 +87,7 @@ export function uploadPrimitive(
 
   let indexBuffer: WebGLBuffer | null = null;
   let indexCount = 0;
-  let indexType = gl.UNSIGNED_SHORT;
+  let indexType: number = gl.UNSIGNED_SHORT;
 
   if (primitive.indices !== undefined) {
     const accessor = asset.json.accessors![primitive.indices];

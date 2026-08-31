@@ -1,5 +1,6 @@
 from playwright.sync_api import sync_playwright
 import json
+import os
 
 results = []
 def chk(name, cond, extra=""):
@@ -215,6 +216,47 @@ with sync_playwright() as p:
     chk("APK mode: no service worker registered", sw_count == 0, sw_count)
     chk("APK mode: app still boots", pg.locator(".app-container").count() == 1)
     pg.close()
+
+    # --- 7) MENU XML: data-driven menu + FAULTY-XML fallback ---
+    fx = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixtures')
+    custom_xml = open(os.path.join(fx, 'menu_custom.xml'), encoding='utf-8').read()
+    faulty_xml = open(os.path.join(fx, 'menu_faulty.xml'), encoding='utf-8').read()
+
+    # valid custom XML actually drives the UI.
+    # The override is injected via fetch (deterministic — immune to service
+    # worker shadowing, which page.route() cannot intercept).
+    def menu_override(body):
+        return f"""
+          const __orig = window.fetch.bind(window);
+          window.fetch = (url, opts) => {{
+            if (String(url).includes('menu.xml')) {{
+              return Promise.resolve(new Response({json.dumps(body)}, {{ status: 200, headers: {{ 'Content-Type': 'application/xml' }} }}));
+            }}
+            return __orig(url, opts);
+          }};
+        """
+    ctx = b.new_context(viewport={"width": 1280, "height": 900})
+    ctx.add_init_script(menu_override(custom_xml))
+    pg = ctx.new_page()
+    pg.goto("http://localhost:8080/", wait_until="networkidle")
+    pg.wait_for_timeout(700)
+    chk("menu XML: custom title drives the rail", pg.locator(".rail-btn[title='ARCHIVE CUSTOM']").count() == 1)
+    chk("menu XML: custom dock label applied", pg.locator(".dock-tab", has_text="COSMETICS").count() == 1)
+    ctx.close()
+
+    # deliberately FAULTY XML -> app falls back to the built-in menu
+    ctx = b.new_context(viewport={"width": 1280, "height": 900})
+    ctx.add_init_script(menu_override(faulty_xml))
+    pg = ctx.new_page()
+    errs = []
+    pg.on("pageerror", lambda e: errs.append(str(e)[:140]))
+    pg.goto("http://localhost:8080/", wait_until="networkidle")
+    pg.wait_for_timeout(700)
+    chk("faulty menu XML: app still boots", pg.locator(".app-container").count() == 1)
+    chk("faulty menu XML: built-in labels restored", pg.locator(".rail-btn[title='Generation Archive']").count() == 1)
+    chk("faulty menu XML: dock tabs intact", pg.locator(".dock-tab", has_text="HAIR STYLE").count() == 1)
+    chk("faulty menu XML: no page errors", len(errs) == 0, errs[:1])
+    ctx.close()
 
     b.close()
 

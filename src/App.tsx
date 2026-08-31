@@ -6,6 +6,7 @@ import { AvatarState, interactionState, loadAvatarState, saveAvatarState, stateP
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
+import { DEFAULT_MENU, loadMenuXml, MenuItem } from './services/menuXml';
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
 import { isAgeConfirmed, confirmAdultAge } from './services/ageGate';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
@@ -367,6 +368,22 @@ export default function App() {
   }, [chatProvider]);
   const adultChatPinWarnRef = useRef(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  // Data-driven menu: labels/titles come from /menu.xml; a faulty file
+  // falls back to DEFAULT_MENU (navigation can never break).
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(DEFAULT_MENU);
+  useEffect(() => {
+    let alive = true;
+    void loadMenuXml().then(m => {
+      if (alive) setMenuItems(m);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const menuLabel = (id: string) =>
+    menuItems.find(i => i.id === id)?.label ?? DEFAULT_MENU.find(i => i.id === id)?.label ?? id;
+  const menuTitle = (id: string) =>
+    menuItems.find(i => i.id === id)?.title ?? DEFAULT_MENU.find(i => i.id === id)?.title ?? '';
   const [copiedId, setCopiedId] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
   const [styleFilter, setStyleFilter] = useState<string | null>(null);
@@ -1542,10 +1559,10 @@ export default function App() {
                 setView('builder');
                 setMobileSheet('inspector');
               }}
-              title="Edit Identity (inspector)"
+              title={menuTitle('edit_inspector')}
             >
               <span className="rail-icon">✏️</span>
-              <span>Edit</span>
+              <span>{menuLabel('edit_inspector')}</span>
             </button>
           )}
 
@@ -1555,10 +1572,10 @@ export default function App() {
               setView('presets');
               if (isMobile) setMobileSheet('none');
             }}
-            title="Preset Identities"
+            title={menuTitle('presets')}
           >
             <span className="rail-icon">🗂️</span>
-            <span>Presets</span>
+            <span>{menuLabel('presets')}</span>
           </button>
 
           <button
@@ -1567,10 +1584,10 @@ export default function App() {
               setView('builder');
               if (isMobile) setMobileSheet('none');
             }}
-            title="Appearance Studio"
+            title={menuTitle('appearance')}
           >
             <span className="rail-icon">💀</span>
-            <span>Appearance</span>
+            <span>{menuLabel('appearance')}</span>
           </button>
 
           <button
@@ -1578,10 +1595,10 @@ export default function App() {
             onClick={() => {
               openSection('body');
             }}
-            title="Body & Build"
+            title={menuTitle('body')}
           >
             <span className="rail-icon">👤</span>
-            <span>Body</span>
+            <span>{menuLabel('body')}</span>
           </button>
 
           <button
@@ -1589,10 +1606,10 @@ export default function App() {
             onClick={() => {
               openSection('clothing');
             }}
-            title="Lingerie & Corsetry"
+            title={menuTitle('clothing')}
           >
             <span className="rail-icon">👚</span>
-            <span>Clothing</span>
+            <span>{menuLabel('clothing')}</span>
           </button>
 
           <button
@@ -1601,10 +1618,10 @@ export default function App() {
               setView('builder');
               setDockTab('style');
             }}
-            title="Hair Styling"
+            title={menuTitle('hair')}
           >
             <span className="rail-icon">💇‍♀️</span>
-            <span>Hair</span>
+            <span>{menuLabel('hair')}</span>
           </button>
 
           <button
@@ -1612,10 +1629,10 @@ export default function App() {
             onClick={() => {
               openSection('face');
             }}
-            title="Face & Makeup"
+            title={menuTitle('face')}
           >
             <span className="rail-icon">🎭</span>
-            <span>Face</span>
+            <span>{menuLabel('face')}</span>
           </button>
 
           <button
@@ -1623,10 +1640,10 @@ export default function App() {
             onClick={() => {
               openSection('eyes');
             }}
-            title="Eyes & Eyeliner"
+            title={menuTitle('eyes')}
           >
             <span className="rail-icon">👁️</span>
-            <span>Eyes</span>
+            <span>{menuLabel('eyes')}</span>
           </button>
 
           <button
@@ -1634,10 +1651,10 @@ export default function App() {
             onClick={() => {
               openSection('clothing');
             }}
-            title="Chokers & Accessories"
+            title={menuTitle('accessories')}
           >
             <span className="rail-icon">💍</span>
-            <span>Accessories</span>
+            <span>{menuLabel('accessories')}</span>
           </button>
 
           <button
@@ -1645,10 +1662,10 @@ export default function App() {
             onClick={() => {
               openSection('augments');
             }}
-            title="Augments"
+            title={menuTitle('augments')}
           >
             <span className="rail-icon">⚡</span>
-            <span>Augments</span>
+            <span>{menuLabel('augments')}</span>
           </button>
 
           <button
@@ -1656,19 +1673,19 @@ export default function App() {
             onClick={() => {
               openSection('tattoos');
             }}
-            title="Tattoos & Lace"
+            title={menuTitle('tattoos')}
           >
             <span className="rail-icon">🖤</span>
-            <span>Tattoos</span>
+            <span>{menuLabel('tattoos')}</span>
           </button>
 
           <button
             className={`rail-btn ${view === 'video' ? 'active' : ''}`}
             onClick={() => setView('video')}
-            title="Video & Animation Studio"
+            title={menuTitle('animations')}
           >
             <span className="rail-icon">🎬</span>
-            <span>Animations</span>
+            <span>{menuLabel('animations')}</span>
           </button>
 
           <button
@@ -1677,10 +1694,10 @@ export default function App() {
               setView('import');
               if (isMobile) setMobileSheet('none');
             }}
-            title="Import & Data"
+            title={menuTitle('import')}
           >
             <span className="rail-icon">📥</span>
-            <span>Import</span>
+            <span>{menuLabel('import')}</span>
           </button>
 
           <button
@@ -1689,10 +1706,10 @@ export default function App() {
               setView('story');
               if (isMobile) setMobileSheet('none');
             }}
-            title="Story Campaign"
+            title={menuTitle('story')}
           >
             <span className="rail-icon">📖</span>
-            <span>Story</span>
+            <span>{menuLabel('story')}</span>
           </button>
 
           <button
@@ -1701,45 +1718,45 @@ export default function App() {
               setView('gallery');
               if (isMobile) setMobileSheet('none');
             }}
-            title="Generation Archive"
+            title={menuTitle('gallery')}
           >
             <span className="rail-icon">🖼️</span>
-            <span>Gallery</span>
+            <span>{menuLabel('gallery')}</span>
           </button>
 
           <button
             className={`rail-btn ${premiumOpen ? 'active' : ''}`}
             onClick={() => setPremiumOpen(true)}
-            title="Premium & Upgrades"
+            title={menuTitle('premium')}
           >
             <span className="rail-icon">⭐</span>
-            <span>Premium</span>
+            <span>{menuLabel('premium')}</span>
           </button>
 
           <button
             className={`rail-btn ${helpOpen ? 'active' : ''}`}
             onClick={() => setHelpOpen(true)}
-            title="Help & Shortcuts"
+            title={menuTitle('help')}
           >
             <span className="rail-icon">❓</span>
-            <span>Help</span>
+            <span>{menuLabel('help')}</span>
           </button>
         </div>
 
         <div className="rail-footer">
-          <button className="rail-btn" onClick={handleRandomize} title="Randomize Persona Traits">
+          <button className="rail-btn" onClick={handleRandomize} title={menuTitle('random')}>
             <span className="rail-icon">🎲</span>
           </button>
 
           <button
             className={`rail-btn ${statsOpen ? 'active' : ''}`}
             onClick={() => setStatsOpen(true)}
-            title="Stats & Achievements"
+            title={menuTitle('stats')}
           >
             <span className="rail-icon">📊</span>
           </button>
 
-          <button className="rail-btn" onClick={() => setIsSettingsOpen(true)} title="AI Provider Settings">
+          <button className="rail-btn" onClick={() => setIsSettingsOpen(true)} title={menuTitle('settings')}>
             <span className="rail-icon">⚙️</span>
           </button>
 
@@ -1758,7 +1775,7 @@ export default function App() {
             <span style={{ fontSize: 8 }}>{adult ? '18+ ON' : '18+'}</span>
           </button>
 
-          <button className="rail-btn" onClick={() => setView('chat')} title="Interactive Dialogue">
+          <button className="rail-btn" onClick={() => setView('chat')} title={menuTitle('chat')}>
             <span className="rail-icon">💬</span>
           </button>
         </div>
@@ -2177,31 +2194,31 @@ export default function App() {
                 className={`dock-tab ${dockTab === 'style' ? 'active' : ''}`}
                 onClick={() => setDockTab('style')}
               >
-                HAIR STYLE
+                {menuLabel('hair_style')}
               </button>
               <button
                 className={`dock-tab ${dockTab === 'color' ? 'active' : ''}`}
                 onClick={() => setDockTab('color')}
               >
-                HAIR COLOR
+                {menuLabel('hair_color')}
               </button>
               <button
                 className={`dock-tab ${dockTab === 'makeup' ? 'active' : ''}`}
                 onClick={() => setDockTab('makeup')}
               >
-                MAKEUP
+                {menuLabel('makeup')}
               </button>
               <button
                 className={`dock-tab ${dockTab === 'eyebrows' ? 'active' : ''}`}
                 onClick={() => setDockTab('eyebrows')}
               >
-                EYEBROWS
+                {menuLabel('eyebrows')}
               </button>
               <button
                 className={`dock-tab ${dockTab === 'scene' ? 'active' : ''}`}
                 onClick={() => setDockTab('scene')}
               >
-                SCENE STYLE
+                {menuLabel('scene_style')}
               </button>
             </div>
 

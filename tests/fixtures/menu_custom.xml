@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Valid custom menu — proves the XML actually drives the UI. -->
+<menu version="1">
+  <section id="rail">
+    <item id="gallery" icon="🖼" label="Gallery" title="ARCHIVE CUSTOM"/>
+    <item id="presets" icon="🗂️" label="Presets" title="Preset Identities"/>
+  </section>
+  <section id="dock">
+    <item id="makeup" label="COSMETICS"/>
+  </section>
+</menu>

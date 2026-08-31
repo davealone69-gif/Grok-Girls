@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ============================================================= -->
+<!-- Grok Girls — menu definition (data-driven menu format)         -->
+<!--                                                               -->
+<!-- The app reads this file at boot and uses it for the left rail -->
+<!-- and dock labels/titles. If the file is missing or invalid     -->
+<!-- (the app is tested against a deliberately FAULTY variant),    -->
+<!-- the built-in menu (DEFAULT_MENU in src/services/menuXml.ts)   -->
+<!-- is used instead — a faulty menu can never break navigation.   -->
+<!--                                                               -->
+<!-- Format:                                                       -->
+<!--   <menu version="1">                                          -->
+<!--     <section id="rail|dock">                                  -->
+<!--       <item id="..." icon="..." label="..." title="..."/>     -->
+<!--     </section>                                                -->
+<!--   </menu>                                                     -->
+<!-- id is required; label is the short rail/dock text, title is   -->
+<!-- the hover tooltip. Escape & as &amp; in text.                 -->
+<!-- ============================================================= -->
+<menu version="1">
+  <section id="rail">
+    <item id="edit_inspector" icon="✏️" label="Edit" title="Edit Identity (inspector)"/>
+    <item id="presets" icon="🗂️" label="Presets" title="Preset Identities"/>
+    <item id="appearance" icon="💀" label="Appearance" title="Appearance Studio"/>
+    <item id="body" icon="👤" label="Body" title="Body &amp; Build"/>
+    <item id="clothing" icon="👚" label="Clothing" title="Lingerie &amp; Corsetry"/>
+    <item id="hair" icon="💇" label="Hair" title="Hair Styling"/>
+    <item id="face" icon="🎭" label="Face" title="Face &amp; Makeup"/>
+    <item id="eyes" icon="👁" label="Eyes" title="Eyes &amp; Eyeliner"/>
+    <item id="accessories" icon="💍" label="Accessories" title="Chokers &amp; Accessories"/>
+    <item id="augments" icon="⚡" label="Augments" title="Augments"/>
+    <item id="tattoos" icon="🖤" label="Tattoos" title="Tattoos &amp; Lace"/>
+    <item id="animations" icon="🎬" label="Animations" title="Video &amp; Animation Studio"/>
+    <item id="import" icon="📥" label="Import" title="Import &amp; Data"/>
+    <item id="story" icon="📖" label="Story" title="Story Campaign"/>
+    <item id="gallery" icon="🖼" label="Gallery" title="Generation Archive"/>
+    <item id="premium" icon="⭐" label="Premium" title="Premium &amp; Upgrades"/>
+    <item id="help" icon="❓" label="Help" title="Help &amp; Shortcuts"/>
+    <item id="random" icon="🎲" title="Randomize Persona Traits"/>
+    <item id="stats" icon="📊" title="Stats &amp; Achievements"/>
+    <item id="settings" icon="⚙️" title="AI Provider Settings"/>
+    <item id="chat" icon="💬" title="Interactive Dialogue"/>
+  </section>
+  <section id="dock">
+    <item id="hair_style" label="HAIR STYLE"/>
+    <item id="hair_color" label="HAIR COLOR"/>
+    <item id="makeup" label="MAKEUP"/>
+    <item id="eyebrows" label="EYEBROWS"/>
+    <item id="scene_style" label="SCENE STYLE"/>
+  </section>
+</menu>

@@ -16,7 +16,10 @@ at startup).
 > follows the native `renderer.hd` PBR spec — factor uniforms, point light
 > with intensity, derivative TBN, Reinhard + gamma — while the wired native
 > path stays `PbrPipeline` + IBL. Web textures are procedural until
-> GLB/texture parity lands.
+> GLB/texture parity lands. The web eye system (`EyeTextures.ts`,
+> `EyeMaterial.ts`, `EyeShader.ts` — sclera/iris/pupil/limbal ring, cornea
+> Fresnel wet layer, PBR specular) mirrors the native eye-renderer plan
+> and precedes a dedicated corneal shell (next refinement).
 
 ## Wired into the Capacitor app
 

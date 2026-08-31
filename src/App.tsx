@@ -24,7 +24,11 @@ import { AvatarParameters, DEFAULT_AVATAR_PARAMETERS } from './renderer/avatar/A
 import { Skeleton, Bone } from './renderer/avatar/Skeleton';
 import { MorphController } from './renderer/avatar/MorphTarget';
 import { DEFAULT_AVATAR_MATERIAL } from './renderer/avatar/AvatarMaterial';
-import { createProceduralSkinTextures, destroyProceduralSkinTextures } from './renderer/ProceduralSkinTextures';
+import { createProceduralSkinTextures, destroyProceduralSkinTextures, createThicknessTexture, destroyThicknessTexture } from './renderer/ProceduralSkinTextures';
+import { DEFAULT_SUBSURFACE_RADIUS, DEFAULT_SUBSURFACE_STRENGTH } from './renderer/SkinMaterial';
+import { createEyeTextures, destroyEyeTextures } from './renderer/EyeTextures';
+import { EyeShader } from './renderer/EyeShader';
+import { DEFAULT_EYE_PARAMETERS, DEFAULT_IRIS_COLOR } from './renderer/EyeMaterial';
 import { HDFrameRenderer } from './renderer/HDFrameRenderer';
 import { RenderResolution, RENDER_RESOLUTIONS } from './renderer/RenderResolution';
 import { HDRenderTarget } from './renderer/HDRenderTarget';
@@ -44,7 +48,16 @@ if (typeof window !== 'undefined') {
     DEFAULT_AVATAR_PARAMETERS,
     DEFAULT_AVATAR_MATERIAL,
     createProceduralSkinTextures,
-    destroyProceduralSkinTextures
+    destroyProceduralSkinTextures,
+    createThicknessTexture,
+    destroyThicknessTexture,
+    DEFAULT_SUBSURFACE_STRENGTH,
+    DEFAULT_SUBSURFACE_RADIUS,
+    createEyeTextures,
+    destroyEyeTextures,
+    EyeShader,
+    DEFAULT_EYE_PARAMETERS,
+    DEFAULT_IRIS_COLOR
   };
 }
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';

@@ -153,3 +153,65 @@ export function destroyProceduralSkinTextures(
   gl.deleteTexture(textures.roughness);
   gl.deleteTexture(textures.normal);
 }
+
+/* ---- thickness map (SSS transmission) ---- */
+
+function createThicknessCanvas(size: number): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Unable to create thickness context');
+  }
+
+  // base 135/255 with per-pixel positive variation — thin areas transmit
+  // more light through the skin
+  const image = ctx.createImageData(size, size);
+  for (let i = 0; i < image.data.length; i += 4) {
+    const variation = Math.random() * 35;
+    const value = Math.min(255, Math.max(0, 135 + variation));
+    image.data[i] = value;
+    image.data[i + 1] = value;
+    image.data[i + 2] = value;
+    image.data[i + 3] = 255;
+  }
+  ctx.putImageData(image, 0, 0);
+
+  return canvas;
+}
+
+/**
+ * Upload the procedural thickness map (RGBA8, R channel = thickness).
+ * Bound on unit 3 by the renderer.
+ */
+export function createThicknessTexture(
+  gl: WebGL2RenderingContext,
+  size = 1024
+): WebGLTexture {
+  const canvas = createThicknessCanvas(size);
+
+  const texture = gl.createTexture();
+  if (!texture) {
+    throw new Error('Failed to create thickness texture');
+  }
+
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  gl.bindTexture(gl.TEXTURE_2D, null);
+
+  return texture;
+}
+
+export function destroyThicknessTexture(
+  gl: WebGL2RenderingContext,
+  texture: WebGLTexture
+): void {
+  gl.deleteTexture(texture);
+}

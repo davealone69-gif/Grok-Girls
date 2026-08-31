@@ -10,6 +10,9 @@
 /*    Reinhard tone map + gamma (reference: native renderer.hd spec)   */
 /*  - setRotation / setMaterial(clamped) / setExposure (inert) /       */
 /*    setKeyLight                                                      */
+/*  - EYE SYSTEM (milestone 1): procedural sclera/iris/pupil maps +   */
+/*    iris normal, dedicated eye shader with cornea Fresnel wet layer  */
+/*    and PBR specular; two eye spheres parented to the avatar         */
 /*  - GPU skinning path: when a Skeleton is bound, uBones[128] drive   */
 /*    a 17-float/vertex skinned mesh (avatar_skin.vert layout)        */
 /*  - AvatarParameters modulate bone scales (height/chest/waist/hips/  */
@@ -25,7 +28,11 @@ import { AvatarMesh, createAvatarMesh } from './avatar/AvatarMesh';
 import { Bone, Skeleton } from './avatar/Skeleton';
 import { AvatarParameters, DEFAULT_AVATAR_PARAMETERS } from './avatar/AvatarParameters';
 import { AvatarMaterial, DEFAULT_AVATAR_MATERIAL } from './avatar/AvatarMaterial';
-import { createProceduralSkinTextures, destroyProceduralSkinTextures, ProceduralSkinTextures } from './ProceduralSkinTextures';
+import { createProceduralSkinTextures, destroyProceduralSkinTextures, createThicknessTexture, destroyThicknessTexture, ProceduralSkinTextures } from './ProceduralSkinTextures';
+import { DEFAULT_SUBSURFACE_RADIUS, DEFAULT_SUBSURFACE_STRENGTH, SkinMaterial } from './SkinMaterial';
+import { createEyeTextures, destroyEyeTextures, EyeTextures } from './EyeTextures';
+import { EyeShader } from './EyeShader';
+import { DEFAULT_EYE_PARAMETERS, DEFAULT_IRIS_COLOR } from './EyeMaterial';
 
 /* 300 es — vertex shader for the non-skinned path. Native attribute
  * layout: 0 pos, 1 normal, 2 uv, 3 tangent (vec4, w = handedness). */
@@ -47,9 +54,10 @@ void main() {
   gl_Position = uProjection * uView * world;
 }`;
 
-/* The native PbrSkin.frag — Cook-Torrance PBR driven by procedural
- * skin textures + factor uniforms + point light (reference: native
- * renderer.hd HdAvatarPbrShader spec, ES 3.00). */
+/* PbrSkin.frag — Cook-Torrance PBR + wrap-light subsurface scattering
+ * driven by procedural skin textures (thickness map on unit 3);
+ * factor uniforms + point light (reference: native renderer.hd
+ * HdAvatarPbrShader spec, ES 3.00). */
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 in vec3 vWorldPosition;
@@ -59,9 +67,12 @@ layout(location = 0) out vec4 outColor;
 uniform sampler2D uBaseColorTexture;
 uniform sampler2D uRoughnessTexture;
 uniform sampler2D uNormalTexture;
+uniform sampler2D uThicknessTexture;
 uniform vec4 uBaseColorFactor;
 uniform float uMetallicFactor;
 uniform float uRoughnessFactor;
+uniform float uSubsurfaceStrength;
+uniform vec3 uSubsurfaceRadius;
 uniform vec3 uCameraPosition;
 uniform vec3 uLightPosition;
 uniform vec3 uLightColor;
@@ -87,6 +98,18 @@ float distributionGGX(vec3 N, vec3 H, float roughness) {
   float NdotH = max(dot(N, H), 0.0);
   float d = NdotH * NdotH * (a2 - 1.0) + 1.0;
   return a2 / max(PI * d * d, 0.000001);
+}
+
+
+vec3 calculateSubsurface(vec3 N, vec3 L, vec3 V, vec3 baseColor, float thickness) {
+  float NdotL = dot(N, L);
+  float wrap = 0.35;
+  float wrapped = clamp((NdotL + wrap) / (1.0 + wrap), 0.0, 1.0);
+  vec3 viewLight = normalize(L + N * 0.35);
+  float backScatter = pow(max(dot(-V, viewLight), 0.0), 2.0);
+  float transmission = wrapped * backScatter * thickness;
+  vec3 scatterColor = baseColor * uSubsurfaceRadius;
+  return scatterColor * transmission * uSubsurfaceStrength;
 }
 
 float geometrySchlickGGX(float NdotV, float roughness) {
@@ -131,7 +154,11 @@ void main() {
   vec3 lighting = (diffuse + specular) * radiance * NdotL;
 
   vec3 ambient = baseColor.rgb * 0.025;
-  vec3 color = ambient + lighting;
+
+  float thickness = texture(uThicknessTexture, vTexCoord).r;
+  vec3 subsurface = calculateSubsurface(N, L, V, baseColor.rgb, thickness);
+
+  vec3 color = ambient + lighting + subsurface;
 
   // Simple HDR-to-display transform.
   color = color / (color + vec3(1.0));
@@ -178,7 +205,8 @@ const UNIFORM_NAMES = [
   'uModel', 'uView', 'uProjection', 'uCameraPosition',
   'uLightPosition', 'uLightColor', 'uLightIntensity',
   'uBaseColorFactor', 'uMetallicFactor', 'uRoughnessFactor',
-  'uBones', 'uBaseColorTexture', 'uRoughnessTexture', 'uNormalTexture'
+  'uBones', 'uBaseColorTexture', 'uRoughnessTexture', 'uNormalTexture',
+  'uThicknessTexture', 'uSubsurfaceStrength', 'uSubsurfaceRadius'
 ];
 
 function cacheUniforms(
@@ -243,6 +271,24 @@ export class HdAvatarRenderer {
   private parameters: AvatarParameters;
   private material: AvatarMaterial;
   private skinTextures: ProceduralSkinTextures | null = null;
+  private thicknessTexture: WebGLTexture | null = null;
+  private subsurfaceStrength = DEFAULT_SUBSURFACE_STRENGTH;
+  private subsurfaceRadius: [number, number, number] = DEFAULT_SUBSURFACE_RADIUS;
+  // eye system (milestone 1)
+  private eyeTextures: EyeTextures | null = null;
+  private eyeShader: EyeShader | null = null;
+  private eyeMeshes: AvatarMesh[] = [];
+  private eyeOffsetX = 0.1;
+  private eyeY = 0.8;
+  private eyeZ = 0.62;
+  private eyeRadius = 0.075;
+  private irisColor: [number, number, number] = DEFAULT_IRIS_COLOR;
+  private irisScale = DEFAULT_EYE_PARAMETERS.irisScale;
+  private pupilRadius = DEFAULT_EYE_PARAMETERS.pupilRadius;
+  private corneaIOR = DEFAULT_EYE_PARAMETERS.corneaIOR;
+  private wetness = DEFAULT_EYE_PARAMETERS.wetness;
+  private scleraRoughness = DEFAULT_EYE_PARAMETERS.scleraRoughness;
+  private irisRoughness = DEFAULT_EYE_PARAMETERS.irisRoughness;
   private uniforms = new Map<WebGLProgram, UniformCache>();
   private frameRenderer: HDFrameRenderer | null = null;
   private autoRotate = true;
@@ -261,8 +307,15 @@ export class HdAvatarRenderer {
     this.program = link(gl, VERTEX_SHADER, FRAGMENT_SHADER);
     this.skinProgram = link(gl, SKIN_VERTEX_SHADER, FRAGMENT_SHADER);
 
-    // procedural skin textures (sRGB base color, roughness, normal)
+    // procedural skin textures (sRGB base color, roughness, normal, thickness)
     this.skinTextures = createProceduralSkinTextures(gl, 1024);
+    this.thicknessTexture = createThicknessTexture(gl, 1024);
+
+    // eye system: procedural eye maps + dedicated eye program + eye pair
+    this.eyeTextures = createEyeTextures(gl, 1024);
+    this.eyeShader = new EyeShader(gl);
+    this.eyeMeshes = [buildSphereMesh(32, 24), buildSphereMesh(32, 24)];
+    for (const m of this.eyeMeshes) m.upload(gl);
 
     // uniform location cache (one entry set per program; both programs
     // share the same fragment uniforms)
@@ -353,6 +406,18 @@ export class HdAvatarRenderer {
       destroyProceduralSkinTextures(this.gl, this.skinTextures);
       this.skinTextures = null;
     }
+    if (this.thicknessTexture) {
+      destroyThicknessTexture(this.gl, this.thicknessTexture);
+      this.thicknessTexture = null;
+    }
+    if (this.eyeTextures) {
+      destroyEyeTextures(this.gl, this.eyeTextures);
+      this.eyeTextures = null;
+    }
+    this.eyeShader?.dispose();
+    this.eyeShader = null;
+    for (const m of this.eyeMeshes) m.destroy(this.gl);
+    this.eyeMeshes = [];
     this.mesh.destroy(this.gl);
     this.frameRenderer?.destroy();
     this.gl.deleteProgram(this.program);
@@ -437,6 +502,45 @@ export class HdAvatarRenderer {
       this.applyCommonUniforms(gl, this.program);
       this.mesh.draw(gl);
     }
+
+    this.drawEyes(gl);
+  }
+
+  /** EYE MESH pair — sclera/iris/pupil/cornea via the dedicated shader. */
+  private drawEyes(gl: WebGL2RenderingContext) {
+    const shader = this.eyeShader;
+    const textures = this.eyeTextures;
+    if (!shader || !textures || this.eyeMeshes.length < 2) return;
+
+    shader.use();
+    shader.setMatrix4('uView', this.view);
+    shader.setMatrix4('uProjection', this.projection);
+    shader.set3f('uCameraPosition', this.camera[0], this.camera[1], this.camera[2]);
+    shader.set3f('uLightPosition', this.lightPosition[0], this.lightPosition[1], this.lightPosition[2]);
+    shader.set3f('uLightColor', this.lightColor[0], this.lightColor[1], this.lightColor[2]);
+    shader.set1f('uLightIntensity', this.lightIntensity);
+    shader.set1f('uIrisScale', this.irisScale);
+    shader.set1f('uPupilRadius', this.pupilRadius);
+    shader.set1f('uCorneaIOR', this.corneaIOR);
+    shader.set1f('uWetness', this.wetness);
+    shader.set1f('uScleraRoughness', this.scleraRoughness);
+    shader.set1f('uIrisRoughness', this.irisRoughness);
+    shader.bindTexture(0, 'uIrisTexture', textures.iris);
+    shader.bindTexture(1, 'uIrisNormalTexture', textures.irisNormal);
+    shader.bindTexture(2, 'uScleraTexture', textures.sclera);
+
+    const offsets = [-1, 1];
+    for (let i = 0; i < 2; i++) {
+      // The iris (UV centre) sits at sphere -x; rotate +90° around Y so
+      // it faces the avatar's forward (+z). Eyes parent to the avatar
+      // model (rotate with it), positioned just proud of the head.
+      const local = mat4Multiply(
+        mat4Translation(offsets[i] * this.eyeOffsetX, this.eyeY, this.eyeZ),
+        mat4Multiply(mat4RotationY(Math.PI / 2), mat4Scale(this.eyeRadius, this.eyeRadius, this.eyeRadius))
+      );
+      shader.setMatrix4('uModel', mat4Multiply(this.model, local));
+      this.eyeMeshes[i].draw(gl);
+    }
   }
 
   private applyCommonUniforms(gl: WebGL2RenderingContext, program: WebGLProgram) {
@@ -463,6 +567,13 @@ export class HdAvatarRenderer {
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, textures ? textures.normal : null);
     gl.uniform1i(u.uNormalTexture, 2);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.thicknessTexture);
+    gl.uniform1i(u.uThicknessTexture, 3);
+
+    // subsurface scattering (wrap light + thickness map)
+    gl.uniform1f(u.uSubsurfaceStrength, this.subsurfaceStrength);
+    gl.uniform3f(u.uSubsurfaceRadius, this.subsurfaceRadius[0], this.subsurfaceRadius[1], this.subsurfaceRadius[2]);
   }
 
   /** native createAvatarMesh(): the placeholder sphere.

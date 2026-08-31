@@ -347,6 +347,24 @@ button:disabled {
   word-break: break-word;
 }
 
+/* AvatarPreviewView onDraw status line (Kotlin View mirror) */
+.preview-draw-status {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: rgba(11, 11, 20, 0.62);
+  border: 1px solid rgba(144, 78, 221, 0.28);
+  color: #c9c9de;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  z-index: 5;
+}
+
 .rail-menu::-webkit-scrollbar {
   display: none;
 }

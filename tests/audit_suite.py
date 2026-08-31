@@ -346,6 +346,19 @@ with sync_playwright() as p:
     vm_hair = pg.evaluate("() => window.__grokGirlsVm.get().hair")
     chk("viewmodel: rich draft edit syncs into the VM", vm_hair == "Long", str(vm_hair))
 
+    # AvatarPreviewView (Kotlin custom View mirror): setAvatar invalidates the draw
+    status0 = pg.locator(".preview-draw-status").inner_text()
+    chk("preview view: onDraw status mirrors the definition", "AVATAR PREVIEW" in status0 and "Female" in status0, status0[:60])
+    pg.evaluate("""() => window.__grokGirlsPreview.setAvatar({
+      gender: 'Android', skin: 'Tone 06', head: 'Head 04', age: 'Mature',
+      hair: 'Mohawk', eyes: 'Cyber', face: 'Sharp', body: 'Heavy',
+      tattoos: 'Full', augmentations: 'Eyes', outfit: 'Armoured'
+    })""")
+    pg.wait_for_timeout(300)
+    status1 = pg.locator(".preview-draw-status").inner_text()
+    chk("preview view: setAvatar invalidates the draw", "Android" in status1 and "Tone 06" in status1 and "Mohawk" in status1, status1[:60])
+    chk("preview view: procedural render still present", pg.locator(".character-image").count() == 1)
+
     # unknown Avatar ID -> Load Outfit falls back to the DEFAULT definition
     pg.locator(".identity-avatar-id").fill("zzz_none")
     pg.wait_for_timeout(200)

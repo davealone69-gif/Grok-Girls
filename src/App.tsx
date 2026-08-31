@@ -17,6 +17,7 @@ import {
 } from './models/avatarDefinition';
 import { AVATAR_CATEGORIES, applyCategoryOption, activeCategoryOption } from './models/avatarCategories';
 import { AvatarDesignerViewModel, createAvatarDesignerViewModel } from './models/avatarDesignerViewModel';
+import { AvatarPreviewView, AvatarPreviewHandle } from './components/AvatarPreviewView';
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
 import { isAgeConfirmed, confirmAdultAge } from './services/ageGate';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
@@ -405,8 +406,12 @@ export default function App() {
   if (!avatarVmRef.current) avatarVmRef.current = createAvatarDesignerViewModel();
   const avatarVm = avatarVmRef.current;
   const [avatarDef, setAvatarDef] = useState<AvatarDefinition>(() => avatarVm.get());
+  const avatarPreviewRef = useRef<AvatarPreviewHandle>(null);
   useEffect(() => {
     (window as unknown as Record<string, unknown>).__grokGirlsVm = avatarVm;
+    (window as unknown as Record<string, unknown>).__grokGirlsPreview = {
+      setAvatar: (d: AvatarDefinition) => avatarPreviewRef.current?.setAvatar(d)
+    };
     return avatarVm.subscribe((def, change) => {
       setAvatarDef(def);
       if (change) {
@@ -1954,11 +1959,11 @@ export default function App() {
             </div>
           )}
           <div className="character-render-wrap">
-            <img
+            <AvatarPreviewView
+              ref={avatarPreviewRef}
+              definition={avatarDef}
               src={currentPreviewUrl}
               alt={girl.name}
-              draggable={false}
-              className="character-image"
               onError={e => {
                 const t = e.currentTarget;
                 if (!t.dataset.fallback) {
@@ -1966,7 +1971,7 @@ export default function App() {
                   t.src = girl.thumbnailUrl || presetThumbFallback(girl.id);
                 }
               }}
-              style={{
+              imgStyle={{
                 transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel}) rotate(${rotationAngle}deg)`,
                 filter: viewportFilter
               }}

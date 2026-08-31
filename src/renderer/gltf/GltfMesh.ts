@@ -56,20 +56,14 @@ export function uploadGltfPrimitive(gl: WebGL2RenderingContext, asset: GltfAsset
   if (!vao) throw new Error('Unable to create glTF VAO');
   gl.bindVertexArray(vao);
   const buffers: WebGLBuffer[] = [];
-  const attrs: Array<[string, number, boolean]> = [
-    ['POSITION', 0, false],
-    ['NORMAL', 1, false],
-    ['TEXCOORD_0', 2, false],
-    ['JOINTS_0', 3, true],
-    ['WEIGHTS_0', 4, false],
-  ];
+  const attrs: Array<[string, number, boolean]> = [['POSITION', 0, false], ['NORMAL', 1, false], ['TEXCOORD_0', 2, false], ['JOINTS_0', 3, true], ['WEIGHTS_0', 4, false]];
   for (const [name, location, integer] of attrs) {
     const index = primitive.attributes[name];
     if (index !== undefined) buffers.push(uploadAttribute(gl, asset, index, location, integer));
   }
   let indexBuffer: WebGLBuffer | null = null;
   let indexCount = 0;
-  let indexType = gl.UNSIGNED_SHORT;
+  let indexType: number = gl.UNSIGNED_SHORT;
   if (primitive.indices !== undefined) {
     const accessor = asset.json.accessors?.[primitive.indices];
     if (!accessor) throw new Error('Missing index accessor');
@@ -80,8 +74,7 @@ export function uploadGltfPrimitive(gl: WebGL2RenderingContext, asset: GltfAsset
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
     indexCount = accessor.count;
     indexType = accessor.componentType;
-  }
-  if (primitive.indices === undefined) {
+  } else {
     const positionAccessor = primitive.attributes.POSITION;
     if (positionAccessor === undefined) throw new Error('glTF primitive has no POSITION');
     indexCount = asset.json.accessors?.[positionAccessor]?.count ?? 0;

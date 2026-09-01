@@ -4,6 +4,77 @@
  * footer out of the hit surface, but preserve the mobile 18+ crown because
  * the audit and the phone UI both expose it as a real control.
  */
+
+/* -------------------------------------------------------------------------
+ * Viewport visibility guard
+ *
+ * The procedural/generated preview must remain a real, visible layout item.
+ * Do not allow flex sizing, an inherited zero-size parent, or a stale
+ * transform to collapse the image to a zero bounding box. This is deliberately
+ * kept here because main.tsx already loads this stylesheet after the base CSS.
+ * ------------------------------------------------------------------------- */
+.viewport-stage {
+  min-width: 1px !important;
+  min-height: 1px !important;
+}
+
+.character-render-wrap {
+  flex: 1 1 auto !important;
+  min-width: 1px !important;
+  min-height: 1px !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.character-render-wrap .character-image {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  flex: 0 1 auto !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: 92% !important;
+  max-height: 94% !important;
+  min-width: 1px !important;
+  min-height: 1px !important;
+  object-fit: contain !important;
+  object-position: center center !important;
+  transform-origin: center center !important;
+}
+
+@media (max-width: 900px) {
+  .app-container.mobile .viewport-stage {
+    min-width: 1px !important;
+    min-height: 1px !important;
+  }
+
+  .app-container.mobile .character-render-wrap {
+    flex: 1 1 auto !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 1px !important;
+    min-height: 1px !important;
+    padding: 4px !important;
+  }
+
+  .app-container.mobile .character-render-wrap .character-image {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: auto !important;
+    height: auto !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    min-width: 1px !important;
+    min-height: 1px !important;
+  }
+}
+
 @media (max-width: 900px) and (orientation: landscape) {
   .nav-rail {
     overflow: hidden;

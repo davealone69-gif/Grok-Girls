@@ -20,6 +20,9 @@ export interface DiceBearStyleDefinition {
   };
 }
 
+/** Backwards-compatible runtime style shape used by avatar session services. */
+export type DiceBearStyleConfig = DiceBearStyleDefinition;
+
 export const ADVENTURER_NEUTRAL: DiceBearStyleDefinition = {
   id: 'adventurer-neutral',
   name: 'Adventurer Neutral',

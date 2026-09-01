@@ -5,6 +5,7 @@ import './renderer/ResultCanvasCompat';
 import { installRendererDiagnostics } from './renderer/RendererDiagnostics';
 import './menu-mobile.css';
 import './styles-landscape-fix.css';
+import './styles-s24-viewport.css';
 
 installRendererDiagnostics();
 
@@ -24,16 +25,9 @@ const isNativeWebview = !!cap?.isNativePlatform?.();
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
     if (isNativeWebview) {
-      navigator.serviceWorker
-        .getRegistrations()
-        .then(rs => rs.forEach(r => r.unregister()))
-        .catch(() => {
-          /* nothing to unregister */
-        });
+      navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
     } else {
-      navigator.serviceWorker.register('/sw.js').catch(() => {
-        /* offline support unavailable — app still works online */
-      });
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
   });
 }

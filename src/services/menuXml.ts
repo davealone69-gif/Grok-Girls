@@ -84,8 +84,9 @@ function parseMenuXml(xml: string): MenuItem[] {
   const controls = Array.from(doc.querySelectorAll('Button,CheckBox,EditText,TextView'));
   const items: MenuItem[] = [];
   for (const el of controls) {
-    const id = cleanId(attr(el, 'id'));
-    if (!id) throw new Error('menu control missing android:id');
+    const rawId = cleanId(attr(el, 'id'));
+    if (!rawId) throw new Error('menu control missing android:id');
+    const id = rawId === 'catMakeup' ? 'makeup' : rawId;
     const section = sectionFor(el);
     if (!section) continue;
     const kind = el.tagName as MenuItem['kind'];

@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { installRendererDiagnostics } from './renderer/RendererDiagnostics';
+import './menu-mobile.css';
 
 installRendererDiagnostics();
 

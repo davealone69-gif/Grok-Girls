@@ -1,216 +1,64 @@
-/* Mobile menu completion pass.
- * The desktop rail remains intact. On narrow phone screens it becomes a
- * fixed, horizontally scrollable bottom navigation bar so every menu action
- * remains reachable without shrinking the avatar viewport into a postage stamp.
- */
-
+/* Mobile menu completion pass. The desktop rail remains intact. */
 @media (max-width: 900px) {
   body { overflow: hidden; }
-
-  .app-container.mobile {
-    position: relative;
-    height: 100dvh;
-    min-height: 0;
-  }
-
+  .app-container.mobile { position: relative; height: 100dvh; min-height: 0; }
   .app-container.mobile .nav-rail {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    height: calc(58px + env(safe-area-inset-bottom));
-    min-height: 58px;
-    padding: 4px 6px env(safe-area-inset-bottom);
-    flex-direction: row;
-    align-items: stretch;
-    background: rgba(12, 12, 20, 0.97);
-    border-right: 0;
-    border-top: 1px solid #29293d;
-    backdrop-filter: blur(16px);
-    z-index: 200;
+    position: fixed; left: 0; right: 0; bottom: 0; width: 100%;
+    height: calc(58px + env(safe-area-inset-bottom)); min-height: 58px;
+    padding: 4px 6px env(safe-area-inset-bottom); flex-direction: row;
+    align-items: stretch; background: rgba(12,12,20,.97); border-right: 0;
+    border-top: 1px solid #29293d; backdrop-filter: blur(16px); z-index: 200;
+    pointer-events: none;
   }
-
+  .app-container.mobile .nav-rail * { pointer-events: auto; }
   .app-container.mobile .brand-logo,
   .app-container.mobile .rail-build-label,
   .app-container.mobile .rail-footer,
-  .app-container.mobile .rail-spacer {
-    display: none;
-  }
-
+  .app-container.mobile .rail-spacer { display: none; }
   .app-container.mobile .rail-menu {
-    width: 100%;
-    height: 100%;
-    min-width: 0;
-    padding: 0;
-    gap: 2px;
-    flex-direction: row;
-    align-items: stretch;
-    overflow-x: auto;
-    overflow-y: hidden;
+    width: 100%; height: 100%; min-width: 0; padding: 0; gap: 2px;
+    flex-direction: row; align-items: stretch; overflow-x: auto; overflow-y: hidden;
     scrollbar-width: none;
   }
-
-  .app-container.mobile .rail-menu > div {
-    display: contents !important;
-  }
-
+  .app-container.mobile .rail-menu > div { display: contents !important; }
   .app-container.mobile .rail-menu .rail-btn {
-    flex: 0 0 58px;
-    width: 58px;
-    min-width: 58px;
-    height: 50px;
-    padding: 5px 2px;
-    border-radius: 8px;
-    gap: 2px;
-    font-size: 7px;
+    flex: 0 0 58px; width: 58px; min-width: 58px; height: 50px;
+    padding: 5px 2px; border-radius: 8px; gap: 2px; font-size: 7px;
   }
-
-  .app-container.mobile .rail-menu .rail-btn .rail-icon {
-    font-size: 18px;
-  }
-
+  .app-container.mobile .rail-menu .rail-btn .rail-icon { font-size: 18px; }
   .app-container.mobile .rail-menu .rail-btn.active::before {
-    left: 12%;
-    right: 12%;
-    top: auto;
-    bottom: 1px;
-    width: auto;
-    height: 2px;
-    border-radius: 2px;
+    left: 12%; right: 12%; top: auto; bottom: 1px; width: auto; height: 2px; border-radius: 2px;
   }
-
-  .app-container.mobile .presets-drawer {
-    display: none;
-  }
-
+  .app-container.mobile .presets-drawer { display: none; }
   .app-container.mobile .center-workspace {
-    width: 100%;
-    height: calc(100dvh - 58px - env(safe-area-inset-bottom));
-    min-height: 0;
+    width: 100%; height: calc(100dvh - 58px - env(safe-area-inset-bottom)); min-height: 0;
   }
-
-  .app-container.mobile .viewport-header {
-    height: auto;
-    min-height: 48px;
-    padding: 6px 8px;
-    gap: 6px;
-  }
-
-  .app-container.mobile .avatar-design-title {
-    min-width: 0;
-    flex: 1 1 auto;
-  }
-
+  .app-container.mobile .viewport-header { height: auto; min-height: 48px; padding: 6px 8px; gap: 6px; }
+  .app-container.mobile .avatar-design-title { min-width: 0; flex: 1 1 auto; }
   .app-container.mobile .avatar-design-title span { display: none; }
   .app-container.mobile .avatar-design-title h2 { font-size: 11px; }
-
-  .app-container.mobile .native-action-row {
-    max-width: 58%;
-    overflow-x: auto;
-    gap: 4px;
-    margin-left: 0;
-  }
-
-  .app-container.mobile .native-action {
-    padding: 6px 8px;
-    font-size: 8px;
-  }
-
-  .app-container.mobile .mode-pills {
-    order: 3;
-    width: 100%;
-    overflow-x: auto;
-    justify-content: flex-start;
-  }
-
-  .app-container.mobile .mode-pill {
-    flex: 0 0 auto;
-    padding: 5px 9px;
-    font-size: 8px;
-  }
-
-  .app-container.mobile .viewport-tools-top {
-    gap: 3px;
-  }
-
+  .app-container.mobile .native-action-row { max-width: 58%; overflow-x: auto; gap: 4px; margin-left: 0; }
+  .app-container.mobile .native-action { padding: 6px 8px; font-size: 8px; }
+  .app-container.mobile .mode-pills { order: 3; width: 100%; overflow-x: auto; justify-content: flex-start; }
+  .app-container.mobile .mode-pill { flex: 0 0 auto; padding: 5px 9px; font-size: 8px; }
+  .app-container.mobile .viewport-tools-top { gap: 3px; }
   .app-container.mobile .viewport-tools-top .icon-tool-btn:nth-child(3),
-  .app-container.mobile .viewport-tools-top .icon-tool-btn:nth-child(8) {
-    display: none;
-  }
-
-  .app-container.mobile .viewport-stage {
-    min-height: 0;
-  }
-
-  .app-container.mobile .character-render-wrap {
-    width: 100%;
-    height: 100%;
-    padding: 4px;
-  }
-
-  .app-container.mobile .character-image {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-  }
-
-  .app-container.mobile .viewport-hud {
-    top: 8px;
-    right: 8px;
-    gap: 4px;
-  }
-
-  .app-container.mobile .hud-btn {
-    min-width: 34px;
-    min-height: 34px;
-    padding: 5px 7px;
-    font-size: 8px;
-  }
-
-  .app-container.mobile .viewport-lighting-bar {
-    bottom: 8px;
-    max-width: calc(100% - 16px);
-    overflow-x: auto;
-  }
-
-  .app-container.mobile .angle-strip {
-    flex-shrink: 0;
-    overflow-x: auto;
-  }
-
-  .app-container.mobile .lower-dock {
-    height: auto;
-    max-height: 34vh;
-    overflow-y: auto;
-    grid-template-columns: 1fr;
-  }
-
+  .app-container.mobile .viewport-tools-top .icon-tool-btn:nth-child(8) { display: none; }
+  .app-container.mobile .viewport-stage { min-height: 0; }
+  .app-container.mobile .character-render-wrap { width: 100%; height: 100%; padding: 4px; }
+  .app-container.mobile .character-image { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .app-container.mobile .viewport-hud { top: 8px; right: 8px; gap: 4px; }
+  .app-container.mobile .hud-btn { min-width: 34px; min-height: 34px; padding: 5px 7px; font-size: 8px; }
+  .app-container.mobile .viewport-lighting-bar { bottom: 8px; max-width: calc(100% - 16px); overflow-x: auto; }
+  .app-container.mobile .angle-strip { flex-shrink: 0; overflow-x: auto; }
+  .app-container.mobile .lower-dock { height: auto; max-height: 34vh; overflow-y: auto; grid-template-columns: 1fr; }
   .app-container.mobile .dock-preview-section,
-  .app-container.mobile .dock-addons-section {
-    display: none;
-  }
-
-  .app-container.mobile .identity-strip {
-    flex-wrap: wrap;
-    gap: 5px;
-    padding: 7px;
-  }
-
-  .app-container.mobile .dock-tabs {
-    overflow-x: auto;
-    gap: 9px;
-  }
-
+  .app-container.mobile .dock-addons-section { display: none; }
+  .app-container.mobile .identity-strip { flex-wrap: wrap; gap: 5px; padding: 7px; }
+  .app-container.mobile .dock-tabs { overflow-x: auto; gap: 9px; }
   .app-container.mobile .companion-overlay-dock {
-    inset: 0;
-    bottom: 0;
-    margin: 0;
-    border-radius: 0;
+    inset: 0; bottom: 0; margin: 0; border-radius: 0;
     padding-bottom: calc(64px + env(safe-area-inset-bottom));
   }
-
-  .app-container.mobile.inspector-open .nav-rail {
-    z-index: 210;
-  }
+  .app-container.mobile.inspector-open .nav-rail { z-index: 210; }
 }

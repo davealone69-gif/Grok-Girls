@@ -15,10 +15,11 @@ export interface HDAvatarVideoConfig {
   background: AvatarBackground;
   name?: string;
   animation: AvatarAnimation;
-  width?: number;
-  height?: number;
-  fps?: number;
-  durationMs?: number;
+  /** Normalized render dimensions are always concrete. */
+  width: number;
+  height: number;
+  fps: number;
+  durationMs: number;
   transparent?: boolean;
 }
 
@@ -226,11 +227,13 @@ export function normalizeHDAvatarVideoConfig(config: Partial<HDAvatarVideoConfig
 export async function renderHDAvatarVideo(input: Partial<HDAvatarVideoConfig>, onProgress?: (progress: number) => void): Promise<HDVideoResult> {
   const config = normalizeHDAvatarVideoConfig(input);
   const canvas = document.createElement('canvas');
-  canvas.width = config.width!;
-  canvas.height = config.height!;
-  const ctx = canvas.getContext('2d', { alpha: config.transparent })!;
-  const fps = config.fps!;
-  const durationMs = config.durationMs!;
+  canvas.width = config.width;
+  canvas.height = config.height;
+  const ctx = canvas.getContext('2d', { alpha: config.transparent });
+  if (!ctx) throw new Error('2D canvas is not available in this browser.');
+  const fps = config.fps;
+  const durationMs = config.durationMs;
+  if (typeof canvas.captureStream !== 'function') throw new Error('Canvas captureStream is not available in this browser.');
   const stream = canvas.captureStream(fps);
   const preferred = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
   const mimeType = preferred.find(m => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) ?? '';
@@ -262,7 +265,7 @@ export async function renderHDAvatarVideo(input: Partial<HDAvatarVideoConfig>, o
   recorder.stop();
   await stopped;
   const blob = new Blob(chunks, { type: recorder.mimeType || 'video/webm' });
-  return { blob, url: URL.createObjectURL(blob), mimeType: blob.type, width: config.width!, height: config.height!, fps, durationMs };
+  return { blob, url: URL.createObjectURL(blob), mimeType: blob.type, width: config.width, height: config.height, fps, durationMs };
 }
 
 export function downloadHDVideo(result: HDVideoResult, filename = 'avatar-video.webm') {

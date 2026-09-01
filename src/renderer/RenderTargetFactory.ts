@@ -83,7 +83,6 @@ function probeDepth(gl: WebGL2RenderingContext, format: Exclude<DepthInternal, n
   gl.renderbufferStorage(gl.RENDERBUFFER, depthDescriptor(gl, format), 4, 4);
   gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
   gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
-  // A depth-only FBO must explicitly disable color draw/read buffers.
   gl.drawBuffers([gl.NONE]);
   gl.readBuffer(gl.NONE);
   const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
@@ -111,7 +110,10 @@ export function getRenderTargetCapabilities(gl: WebGL2RenderingContext): RenderT
 function colorFallback(requested: ColorInternal, caps: RenderTargetCapabilities): ColorInternal {
   const order: ColorInternal[] = requested === 'rgba8' ? ['rgba8']
     : requested === 'r16f' ? ['r16f', 'rgba8']
-    : requested === 'rg16f' ? ['rg16f', 'rgba16f', 'rgba32f', 'rgba8']
+    // RG16F is a two-channel target. Do not silently substitute RGBA16F/RGBA32F,
+    // because downstream read/write semantics and bandwidth change. RGBA8 is the
+    // only safe generic fallback for a pipeline that can repack the channels.
+    : requested === 'rg16f' ? ['rg16f', 'rgba8']
     : requested === 'rgba32f' ? ['rgba32f', 'rgba16f', 'rgba8']
     : ['rgba16f', 'rgba32f', 'rgba8'];
   return order.find(format => caps[format]) ?? 'rgba8';

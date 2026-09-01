@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import { installRendererDiagnostics } from './renderer/RendererDiagnostics';
 import './menu-mobile.css';
+import './styles-landscape-fix.css';
 
 installRendererDiagnostics();
 

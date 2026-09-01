@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import './renderer/ResultCanvasCompat';
 import { installRendererDiagnostics } from './renderer/RendererDiagnostics';
 import './menu-mobile.css';
 import './styles-landscape-fix.css';

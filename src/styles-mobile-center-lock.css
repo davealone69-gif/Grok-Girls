@@ -1,0 +1,70 @@
+/* Final narrow-phone horizontal lock.
+ * Keep the mobile workspace pinned to the physical viewport's left edge.
+ * This is intentionally loaded after every legacy mobile/layout stylesheet.
+ */
+@media (max-width: 900px) {
+  html, body, #root {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .app-container.mobile {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    transform: none !important;
+  }
+
+  .app-container.mobile .center-workspace {
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    transform: none !important;
+    overflow: hidden !important;
+  }
+
+  .app-container.mobile .viewport-header,
+  .app-container.mobile .viewport-stage,
+  .app-container.mobile .angle-strip,
+  .app-container.mobile .lower-dock {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .app-container.mobile .viewport-stage,
+  .app-container.mobile .character-render-wrap {
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+  }
+
+  .app-container.mobile .character-render-wrap {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    display: grid !important;
+    place-items: center !important;
+  }
+
+  .app-container.mobile .character-image,
+  .app-container.mobile .hd3d-canvas {
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}

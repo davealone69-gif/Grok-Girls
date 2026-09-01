@@ -1,27 +1,25 @@
 /* Types mirroring the native renderer package (renderer/*.kt). */
 
 export interface RenderConfig {
-  width?: number; // explicit size (legacy path)
+  width?: number;
   height?: number;
-  /* ---- native RenderConfig v2 (com.example.hdrenderer) ---- */
-  resolution?: RenderResolution; // default FULL_HD
-  renderScale?: number; // default 1.0
-  enableDepth?: boolean; // default true
-  enableMsaa?: boolean; // default true (web: canvas antialias)
-  msaaSamples?: number; // default 4
-  /* enableHdr/enableBloom are the native names for hdr/bloom */
-  enableHdr?: boolean; // default false
-  enableBloom?: boolean; // default false
+  resolution?: RenderResolution;
+  renderScale?: number;
+  enableDepth?: boolean;
+  enableMsaa?: boolean;
+  msaaSamples?: number;
+  enableHdr?: boolean;
+  enableBloom?: boolean;
   hdr?: boolean;
   bloom?: boolean;
   shadows?: boolean;
   samples?: number;
+  /** Requested shadow atlas/map dimension. */
+  shadowMapSize?: number;
   background?: [number, number, number];
   seed?: number;
 }
 
-/** width/height getters of the native RenderConfig:
- *  (resolution.width * renderScale).toInt().coerceAtLeast(1) */
 export function configSize(cfg: RenderConfig): { width: number; height: number } {
   if (cfg.resolution) {
     const base = RENDER_RESOLUTIONS[cfg.resolution];
@@ -60,9 +58,7 @@ export interface Camera {
 }
 
 export interface Mesh {
-  /** packed [x,y,z, nx,ny,nz, u,v] */
   data: Float32Array;
-  /** triangle indices */
   indices: Uint32Array;
   indexCount: number;
   material?: Material;

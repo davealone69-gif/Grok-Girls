@@ -13,7 +13,6 @@
   .app-container.mobile .nav-rail * { pointer-events: auto; }
   .app-container.mobile .brand-logo,
   .app-container.mobile .rail-build-label,
-  .app-container.mobile .rail-footer,
   .app-container.mobile .rail-spacer { display: none; }
   .app-container.mobile .rail-menu {
     width: 100%; height: 100%; min-width: 0; padding: 0; gap: 2px;
@@ -29,6 +28,33 @@
   .app-container.mobile .rail-menu .rail-btn.active::before {
     left: 12%; right: 12%; top: auto; bottom: 1px; width: auto; height: 2px; border-radius: 2px;
   }
+
+  /* Keep the 18+ control available on phones without restoring the desktop
+     footer hit-surface. Only the crown is rendered, and only the button
+     receives pointer events. Randomize remains in the desktop footer only. */
+  .app-container.mobile .rail-footer {
+    display: block !important;
+    position: absolute;
+    right: 6px;
+    bottom: calc(4px + env(safe-area-inset-bottom));
+    width: 58px;
+    height: 50px;
+    padding: 0;
+    margin: 0;
+    z-index: 3;
+    pointer-events: none !important;
+  }
+  .app-container.mobile .rail-footer > .rail-btn {
+    display: none !important;
+  }
+  .app-container.mobile .rail-footer > .rail-btn.crown-btn {
+    display: flex !important;
+    width: 58px;
+    min-width: 58px;
+    height: 50px;
+    pointer-events: auto !important;
+  }
+
   .app-container.mobile .presets-drawer { display: none; }
   .app-container.mobile .center-workspace {
     width: 100%; height: calc(100dvh - 58px - env(safe-area-inset-bottom)); min-height: 0;

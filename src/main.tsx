@@ -6,6 +6,7 @@ import { installRendererDiagnostics } from './renderer/RendererDiagnostics';
 import './menu-mobile.css';
 import './styles-landscape-fix.css';
 import './styles-s24-viewport.css';
+import './styles-mobile-center-lock.css';
 
 installRendererDiagnostics();
 

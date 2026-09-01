@@ -1,11 +1,8 @@
 /* Landscape short-height fix.
  *
- * The mobile nav rail is a fixed bottom hit-surface. Keeping the desktop
- * rail-footer inside it in a 780x360 viewport makes its Randomize/Crown
- * controls sit above the workspace and steal pointer events from chat SEND
- * and other controls. Mobile already has the compact rail/menu for those
- * actions, so the desktop footer must not participate in landscape hit
- * testing.
+ * The mobile nav rail is a fixed bottom hit-surface. Keep the desktop
+ * footer out of the hit surface, but preserve the mobile 18+ crown because
+ * the audit and the phone UI both expose it as a real control.
  */
 @media (max-width: 900px) and (orientation: landscape) {
   .nav-rail {
@@ -19,11 +16,35 @@
     overflow-y: auto !important;
   }
 
-  /* Critical: menu-mobile.css hides this footer on mobile. Do not override
-     that rule in landscape, otherwise the fixed rail becomes a click shield. */
+  /* The footer itself is never a hit surface. Only the crown button is.
+     Keep the footer compact so it cannot cover the workspace. */
   .app-container.mobile .nav-rail .rail-footer {
-    display: none !important;
-    visibility: hidden !important;
+    display: block !important;
+    visibility: visible !important;
+    position: absolute !important;
+    right: 6px !important;
+    bottom: calc(4px + env(safe-area-inset-bottom)) !important;
+    width: 58px !important;
+    height: 50px !important;
+    min-width: 58px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    z-index: 3 !important;
     pointer-events: none !important;
+  }
+
+  /* Randomize stays hidden on mobile. */
+  .app-container.mobile .nav-rail .rail-footer > .rail-btn:not(.crown-btn) {
+    display: none !important;
+  }
+
+  /* The 18+ control remains visible and clickable. */
+  .app-container.mobile .nav-rail .rail-footer > .rail-btn.crown-btn {
+    display: flex !important;
+    visibility: visible !important;
+    width: 58px !important;
+    min-width: 58px !important;
+    height: 50px !important;
+    pointer-events: auto !important;
   }
 }

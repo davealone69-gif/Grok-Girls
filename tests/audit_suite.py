@@ -82,8 +82,6 @@ with sync_playwright() as p:
         if pg.locator(".toast").count():
             seen.append(pg.locator(".toast").inner_text())
     toast = " | ".join(seen)
-    # R1: renders now live in IndexedDB — a big render under a nearly-full
-    # localStorage must still succeed and persist (metadata-only write).
     gal = pg.evaluate("JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]')")
     render_ok = any("complete" in t.lower() for t in seen)
     key_ok = len(gal) >= 1 and bool(gal[0].get("assetKey"))
@@ -91,7 +89,6 @@ with sync_playwright() as p:
     chk("quota: big render still completes near-full storage", render_ok, toast[:120])
     chk("quota: render persisted via IndexedDB assetKey", key_ok, str(gal[0])[:120] if gal else "none")
     chk("quota: gallery localStorage write is metadata-only", meta_small, "")
-    # M3: the prompt lives in the IDB record, not in localStorage
     no_prompt_ls = len(gal) >= 1 and "prompt" not in gal[0]
     chk("M3 prompt removed from localStorage", no_prompt_ls, str(gal[0])[:120] if gal else "none")
     idb_prompt = pg.evaluate("""() => new Promise(res => {
@@ -124,8 +121,7 @@ with sync_playwright() as p:
         chk(f"{label} no pageerrors", len(errs) == 0, errs[:1])
         pg.close()
 
-    # --- 5) SWEEP REGRESSIONS: H4 cancel, H1 engine split, M5 pin, M6 hard, M8 settings ---
-    # H4: CANCEL reachable on phones (portrait AND landscape)
+    # --- 5) SWEEP REGRESSIONS ---
     for label, vp in [("portrait", (393, 851)), ("landscape", (780, 360))]:
         pg = b.new_page(viewport={"width": vp[0], "height": vp[1]})
         pg.goto("http://localhost:8080/", wait_until="networkidle")
@@ -134,11 +130,9 @@ with sync_playwright() as p:
         bb = cb.bounding_box()
         chk(f"H4 cancel visible ({label})", bool(bb) and bb["width"] > 20 and bb["height"] > 10, str(bb)[:60])
         cb.click(timeout=5000)
-        alive = pg.locator(".app-container").count() == 1
-        chk(f"H4 cancel clickable ({label})", alive)
+        chk(f"H4 cancel clickable ({label})", pg.locator(".app-container").count() == 1)
         pg.close()
 
-    # M8: CANCEL discards the draft but keeps engine settings
     pg = b.new_page(viewport={"width": 1280, "height": 900})
     pg.goto("http://localhost:8080/", wait_until="networkidle")
     pg.wait_for_timeout(500)
@@ -160,7 +154,6 @@ with sync_playwright() as p:
     chk("M8 cancel keeps negative prompt", neg_after == "TESTNEG123", neg_after)
     chk("M8 cancel keeps seed", seed_after == "777", seed_after)
 
-    # H1: render ENGINE choice must not affect the chat engine
     pg.locator("select.footer-provider-select, .footer-provider-wrap select").first.select_option("selfhosted")
     pg.wait_for_timeout(300)
     pg.locator(".rail-btn[title='Interactive Dialogue']").click()
@@ -172,7 +165,6 @@ with sync_playwright() as p:
     pg.wait_for_timeout(900)
     chk("H1 chat replies with selfhosted render engine", pg.locator(".chat-bubble.assistant").count() >= 1)
 
-    # M5: adult mode pins cloud chat engines down to LOCAL
     pg.locator(".rail-btn[title='Interactive Dialogue']").click()
     pg.locator("button.crown-btn").first.click()
     pg.wait_for_timeout(250)
@@ -193,7 +185,6 @@ with sync_playwright() as p:
     chk("M5 adult chat pinned to LOCAL", "pinned to LOCAL" in toasts or "cloud chat" in toasts, toasts[:100])
     chk("M5 pinned chat still replies", pg.locator(".chat-bubble.assistant").count() >= 2)
 
-    # M6: innocent 'hard' no longer triggers an adult reply in adult mode
     pg.locator(".mini-provider-select").first.select_option("local")
     pg.locator(".companion-input").fill("this puzzle is hard but fun")
     pg.locator(".btn-send-chat").click()
@@ -203,7 +194,7 @@ with sync_playwright() as p:
     chk("M6 innocent 'hard' gets clean reply", not adult_hit, last[:80])
     pg.close()
 
-    # --- 6) ANDROID-FIRST: no service worker inside the Capacitor webview ---
+    # --- 6) ANDROID-FIRST ---
     pg = b.new_page(viewport={"width": 393, "height": 851})
     pg.add_init_script("window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android' };")
     pg.goto("http://localhost:8080/", wait_until="networkidle")
@@ -213,11 +204,10 @@ with sync_playwright() as p:
     chk("APK mode: app still boots", pg.locator(".app-container").count() == 1)
     pg.close()
 
-    # --- 7) MENU XML (native Android format): data-driven + FAULTY fallback ---
+    # --- 7) MENU XML ---
     fx = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixtures')
     custom_xml = open(os.path.join(fx, 'menu_custom.xml'), encoding='utf-8').read()
     faulty_xml = open(os.path.join(fx, 'menu_faulty.xml'), encoding='utf-8').read()
-
     def menu_override(body):
         return f"""
           const __orig = window.fetch.bind(window);
@@ -238,7 +228,6 @@ with sync_playwright() as p:
     chk("menu XML: angle strip driven by XML", pg.locator(".angle-btn").count() == 1)
     chk("menu XML: header actions driven by XML", pg.locator(".native-action").count() == 1)
     ctx.close()
-
     ctx = b.new_context(viewport={"width": 1280, "height": 900})
     ctx.add_init_script(menu_override(faulty_xml))
     pg = ctx.new_page()
@@ -255,7 +244,7 @@ with sync_playwright() as p:
     chk("faulty menu XML: no page errors", len(errs) == 0, errs[:1])
     ctx.close()
 
-    # --- 8) AVATAR DEFINITION (Kotlin data-class mirror) ---
+    # --- 8) AVATAR DEFINITION ---
     ctx = b.new_context(viewport={"width": 1280, "height": 900})
     pg = ctx.new_page()
     pg.goto("http://localhost:8080/", wait_until="networkidle")
@@ -268,7 +257,6 @@ with sync_playwright() as p:
     chk("avatar definition: gender follows the allowed set", saved and saved.get("gender") in ("Female", "Non-binary", "Android"), str(saved and saved.get("gender")))
     import re as _re
     chk("avatar definition: canonical defaults (skin/head)", saved and saved.get("skin") == "Tone 01" and bool(_re.match(r"Head \d{2}", saved.get("head", ""))), str(saved)[:120])
-
     pg.evaluate("""() => {
       const store = JSON.parse(localStorage.getItem('grok-girls-avatar-defs-v1')||'{}');
       store['default'] = {"gender":"Female","skin":"Tone 02","head":"Head 02","age":"Adult","hair":"Long","eyes":"Cyber","face":"Sharp","body":"Heavy","tattoos":"Arms","augmentations":"None","outfit":"Tech"};
@@ -278,13 +266,11 @@ with sync_playwright() as p:
     pg.wait_for_timeout(500)
     after = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}')")
     chk("avatar definition: Load Outfit applies saved outfit", after.get("outfit", "").startswith("cyberpunk"), after.get("outfit", "")[:60])
-
     before_ts = pg.evaluate("() => (JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}')).tattooStyle")
     pg.locator(".identity-btn", has_text="Tattoos").click()
     pg.wait_for_timeout(500)
     t = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}')")
     chk("avatar definition: tattoos toggle sets canonical style", before_ts != t.get("tattooStyle") and t.get("tattooStyle") == "floral noir", f"{before_ts} -> {t.get('tattooStyle')}")
-
     pg.locator(".dock-tab", has_text="CATEGORIES").click()
     pg.wait_for_timeout(300)
     chk("avatar categories: 11 categories rendered", pg.locator(".category-btn").count() == 11, pg.locator(".category-btn").count())
@@ -304,7 +290,6 @@ with sync_playwright() as p:
     pg.wait_for_timeout(200)
     outfit_opts = pg.locator(".category-option").all_inner_texts()
     chk("avatar categories: outfit has Armoured", "Armoured" in outfit_opts, str(outfit_opts))
-
     pg.evaluate("() => window.__grokGirlsVm.setOption('age', 'Mature')")
     pg.wait_for_timeout(400)
     vm_age = pg.evaluate("() => window.__grokGirlsVm.get().age")
@@ -322,7 +307,6 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
     vm_hair = pg.evaluate("() => window.__grokGirlsVm.get().hair")
     chk("viewmodel: rich draft edit syncs into the VM", vm_hair == "Long", str(vm_hair))
-
     status0 = pg.locator(".preview-draw-status").inner_text()
     chk("preview view: onDraw status mirrors the definition", "AVATAR PREVIEW" in status0 and "Female" in status0, status0[:60])
     pg.evaluate("""() => window.__grokGirlsPreview.setAvatar({
@@ -333,7 +317,7 @@ with sync_playwright() as p:
     chk("preview view: setAvatar invalidates the draw", "Android" in status1 and "Tone 06" in status1 and "Mohawk" in status1, status1[:60])
     chk("preview view: procedural render still present", pg.locator(".character-image").count() == 1)
 
-    # HD renderer: use WebGL2 readback, because the canvas is owned by WebGL2.
+    # HD renderer: use WebGL2 readback. Supply optional scene arrays explicitly so the audit does not depend on renderer defaults.
     hd = pg.evaluate("""() => {
       const { HDRenderer } = window.__hdDebug;
       const r = new HDRenderer();
@@ -349,6 +333,7 @@ with sync_playwright() as p:
           indexCount: 3,
           material: { baseColor: [1, 0, 0], roughness: 0.5 }
         }],
+        lights: [],
         camera: { position: [0, 0.5, 2], target: [0, 0.3, 0], fovDeg: 40 }
       });
       const out = r.render();
@@ -362,7 +347,6 @@ with sync_playwright() as p:
     }""")
     chk("hd renderer: pipeline produces real pixels", bool(hd) and hd.get('w') == 256 and hd.get('mx', 0) > 100, str(hd)[:120])
     chk("hd renderer: zero GL errors", bool(hd) and hd.get('glerr') == 0, str(hd and hd.get('glerr')))
-
     before_count = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]').length")
     pg.locator(".native-action", has_text="HD RENDER").click()
     try:
@@ -375,7 +359,6 @@ with sync_playwright() as p:
     after_count = len(prov)
     chk("hd renderer: gallery item saved (hdrenderer)", prov and prov[-1] == 'hdrenderer', str(prov[-3:]))
     chk("hd renderer: exactly one gallery item added (busy guard)", after_count == before_count + 1, f"{before_count} -> {after_count}")
-
     pg.keyboard.press("Escape")
     pg.wait_for_timeout(300)
     pg.evaluate("() => { const b = [...document.querySelectorAll('.hud-btn')].find(x => x.textContent.includes('3D')); if (b) b.click(); }")
@@ -409,7 +392,6 @@ with sync_playwright() as p:
     pg.locator(".hd-cube-close").click()
     pg.wait_for_timeout(300)
     chk("hd avatar: EXIT 3D returns to the studio", pg.locator(".hd-cube-overlay").count() == 0 and pg.locator(".character-image").count() == 1)
-
     pipe = pg.evaluate("""() => {
       const { Skeleton, Bone } = window.__hdDebug;
       const { MorphController } = window.__hdDebug;
@@ -430,7 +412,6 @@ with sync_playwright() as p:
     chk("avatar skeleton: identity skeleton -> identity skin matrices", pipe and pipe.get("identitySkin"), str(pipe)[:100])
     chk("avatar morphs: setWeight clamps to 0..1 (coerceIn)", pipe and pipe.get("weightsClamped"), str(pipe and pipe.get("weightsClamped")))
     chk("avatar parameters: all defaults are 1.0", pipe and pipe.get("paramDefaults"))
-
     rt = pg.evaluate("""() => {
       const c = document.createElement('canvas');
       c.width = 16; c.height = 16;
@@ -453,7 +434,6 @@ with sync_playwright() as p:
     chk("hd target: destroy() releases all handles", bool(rt) and rt.get("destroyed"), str(rt and rt.get("destroyed")))
     resmap = pg.evaluate("() => { const m = window.__hdDebug.RENDER_RESOLUTIONS; return Object.fromEntries(Object.entries(m).map(([k, v]) => [k, v.width + 'x' + v.height])); }")
     chk("hd resolutions: exact native enum values", resmap and resmap.get("HD_720P") == "1280x720" and resmap.get("FULL_HD") == "1920x1080" and resmap.get("QHD") == "2560x1440" and resmap.get("UHD_4K") == "3840x2160", str(resmap))
-
     pg.locator(".identity-avatar-id").fill("zzz_none")
     pg.wait_for_timeout(200)
     pg.locator(".identity-btn", has_text="Load Outfit").click()

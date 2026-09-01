@@ -1,0 +1,1 @@
+CI audit fix: HD renderer audit now reads GPU output with WebGL2 readPixels() instead of requesting a 2D context and calling getImageData() on the WebGL canvas. Stress suite and GLB renderer gate were already passing.

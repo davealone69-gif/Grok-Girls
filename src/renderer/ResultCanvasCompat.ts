@@ -1,8 +1,8 @@
 import { HDRenderer } from './HDRenderer';
+import type { RenderResult } from './types';
 
 type RendererRuntime = HDRenderer & { gl?: WebGL2RenderingContext };
-type RenderResultRuntime = { canvas: HTMLCanvasElement } & Record<string, unknown>;
-type RendererPrototype = { render: (this: RendererRuntime) => RenderResultRuntime };
+type RendererPrototype = { render: (this: RendererRuntime) => RenderResult };
 type PatchedConstructor = typeof HDRenderer & { __resultCanvasPatched?: boolean };
 
 /** Keep RenderResult.canvas tied to the real WebGL surface for GPU readback.

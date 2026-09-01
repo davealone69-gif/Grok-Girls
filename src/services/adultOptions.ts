@@ -17,6 +17,7 @@ export interface AdultSelections {
 
 export const adultOptions = {
   nudityLevel: ['covered', 'implied', 'artistic_nude', 'explicit_nude', 'graphic_sex'] as const,
+
   wardrobe: [
     'elegant lingerie set',
     'lace bodysuit',
@@ -29,8 +30,13 @@ export const adultOptions = {
     'collar and restraints only',
     'stockings and garter only',
     'open shirt nothing underneath',
-    'micro bikini aside'
+    'micro bikini aside',
+    'fishnet bodystocking',
+    'leather harness only',
+    'wet shirt clinging',
+    'just a choker'
   ],
+
   coverage: [
     'fully covered styling',
     'strategic fabric draping',
@@ -40,8 +46,12 @@ export const adultOptions = {
     'full explicit nudity, detailed anatomy',
     'spread legs, exposed genitals, graphic detail',
     'penetrated, fluids visible',
-    'cum on skin, post-sex'
+    'cum on skin, post-sex',
+    'ass spread, detailed hole',
+    'pussy spread, wet detailed',
+    'breasts out, nipples erect'
   ],
+
   pose: [
     'standing relaxed three-quarter pose',
     'seated portrait pose',
@@ -60,8 +70,15 @@ export const adultOptions = {
     'prone bone flat',
     'lotus face to face',
     '69 mutual oral',
-    'reverse cowgirl ass view'
+    'reverse cowgirl ass view',
+    'mating press legs folded',
+    'spooning side penetration',
+    'anal presenting, cheeks spread',
+    'squatting over face',
+    'legs over shoulders',
+    'bent over balcony railing'
   ],
+
   bodyPresentation: [
     'natural adult anatomy',
     'athletic adult physique',
@@ -71,8 +88,14 @@ export const adultOptions = {
     'breasts with erect nipples',
     'ass spread, detailed',
     'cum covered',
-    'flushed post-orgasm'
+    'flushed post-orgasm',
+    'pussy dripping, swollen',
+    'anal stretched, detailed',
+    'body with bite marks and hickeys',
+    'sweaty glistening skin',
+    'makeup smeared from sex'
   ],
+
   scene: [
     'private luxury bedroom studio',
     'dark leather boudoir studio',
@@ -85,8 +108,16 @@ export const adultOptions = {
     'rooftop railing outdoor sex',
     'mirror sex scene',
     'shower wet sex',
-    'car backseat risk'
+    'car backseat risk',
+    'hotel room messy sheets',
+    'office desk after hours',
+    'kitchen counter',
+    'bathtub water play',
+    'balcony at night',
+    'dungeon restraint room',
+    'photostudio seamless backdrop'
   ],
+
   lighting: [
     'soft diffused studio light',
     'dramatic rim lighting',
@@ -95,8 +126,13 @@ export const adultOptions = {
     'harsh explicit close-up lighting',
     'neon cyber sex lighting',
     'flash photography explicit',
-    'moonlight through blinds'
+    'moonlight through blinds',
+    'red room lighting',
+    'golden hour through window',
+    'blue hour neon mix',
+    'single practical lamp'
   ],
+
   camera: [
     'full-body editorial framing',
     'three-quarter portrait framing',
@@ -105,16 +141,25 @@ export const adultOptions = {
     'over-shoulder thrusting view',
     'from below looking up',
     'mirror reflection shot',
-    'extreme close-up fluids'
+    'extreme close-up fluids',
+    'side profile penetration',
+    'top-down looking down',
+    'low angle power shot',
+    'intimate face + body crop'
   ],
+
   styling: [
     'luxury fashion editorial',
     'gothic glamour',
     'explicit adult photography',
     'hardcore graphic sex scene',
     'amateur realistic sex',
-    'cinematic erotic'
+    'cinematic erotic',
+    'raw documentary sex',
+    'glamour nude',
+    'cyberpunk erotic'
   ],
+
   accessories: [
     'none',
     'velvet choker',
@@ -123,8 +168,15 @@ export const adultOptions = {
     'vibrator / toy visible',
     'ball gag',
     'blindfold',
-    'nipple clamps'
+    'nipple clamps',
+    'butt plug',
+    'rope bondage',
+    'thigh high stockings',
+    'garter belt',
+    'ankle cuffs',
+    'remote vibe'
   ],
+
   mood: [
     'confident and composed',
     'sensual and elegant',
@@ -133,8 +185,13 @@ export const adultOptions = {
     'orgasmic intensity',
     'overstimulated',
     'claimed / marked',
-    'afterglow soft'
+    'afterglow soft',
+    'teasing and edging',
+    'raw and animalistic',
+    'tender and intimate',
+    'degraded and used'
   ],
+
   act: [
     'none',
     'explicit oral sex, deepthroat, wet detailed',
@@ -156,7 +213,14 @@ export const adultOptions = {
     'standing wall sex',
     'lotus intimate',
     'collared sex',
-    'overstimulation multiple orgasms'
+    'overstimulation multiple orgasms',
+    'anal creampie',
+    'mating press breeding',
+    'edging denied orgasm',
+    'public risk sex',
+    'mirror sex',
+    'shower wet sex',
+    'bondage restrained sex'
   ]
 } as const;
 

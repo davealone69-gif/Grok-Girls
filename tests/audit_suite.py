@@ -82,6 +82,8 @@ with sync_playwright() as p:
         if pg.locator(".toast").count():
             seen.append(pg.locator(".toast").inner_text())
     toast = " | ".join(seen)
+    # R1: renders now live in IndexedDB — a big render under a nearly-full
+    # localStorage must still succeed and persist (metadata-only write).
     gal = pg.evaluate("JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]')")
     render_ok = any("complete" in t.lower() for t in seen)
     key_ok = len(gal) >= 1 and bool(gal[0].get("assetKey"))
@@ -89,6 +91,7 @@ with sync_playwright() as p:
     chk("quota: big render still completes near-full storage", render_ok, toast[:120])
     chk("quota: render persisted via IndexedDB assetKey", key_ok, str(gal[0])[:120] if gal else "none")
     chk("quota: gallery localStorage write is metadata-only", meta_small, "")
+    # M3: the prompt lives in the IDB record, not in localStorage
     no_prompt_ls = len(gal) >= 1 and "prompt" not in gal[0]
     chk("M3 prompt removed from localStorage", no_prompt_ls, str(gal[0])[:120] if gal else "none")
     idb_prompt = pg.evaluate("""() => new Promise(res => {
@@ -122,6 +125,7 @@ with sync_playwright() as p:
         pg.close()
 
     # --- 5) SWEEP REGRESSIONS: H4 cancel, H1 engine split, M5 pin, M6 hard, M8 settings ---
+    # H4: CANCEL reachable on phones (portrait AND landscape)
     for label, vp in [("portrait", (393, 851)), ("landscape", (780, 360))]:
         pg = b.new_page(viewport={"width": vp[0], "height": vp[1]})
         pg.goto("http://localhost:8080/", wait_until="networkidle")
@@ -134,6 +138,7 @@ with sync_playwright() as p:
         chk(f"H4 cancel clickable ({label})", alive)
         pg.close()
 
+    # M8: CANCEL discards the draft but keeps engine settings
     pg = b.new_page(viewport={"width": 1280, "height": 900})
     pg.goto("http://localhost:8080/", wait_until="networkidle")
     pg.wait_for_timeout(500)
@@ -155,6 +160,7 @@ with sync_playwright() as p:
     chk("M8 cancel keeps negative prompt", neg_after == "TESTNEG123", neg_after)
     chk("M8 cancel keeps seed", seed_after == "777", seed_after)
 
+    # H1: render ENGINE choice must not affect the chat engine
     pg.locator("select.footer-provider-select, .footer-provider-wrap select").first.select_option("selfhosted")
     pg.wait_for_timeout(300)
     pg.locator(".rail-btn[title='Interactive Dialogue']").click()
@@ -166,6 +172,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(900)
     chk("H1 chat replies with selfhosted render engine", pg.locator(".chat-bubble.assistant").count() >= 1)
 
+    # M5: adult mode pins cloud chat engines down to LOCAL
     pg.locator(".rail-btn[title='Interactive Dialogue']").click()
     pg.locator("button.crown-btn").first.click()
     pg.wait_for_timeout(250)
@@ -186,6 +193,7 @@ with sync_playwright() as p:
     chk("M5 adult chat pinned to LOCAL", "pinned to LOCAL" in toasts or "cloud chat" in toasts, toasts[:100])
     chk("M5 pinned chat still replies", pg.locator(".chat-bubble.assistant").count() >= 2)
 
+    # M6: innocent 'hard' no longer triggers an adult reply in adult mode
     pg.locator(".mini-provider-select").first.select_option("local")
     pg.locator(".companion-input").fill("this puzzle is hard but fun")
     pg.locator(".btn-send-chat").click()
@@ -220,46 +228,240 @@ with sync_playwright() as p:
             return __orig(url, opts);
           }};
         """
-
-    pg = b.new_page(viewport={"width": 393, "height": 851})
-    pg.add_init_script(menu_override(custom_xml))
-    pg.goto("http://localhost:8080/", wait_until="networkidle")
-    pg.wait_for_timeout(600)
-    pg.locator(".rail-btn").first.click()
-    pg.wait_for_timeout(300)
-    chk("menu XML custom item rendered", pg.locator("text=Custom Test Item").count() >= 1)
-    pg.close()
-
-    pg = b.new_page(viewport={"width": 393, "height": 851})
-    pg.add_init_script(menu_override(faulty_xml))
-    pg.goto("http://localhost:8080/", wait_until="networkidle")
-    pg.wait_for_timeout(600)
-    pg.locator(".rail-btn").first.click()
-    pg.wait_for_timeout(300)
-    chk("menu XML faulty fallback keeps app alive", pg.locator(".app-container").count() == 1)
-    pg.close()
-
-    # --- 8) HD RENDERER DIAGNOSTICS ---
-    pg = b.new_page(viewport={"width": 1280, "height": 900})
+    ctx = b.new_context(viewport={"width": 1280, "height": 900})
+    ctx.add_init_script(menu_override(custom_xml))
+    pg = ctx.new_page()
     pg.goto("http://localhost:8080/", wait_until="networkidle")
     pg.wait_for_timeout(700)
+    chk("menu XML: custom title drives the rail", pg.locator(".rail-btn[title='ARCHIVE CUSTOM']").count() == 1)
+    chk("menu XML: custom dock label applied", pg.locator(".dock-tab", has_text="COSMETICS").count() == 1)
+    chk("menu XML: angle strip driven by XML", pg.locator(".angle-btn").count() == 1)
+    chk("menu XML: header actions driven by XML", pg.locator(".native-action").count() == 1)
+    ctx.close()
+
+    ctx = b.new_context(viewport={"width": 1280, "height": 900})
+    ctx.add_init_script(menu_override(faulty_xml))
+    pg = ctx.new_page()
+    errs = []
+    pg.on("pageerror", lambda e: errs.append(str(e)[:140]))
+    pg.goto("http://localhost:8080/", wait_until="networkidle")
+    pg.wait_for_timeout(700)
+    chk("faulty menu XML: app still boots", pg.locator(".app-container").count() == 1)
+    chk("faulty menu XML: built-in labels restored", pg.locator(".rail-btn[title='Generation Archive']").count() == 1)
+    chk("faulty menu XML: dock tabs intact", pg.locator(".dock-tab", has_text="HAIR STYLE").count() == 1)
+    chk("faulty menu XML: angle strip restored (4 buttons)", pg.locator(".angle-btn").count() == 4)
+    chk("faulty menu XML: header actions restored (5 buttons)", pg.locator(".native-action").count() == 5)
+    chk("faulty menu XML: BUILD rail header restored", pg.locator(".rail-build-label").inner_text() == "BUILD")
+    chk("faulty menu XML: no page errors", len(errs) == 0, errs[:1])
+    ctx.close()
+
+    # --- 8) AVATAR DEFINITION (Kotlin data-class mirror) ---
+    ctx = b.new_context(viewport={"width": 1280, "height": 900})
+    pg = ctx.new_page()
+    pg.goto("http://localhost:8080/", wait_until="networkidle")
+    pg.wait_for_timeout(700)
+    pg.locator(".identity-save").click()
+    pg.wait_for_timeout(500)
+    saved = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-avatar-defs-v1')||'{}')['default']")
+    keys_ok = bool(saved) and sorted(saved.keys()) == sorted(["gender", "skin", "head", "age", "hair", "eyes", "face", "body", "tattoos", "augmentations", "outfit"])
+    chk("avatar definition: all 11 data-class fields stored", keys_ok, str(sorted(saved.keys()))[:120] if saved else "none")
+    chk("avatar definition: gender follows the allowed set", saved and saved.get("gender") in ("Female", "Non-binary", "Android"), str(saved and saved.get("gender")))
+    import re as _re
+    chk("avatar definition: canonical defaults (skin/head)", saved and saved.get("skin") == "Tone 01" and bool(_re.match(r"Head \d{2}", saved.get("head", ""))), str(saved)[:120])
+
+    pg.evaluate("""() => {
+      const store = JSON.parse(localStorage.getItem('grok-girls-avatar-defs-v1')||'{}');
+      store['default'] = {"gender":"Female","skin":"Tone 02","head":"Head 02","age":"Adult","hair":"Long","eyes":"Cyber","face":"Sharp","body":"Heavy","tattoos":"Arms","augmentations":"None","outfit":"Tech"};
+      localStorage.setItem('grok-girls-avatar-defs-v1', JSON.stringify(store));
+    }""")
+    pg.locator(".identity-btn", has_text="Load Outfit").click()
+    pg.wait_for_timeout(500)
+    after = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}')")
+    chk("avatar definition: Load Outfit applies saved outfit", after.get("outfit", "").startswith("cyberpunk"), after.get("outfit", "")[:60])
+
+    before_ts = pg.evaluate("() => (JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}')).tattooStyle")
+    pg.locator(".identity-btn", has_text="Tattoos").click()
+    pg.wait_for_timeout(500)
+    t = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}')")
+    chk("avatar definition: tattoos toggle sets canonical style", before_ts != t.get("tattooStyle") and t.get("tattooStyle") == "floral noir", f"{before_ts} -> {t.get('tattooStyle')}")
+
+    pg.locator(".dock-tab", has_text="CATEGORIES").click()
+    pg.wait_for_timeout(300)
+    chk("avatar categories: 11 categories rendered", pg.locator(".category-btn").count() == 11, pg.locator(".category-btn").count())
+    gender_opts = pg.locator(".category-option").all_inner_texts()
+    chk("avatar categories: gender excludes Male (product rule)", "Male" not in gender_opts and "Non-binary" in gender_opts, str(gender_opts))
+    pg.locator(".category-btn", has_text="Skin").click()
+    pg.wait_for_timeout(200)
+    chk("avatar categories: skin has 6 tones", pg.locator(".category-option").count() == 6, pg.locator(".category-option").count())
+    pg.locator(".category-option", has_text="Tone 03").click()
+    pg.wait_for_timeout(400)
+    pg.locator(".identity-avatar-id").fill("default")
+    pg.locator(".identity-save").click()
+    pg.wait_for_timeout(400)
+    skin_after = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-avatar-defs-v1')||'{}')['default']")
+    chk("avatar categories: Tone 03 applied to saved definition", skin_after.get("skin") == "Tone 03", str(skin_after)[:100])
+    pg.locator(".category-btn", has_text="Outfit").click()
+    pg.wait_for_timeout(200)
+    outfit_opts = pg.locator(".category-option").all_inner_texts()
+    chk("avatar categories: outfit has Armoured", "Armoured" in outfit_opts, str(outfit_opts))
+
+    pg.evaluate("() => window.__grokGirlsVm.setOption('age', 'Mature')")
+    pg.wait_for_timeout(400)
+    vm_age = pg.evaluate("() => window.__grokGirlsVm.get().age")
+    draft_age = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}').age")
+    chk("viewmodel: setOption updates the canonical definition", vm_age == "Mature", str(vm_age))
+    chk("viewmodel: change applies onto the draft", draft_age == 40, str(draft_age))
+    before = pg.evaluate("() => JSON.stringify(window.__grokGirlsVm.get())")
+    pg.evaluate("() => window.__grokGirlsVm.setOption('bogus_category', 'x')")
+    pg.wait_for_timeout(300)
+    after = pg.evaluate("() => JSON.stringify(window.__grokGirlsVm.get())")
+    chk("viewmodel: unknown category is a no-op (Kotlin else branch)", before == after, "unchanged" if before == after else "MUTATED")
+    pg.locator(".dock-tab", has_text="HAIR STYLE").click()
+    pg.wait_for_timeout(200)
+    pg.locator(".hair-style-card[title='Glamour Waves']").click()
+    pg.wait_for_timeout(400)
+    vm_hair = pg.evaluate("() => window.__grokGirlsVm.get().hair")
+    chk("viewmodel: rich draft edit syncs into the VM", vm_hair == "Long", str(vm_hair))
+
+    status0 = pg.locator(".preview-draw-status").inner_text()
+    chk("preview view: onDraw status mirrors the definition", "AVATAR PREVIEW" in status0 and "Female" in status0, status0[:60])
+    pg.evaluate("""() => window.__grokGirlsPreview.setAvatar({
+      gender: 'Android', skin: 'Tone 06', head: 'Head 04', age: 'Mature', hair: 'Mohawk', eyes: 'Cyber', face: 'Sharp', body: 'Heavy', tattoos: 'Full', augmentations: 'Eyes', outfit: 'Armoured'
+    })""")
+    pg.wait_for_timeout(300)
+    status1 = pg.locator(".preview-draw-status").inner_text()
+    chk("preview view: setAvatar invalidates the draw", "Android" in status1 and "Tone 06" in status1 and "Mohawk" in status1, status1[:60])
+    chk("preview view: procedural render still present", pg.locator(".character-image").count() == 1)
+
+    # HD renderer: use WebGL2 readback, because the canvas is owned by WebGL2.
     hd = pg.evaluate("""() => {
       const { HDRenderer } = window.__hdDebug;
       const r = new HDRenderer();
+      r.configure({ width: 256, height: 256, shadows: true, bloom: true, samples: 1 });
+      r.loadScene({
+        meshes: [{
+          data: new Float32Array([
+            -0.5, 0, 0, 0, 0, 1, 0, 0,
+             0.5, 0, 0, 0, 0, 1, 1, 0,
+             0.0, 1, 0, 0, 0, 1, 0.5, 1
+          ]),
+          indices: new Uint32Array([0, 1, 2]),
+          indexCount: 3,
+          material: { baseColor: [1, 0, 0], roughness: 0.5 }
+        }],
+        camera: { position: [0, 0.5, 2], target: [0, 0.3, 0], fovDeg: 40 }
+      });
       const out = r.render();
       const gl = out.canvas.getContext('webgl2');
-      if (!gl) return {mx: 0, glerr: -1, w: out.width};
+      if (!gl) return { mx: 0, glerr: -1, w: out.width };
       const pixels = new Uint8Array(256 * 256 * 4);
       gl.readPixels(0, 0, 256, 256, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
       let mx = 0;
       for (let i = 0; i < pixels.length; i += 4) mx = Math.max(mx, pixels[i]);
       return { mx, glerr: gl.getError(), w: out.width };
     }""")
-    chk("HD render returns non-black pixels", hd["mx"] > 0, str(hd))
-    chk("HD render GL error-free", hd["glerr"] == 0, str(hd))
-    chk("HD render requested output width", hd["w"] >= 512, str(hd))
-    pg.close()
+    chk("hd renderer: pipeline produces real pixels", bool(hd) and hd.get('w') == 256 and hd.get('mx', 0) > 100, str(hd)[:120])
+    chk("hd renderer: zero GL errors", bool(hd) and hd.get('glerr') == 0, str(hd and hd.get('glerr')))
+
+    before_count = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]').length")
+    pg.locator(".native-action", has_text="HD RENDER").click()
+    try:
+        pg.wait_for_function("() => { const t = [...document.querySelectorAll('.toast')].map(x => x.textContent).join(' '); return t.includes('HD render complete'); }", timeout=120000)
+        done = True
+    except Exception:
+        done = False
+    chk("hd renderer: render completes + toast", done, "")
+    prov = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]').map(i => i.provider)")
+    after_count = len(prov)
+    chk("hd renderer: gallery item saved (hdrenderer)", prov and prov[-1] == 'hdrenderer', str(prov[-3:]))
+    chk("hd renderer: exactly one gallery item added (busy guard)", after_count == before_count + 1, f"{before_count} -> {after_count}")
+
+    pg.keyboard.press("Escape")
+    pg.wait_for_timeout(300)
+    pg.evaluate("() => { const b = [...document.querySelectorAll('.hud-btn')].find(x => x.textContent.includes('3D')); if (b) b.click(); }")
+    pg.wait_for_timeout(1500)
+    chk("hd avatar: 3D overlay visible", pg.locator(".hd-cube-overlay").count() == 1)
+    a1 = pg.evaluate("() => window.__hdAvatar.getAngle()")
+    pg.wait_for_timeout(500)
+    a2 = pg.evaluate("() => window.__hdAvatar.getAngle()")
+    chk("hd avatar: auto-rotates (continuous render mode)", a2 > a1, round(a2 - a1, 1))
+    strip = pg.evaluate("() => window.__hdAvatar.maxStrip(0.5)")
+    chk("hd avatar: PBR skin sphere is lit (warm skin tone, red > blue)", strip[0] > 40 and strip[0] > strip[2], str(strip))
+    pg.evaluate("() => window.__hdAvatar.pause()")
+    b1 = pg.evaluate("() => window.__hdAvatar.getAngle()")
+    pg.wait_for_timeout(400)
+    b2 = pg.evaluate("() => window.__hdAvatar.getAngle()")
+    chk("hd avatar: pause stops the spin (lifecycle mirror)", abs(b2 - b1) < 0.01)
+    pg.evaluate("() => window.__hdAvatar.resume()")
+    c1 = pg.evaluate("() => window.__hdAvatar.getAngle()")
+    pg.wait_for_timeout(400)
+    c2 = pg.evaluate("() => window.__hdAvatar.getAngle()")
+    chk("hd avatar: resume restarts the spin", c2 > c1)
+    pg.evaluate("() => { window.__hdAvatar.setMaterial(1.5, 0.01); window.__hdAvatar.setExposure(99); }")
+    clamped = pg.evaluate("""() => { const c = document.querySelector('.hd3d-canvas'); const gl = c.getContext('webgl2'); return !!gl; }""")
+    chk("hd avatar: setters accept out-of-range inputs without throwing", bool(clamped))
+    pg.evaluate("""() => window.__hdAvatar.setParameters({
+      height: 1, bodyWidth: 0.8, shoulderWidth: 1, chest: 1.3, waist: 0.7, hipWidth: 1.3, armLength: 1, legLength: 1, headScale: 1.15, eyeSize: 1, noseWidth: 1, jawWidth: 1, cheekWidth: 1
+    })""")
+    pg.wait_for_timeout(500)
+    strip2 = pg.evaluate("() => window.__hdAvatar.maxStrip(0.5)")
+    chk("hd avatar: parameter change still renders (skinned path)", strip2[0] > 40, str(strip2))
+    pg.locator(".hd-cube-close").click()
+    pg.wait_for_timeout(300)
+    chk("hd avatar: EXIT 3D returns to the studio", pg.locator(".hd-cube-overlay").count() == 0 and pg.locator(".character-image").count() == 1)
+
+    pipe = pg.evaluate("""() => {
+      const { Skeleton, Bone } = window.__hdDebug;
+      const { MorphController } = window.__hdDebug;
+      const { DEFAULT_AVATAR_PARAMETERS } = window.__hdDebug;
+      const bones = [new Bone('root', -1), new Bone('spine', 0)];
+      const sk = new Skeleton(bones);
+      sk.update();
+      const sm = Array.from(sk.skinMatrices.slice(0, 16));
+      const identitySkin = sm[0] === 1 && sm[5] === 1 && sm[10] === 1 && sm[15] === 1;
+      const mc = new MorphController([{ name: 'jaw', positionDeltas: new Float32Array(3) }, { name: 'cheeks', positionDeltas: new Float32Array(3) }]);
+      mc.setWeight('jaw', 1.7);
+      mc.setWeight('cheeks', -0.4);
+      mc.setWeight('unknown', 0.9);
+      const w = Array.from(mc.getWeights());
+      const params = DEFAULT_AVATAR_PARAMETERS;
+      return { identitySkin, weightsClamped: w[0] === 1 && w[1] === 0, weightCount: w.length, paramDefaults: params.height === 1 && params.chest === 1 && params.eyeSize === 1 };
+    }""")
+    chk("avatar skeleton: identity skeleton -> identity skin matrices", pipe and pipe.get("identitySkin"), str(pipe)[:100])
+    chk("avatar morphs: setWeight clamps to 0..1 (coerceIn)", pipe and pipe.get("weightsClamped"), str(pipe and pipe.get("weightsClamped")))
+    chk("avatar parameters: all defaults are 1.0", pipe and pipe.get("paramDefaults"))
+
+    rt = pg.evaluate("""() => {
+      const c = document.createElement('canvas');
+      c.width = 16; c.height = 16;
+      const gl = c.getContext('webgl2');
+      if (!gl) return { ok: false, why: 'no webgl2' };
+      const t = new window.__hdDebug.HDRenderTarget(gl, 16, 16);
+      t.create();
+      const created = !!(t.framebuffer && t.colorTexture && t.depthBuffer);
+      let threw = false;
+      try {
+        const bad = new window.__hdDebug.HDRenderTarget(gl, 0, 16);
+        bad.create();
+      } catch (e) { threw = true; }
+      t.destroy();
+      const destroyed = !t.framebuffer && !t.colorTexture && !t.depthBuffer;
+      return { ok: true, created, threw, destroyed };
+    }""")
+    chk("hd target: create() makes FBO + color + depth", bool(rt) and rt.get("ok") and rt.get("created"), str(rt)[:120])
+    chk("hd target: incomplete framebuffer throws (Kotlin IllegalState)", bool(rt) and rt.get("threw"), str(rt and rt.get("threw")))
+    chk("hd target: destroy() releases all handles", bool(rt) and rt.get("destroyed"), str(rt and rt.get("destroyed")))
+    resmap = pg.evaluate("() => { const m = window.__hdDebug.RENDER_RESOLUTIONS; return Object.fromEntries(Object.entries(m).map(([k, v]) => [k, v.width + 'x' + v.height])); }")
+    chk("hd resolutions: exact native enum values", resmap and resmap.get("HD_720P") == "1280x720" and resmap.get("FULL_HD") == "1920x1080" and resmap.get("QHD") == "2560x1440" and resmap.get("UHD_4K") == "3840x2160", str(resmap))
+
+    pg.locator(".identity-avatar-id").fill("zzz_none")
+    pg.wait_for_timeout(200)
+    pg.locator(".identity-btn", has_text="Load Outfit").click()
+    pg.wait_for_timeout(500)
+    fb = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}')")
+    chk("avatar definition: missing ID falls back to Casual", "silk robe" in fb.get("outfit", ""), fb.get("outfit", "")[:60])
+    ctx.close()
 
     b.close()
 
-print(json.dumps(results))
+print(json.dumps(results, indent=1))

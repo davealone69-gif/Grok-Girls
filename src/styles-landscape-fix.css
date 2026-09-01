@@ -1,29 +1,29 @@
-/* landscape short-height — crown/adult always visible */
+/* Landscape short-height fix.
+ *
+ * The mobile nav rail is a fixed bottom hit-surface. Keeping the desktop
+ * rail-footer inside it in a 780x360 viewport makes its Randomize/Crown
+ * controls sit above the workspace and steal pointer events from chat SEND
+ * and other controls. Mobile already has the compact rail/menu for those
+ * actions, so the desktop footer must not participate in landscape hit
+ * testing.
+ */
 @media (max-width: 900px) and (orientation: landscape) {
   .nav-rail {
     overflow: hidden;
     min-height: 0;
   }
+
   .nav-rail .rail-menu {
     flex: 1 1 auto !important;
     min-height: 0 !important;
     overflow-y: auto !important;
   }
-  .nav-rail .rail-footer {
-    flex-shrink: 0 !important;
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    background: #171A21;
-    z-index: 2;
-  }
-  .nav-rail .rail-footer .rail-btn,
-  .nav-rail .crown-btn {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
-    flex-shrink: 0 !important;
-    height: 34px !important;
+
+  /* Critical: menu-mobile.css hides this footer on mobile. Do not override
+     that rule in landscape, otherwise the fixed rail becomes a click shield. */
+  .app-container.mobile .nav-rail .rail-footer {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
   }
 }

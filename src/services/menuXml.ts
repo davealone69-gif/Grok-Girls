@@ -42,6 +42,7 @@ export const DEFAULT_MENU: MenuItem[] = [
   { id: 'hair_style', kind: 'Button', section: 'dock', label: 'HAIR STYLE' },
   { id: 'hair_color', kind: 'Button', section: 'dock', label: 'HAIR COLOR' },
   { id: 'makeup', kind: 'Button', section: 'dock', label: 'MAKEUP' },
+  { id: 'catMakeup', kind: 'Button', section: 'dock', label: 'MAKEUP' },
   { id: 'eyebrows', kind: 'Button', section: 'dock', label: 'EYEBROWS' },
   { id: 'scene_style', kind: 'Button', section: 'dock', label: 'SCENE STYLE' },
   { id: 'catAvatar', kind: 'Button', section: 'dock', label: 'CATEGORIES' },

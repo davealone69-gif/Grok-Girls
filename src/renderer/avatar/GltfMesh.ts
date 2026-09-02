@@ -85,6 +85,37 @@ export function uploadPrimitive(
     }
   }
 
+  // Unskinned primitives still bind dummy joint/weight arrays (index 0,
+  // weight (1,0,0,0)) so the renderer can always run the skin program's
+  // skinned branch with identity bones — some GL implementations (the
+  // WebKit software GL used by headless CI) misrender the uSkinned=false
+  // branch of a shader that contains dynamic uBones[] indexing.
+  const posAccForCount =
+    primitive.attributes.POSITION !== undefined
+      ? asset.json.accessors?.[primitive.attributes.POSITION]
+      : undefined;
+  const vertexCountDummy = posAccForCount?.count ?? 0;
+
+  if (primitive.attributes.JOINTS_0 === undefined) {
+    const joints = new Uint8Array(vertexCountDummy * 4);
+    const buffer = gl.createBuffer();
+    if (!buffer) throw new Error('Unable to create dummy joint buffer');
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, joints, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(4);
+    gl.vertexAttribIPointer(4, 4, gl.UNSIGNED_BYTE, 0, 0);
+  }
+  if (primitive.attributes.WEIGHTS_0 === undefined) {
+    const weights = new Float32Array(vertexCountDummy * 4);
+    for (let i = 0; i < vertexCountDummy; i++) weights[i * 4] = 1;
+    const buffer = gl.createBuffer();
+    if (!buffer) throw new Error('Unable to create dummy weight buffer');
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, weights, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(5);
+    gl.vertexAttribPointer(5, 4, gl.FLOAT, false, 0, 0);
+  }
+
   let indexBuffer: WebGLBuffer | null = null;
   let indexCount = 0;
   let indexType: number = gl.UNSIGNED_SHORT;

@@ -14,7 +14,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-SUITES = ["audit_suite.py", "stress_suite.py"]
+SUITES = ["audit_suite.py", "glb_suite.py", "stress_suite.py"]
 TIMEOUT_S = 900
 
 # Gating criteria for stress-suite rows. Rows not listed here are

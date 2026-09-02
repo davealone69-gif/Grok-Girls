@@ -43,9 +43,10 @@ import { createIblPipeline, destroyIblPipeline, generateStudioEnvironment, DEFAU
 import { CinematicPipeline, CinematicRenderer, createFullscreenTriangle } from './renderer/CinematicPipeline';
 import { probeCapabilities, createRenderTarget, checkFramebufferComplete } from './renderer/RenderTarget';
 import { parseGlb } from './renderer/avatar/GlbLoader';
-import { readAccessor } from './renderer/avatar/GltfAccessor';
+import { readAccessor, toFloat32 } from './renderer/avatar/GltfAccessor';
 import { loadAvatarGlb, disposeAvatarAsset, updateSkeleton } from './renderer/avatar/GltfAvatar';
 import { computeGlobalTransforms, evaluateSkins } from './renderer/avatar/GltfSkeleton';
+import { uploadGltfTexture, loadGltfImage } from './renderer/avatar/GltfImages';
 import { HDFrameRenderer } from './renderer/HDFrameRenderer';
 import { RenderResolution, RENDER_RESOLUTIONS } from './renderer/RenderResolution';
 import { HDRenderTarget } from './renderer/HDRenderTarget';
@@ -107,11 +108,14 @@ if (typeof window !== 'undefined') {
     checkFramebufferComplete,
     parseGlb,
     readAccessor,
+    toFloat32,
     loadAvatarGlb,
     disposeAvatarAsset,
     updateSkeleton,
     computeGlobalTransforms,
-    evaluateSkins
+    evaluateSkins,
+    uploadGltfTexture,
+    loadGltfImage
   };
 }
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
@@ -518,6 +522,10 @@ export default function App() {
       setExpressionIntensity: (v: number) => avatar3dRef.current?.setExpressionIntensity(v),
       setWrinkleStrength: (v: number) => avatar3dRef.current?.setWrinkleStrength(v),
       loadGlb: (data: ArrayBuffer) => avatar3dRef.current?.loadGlb(data),
+      setGlbMorphWeights: (w: number[]) => avatar3dRef.current?.setGlbMorphWeights(w),
+      glbInfo: () => avatar3dRef.current?.glbInfo() ?? null,
+      setGlbScale: (s: number) => avatar3dRef.current?.setGlbScale(s),
+      setAvatarVisible: (v: boolean) => avatar3dRef.current?.setAvatarVisible(v),
       setKeyLight: (x: number, y: number, z: number) => avatar3dRef.current?.setKeyLight(x, y, z),
       setParameters: (p: AvatarParameters) => avatar3dRef.current?.setParameters(p),
       setAutoRotate: (v: boolean) => avatar3dRef.current?.setAutoRotate(v),

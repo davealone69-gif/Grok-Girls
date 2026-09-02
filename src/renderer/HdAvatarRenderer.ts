@@ -303,8 +303,6 @@ void main() {
   outColor = vec4(color, baseColor.a);
 }`;
 
-/* avatar_skin.vert — GPU skinning (4 weights, uBones[128]).
- * Shares the fragment's varyings with the plain vertex shader. */
 /* avatar_skin.vert — GPU skinning (4 weights, uBones[128]) + GPU morph
  * blending (uMorph*[64], weight-guarded) + uSkinned switch so GLB
  * primitives (skinned or not) share this vertex stage. */
@@ -419,9 +417,41 @@ export interface HdAvatarRendererOptions {
   material?: AvatarMaterial;
 }
 
+/** 1x1 neutral textures for GLB material slots that are absent (the skin
+ *  fragment samples baseColor/roughness/normal unconditionally, and an
+ *  unbound unit would sample stale/black data): white base color,
+ *  white roughness (factor-only), flat normal (0.5,0.5,1 -> +Z). */
+const glbFallbackCache = new WeakMap<WebGL2RenderingContext, {
+  white: WebGLTexture;
+  flatNormal: WebGLTexture;
+}>();
+
+function glbFallbacks(gl: WebGL2RenderingContext): {
+  white: WebGLTexture;
+  flatNormal: WebGLTexture;
+} {
+  const cached = glbFallbackCache.get(gl);
+  if (cached) return cached;
+  const make = (rgba: [number, number, number, number]): WebGLTexture => {
+    const tex = gl.createTexture();
+    if (!tex) throw new Error('Unable to create GLB fallback texture');
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+      new Uint8Array(rgba));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    return tex;
+  };
+  const fb = { white: make([255, 255, 255, 255]), flatNormal: make([128, 128, 255, 255]) };
+  glbFallbackCache.set(gl, fb);
+  return fb;
+}
+
 /** Bind a GLB PBR material onto the skin program's factor + texture
  *  uniforms (slots that exist in the fragment; occlusion/emissive
- *  samplers are deferred to the unified material pass). */
+ *  samplers are deferred to the unified material pass). Absent slots
+ *  bind neutral 1x1 fallbacks so factor-only materials render. */
 function bindGlbMaterial(
   gl: WebGL2RenderingContext,
   u: UniformCache,
@@ -432,23 +462,18 @@ function bindGlbMaterial(
   gl.uniform1f(u.uRoughnessFactor, material.roughness);
   gl.uniform3f(u.uEmissiveFactor, material.emissive[0], material.emissive[1], material.emissive[2]);
 
-  if (material.baseColorTexture) {
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, material.baseColorTexture);
-    gl.uniform1i(u.uBaseColorTexture, 0);
-  }
+  const fb = glbFallbacks(gl);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, material.baseColorTexture ?? fb.white);
+  gl.uniform1i(u.uBaseColorTexture, 0);
   // glTF MR map: G=roughness, B=metallic — bound to uRoughnessTexture;
   // channel mapping documented for the unified material pass.
-  if (material.metallicRoughnessTexture) {
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, material.metallicRoughnessTexture);
-    gl.uniform1i(u.uRoughnessTexture, 1);
-  }
-  if (material.normalTexture) {
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, material.normalTexture);
-    gl.uniform1i(u.uNormalTexture, 2);
-  }
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, material.metallicRoughnessTexture ?? fb.white);
+  gl.uniform1i(u.uRoughnessTexture, 1);
+  gl.activeTexture(gl.TEXTURE2);
+  gl.bindTexture(gl.TEXTURE_2D, material.normalTexture ?? fb.flatNormal);
+  gl.uniform1i(u.uNormalTexture, 2);
 }
 
 /** Zero-filled morph slots for primitives without morph targets. */
@@ -527,13 +552,14 @@ export class HdAvatarRenderer {
   private cinematic: CinematicRenderer | null = null;
   // GLB parity (milestone 8)
   private glbAsset: AvatarAsset | null = null;
+  private glbScale = 1;
+  private avatarVisible = true;
   private uniforms = new Map<WebGLProgram, UniformCache>();
   private frameRenderer: HDFrameRenderer | null = null;
   private autoRotate = true;
   private angle = 0;
   private spinning = false;
   private raf = 0;
-  private glErrors: number[] = [];
 
   constructor(canvas: HTMLCanvasElement, opts: HdAvatarRendererOptions = {}) {
     const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true, depth: true, antialias: true });
@@ -768,9 +794,6 @@ export class HdAvatarRenderer {
       this.renderScene(w, h, true);
     }
 
-    const err = gl.getError();
-    if (err !== 0) this.glErrors.push(err);
-
     if (this.spinning) this.raf = requestAnimationFrame(() => this.frame());
   }
 
@@ -789,6 +812,12 @@ export class HdAvatarRenderer {
 
     const p = this.parameters;
     const skinned = this.skeleton && this.skeleton.bones.length > 0;
+
+    if (!this.avatarVisible) {
+      // Isolated GLB rendering (tests/editor preview): skip avatar.
+      this.drawGlb(gl);
+      return;
+    }
 
     if (skinned && this.skeleton) {
       // AvatarParameters drive bone locals (the native morph/skeleton layer)
@@ -901,20 +930,27 @@ export class HdAvatarRenderer {
 
   /** Draws every opaque piece into the shadow depth attachment. */
   private drawAvatarDepth(shader: ShadowShader): void {
-    shader.setModel(this.model);
-    this.mesh.draw(this.gl);
-    for (let i = 0; i < this.eyeMeshes.length; i++) {
-      shader.setModel(this.eyeModelMatrix(i));
-      this.eyeMeshes[i].draw(this.gl);
-    }
-    if (this.hairMesh) {
-      shader.setModel(this.hairModelMatrix());
-      this.hairMesh.draw(this.gl);
+    if (this.avatarVisible) {
+      shader.setModel(this.model);
+      this.mesh.draw(this.gl);
+      for (let i = 0; i < this.eyeMeshes.length; i++) {
+        shader.setModel(this.eyeModelMatrix(i));
+        this.eyeMeshes[i].draw(this.gl);
+      }
+      if (this.hairMesh) {
+        shader.setModel(this.hairModelMatrix());
+        this.hairMesh.draw(this.gl);
+      }
     }
     const asset = this.glbAsset;
     if (asset) {
       for (const prim of asset.primitives) {
-        shader.setModel(asset.meshModels[prim.meshIndex] ?? mat4Identity());
+        const meshModel = asset.meshModels[prim.meshIndex] ?? mat4Identity();
+        shader.setModel(
+          this.glbScale === 1
+            ? meshModel
+            : mat4Multiply(meshModel, mat4Scale(this.glbScale, this.glbScale, this.glbScale))
+        );
         const gl = this.gl;
         gl.bindVertexArray(prim.vao);
         if (prim.indexBuffer) {
@@ -929,7 +965,70 @@ export class HdAvatarRenderer {
 
   /** Load a GLB avatar and draw it through the existing skin pipeline. */
   async loadGlb(data: ArrayBuffer): Promise<void> {
-    this.glbAsset = await loadAvatarGlb(this.gl, data);
+    const asset = await loadAvatarGlb(this.gl, data);
+    if (this.glbAsset) {
+      disposeAvatarAsset(this.gl, this.glbAsset);
+    }
+    this.glbAsset = asset;
+  }
+
+  /** Overwrite morph weights on every morph-enabled GLB primitive. */
+  setGlbMorphWeights(weights: number[]): void {
+    const asset = this.glbAsset;
+    if (!asset) return;
+    for (const prim of asset.primitives) {
+      if (!prim.morphs) continue;
+      const w = prim.morphs.weights;
+      const n = Math.min(weights.length, w.length);
+      for (let i = 0; i < n; i++) w[i] = weights[i];
+      for (let i = n; i < w.length; i++) w[i] = 0;
+    }
+  }
+
+  /** Uniform scale applied to the GLB model matrices (debug/tests). */
+  setGlbScale(s: number): void {
+    this.glbScale = Math.max(0.0001, s);
+  }
+
+  /** Show/hide the procedural avatar (isolates GLB draws for tests). */
+  setAvatarVisible(v: boolean): void {
+    this.avatarVisible = v;
+  }
+
+  /** Structural summary of the loaded GLB (drives the automated suites). */
+  glbInfo(): Record<string, unknown> | null {
+    const asset = this.glbAsset;
+    if (!asset) return null;
+    const json = asset.gltf.json;
+    const meshPrims = (json.meshes ?? []).reduce((a, m) => a + m.primitives.length, 0);
+    let morphTargets = 0;
+    for (const m of json.meshes ?? []) {
+      for (const pr of m.primitives) morphTargets += pr.targets?.length ?? 0;
+    }
+    let textured = 0;
+    for (const mat of asset.materials) {
+      if (mat.baseColorTexture || mat.metallicRoughnessTexture || mat.normalTexture) textured++;
+    }
+    // Largest |delta| across all morph position buffers (0 when none):
+    // proves the morph DELTA DATA reached the GPU upload source.
+    let morphMaxDelta = 0;
+    for (const prim of asset.primitives) {
+      const d = prim.morphs?.positionDeltas;
+      if (!d) continue;
+      for (let i = 0; i < d.length; i++) {
+        const a = Math.abs(d[i]);
+        if (a > morphMaxDelta) morphMaxDelta = a;
+      }
+    }
+    return {
+      primitives: meshPrims,
+      materials: asset.materials.length,
+      morphTargets,
+      texturedMaterials: textured,
+      images: json.images?.length ?? 0,
+      joints: json.skins?.[0]?.joints?.length ?? 0,
+      morphMaxDelta,
+    };
   }
 
   /** GLB parity: draw all primitives through the skin program/fragment. */
@@ -939,15 +1038,28 @@ export class HdAvatarRenderer {
     const u = this.uniforms.get(this.skinProgram) ?? {};
     gl.useProgram(this.skinProgram);
     this.applyCommonUniforms(gl, this.skinProgram);
-    if (u.uBones) gl.uniformMatrix4fv(u.uBones, false, asset.jointMatrices);
+    // Shader declares MAX_BONES 128 — clamp CPU-side joint matrices
+    // (evaluateSkins pads to MAX_JOINTS 256) so no out-of-bounds upload.
+    if (u.uBones) {
+      const matrices = asset.jointMatrices;
+      gl.uniformMatrix4fv(u.uBones, false, matrices.length > 2048 ? matrices.subarray(0, 2048) : matrices);
+    }
 
     for (const prim of asset.primitives) {
-      gl.uniform1i(u.uSkinned, prim.skinned ? 1 : 0);
+      // Always 1: unskinned primitives carry identity bones + dummy
+      // joint/weight buffers (see uploadPrimitive), and the software GL
+      // in headless CI misrenders the uSkinned=false branch when the
+      // shader contains dynamic uBones[] indexing.
+      gl.uniform1i(u.uSkinned, 1);
 
-      // GPU morph deltas (milestone 8 -> milestone 6 face system)
+      // GPU morph deltas (milestone 8 -> milestone 6 face system).
+      // The shader declares MAX_MORPHS (64) per-slot arrays — upload only
+      // the first 64 deltas (positionDeltas holds verts*MAX_MORPHS*3).
       if (prim.morphs) {
-        if (u.uMorphPosition) gl.uniform3fv(u.uMorphPosition, prim.morphs.positionDeltas);
-        if (u.uMorphNormal) gl.uniform3fv(u.uMorphNormal, prim.morphs.normalDeltas);
+        const pMax = prim.morphs.positionDeltas.length > 192 ? prim.morphs.positionDeltas.subarray(0, 192) : prim.morphs.positionDeltas;
+        const nMax = prim.morphs.normalDeltas.length > 192 ? prim.morphs.normalDeltas.subarray(0, 192) : prim.morphs.normalDeltas;
+        if (u.uMorphPosition) gl.uniform3fv(u.uMorphPosition, pMax);
+        if (u.uMorphNormal) gl.uniform3fv(u.uMorphNormal, nMax);
         if (u.uMorphWeight) gl.uniform1fv(u.uMorphWeight, prim.morphs.weights);
       } else {
         if (u.uMorphPosition) gl.uniform3fv(u.uMorphPosition, ZERO_MORPH_POSITION);
@@ -958,7 +1070,14 @@ export class HdAvatarRenderer {
       const material = asset.materials[prim.materialIndex] ?? asset.materials[0];
       if (material) bindGlbMaterial(gl, u, material);
 
-      gl.uniformMatrix4fv(u.uModel, false, asset.meshModels[prim.meshIndex] ?? mat4Identity());
+      const meshModel = asset.meshModels[prim.meshIndex] ?? mat4Identity();
+      gl.uniformMatrix4fv(
+        u.uModel,
+        false,
+        this.glbScale === 1
+          ? meshModel
+          : mat4Multiply(meshModel, mat4Scale(this.glbScale, this.glbScale, this.glbScale))
+      );
       gl.bindVertexArray(prim.vao);
       if (prim.indexBuffer) {
         gl.drawElements(gl.TRIANGLES, prim.indexCount, prim.indexType, 0);

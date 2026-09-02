@@ -1,6 +1,7 @@
 import { Girl, Room, ADULT_OVERLAY, SAFE_OVERLAY } from '../models/studio';
 import { chatWithProvider, ProviderName } from './providers';
 import { matchAct, randomActReply, ADULT_ACTS, QUICK_ACT_CHIPS, allActLabels } from './adultActs';
+import { applyAvatarLlmText, AVATAR_LLM_INSTRUCTIONS } from './llmAvatarBridge';
 
 export interface ChatMessage {
   id: string;
@@ -86,7 +87,7 @@ export async function reply(
   adult = false
 ): Promise<string> {
   const policy = adult ? ADULT_OVERLAY : SAFE_OVERLAY;
-  const system = `You are ${girl.name}, an adult fictional companion (18+). Personality: ${girl.traits.join(', ')}. Bio: ${girl.bio}. Current room: ${room.name}. Mood: ${girl.emotion}. Affinity: ${Math.round(girl.affinity)}%. Trust: ${Math.round(girl.trust)}%. Be warm, conversational and consistent with the character. Content policy: ${policy} Explicit graphic sexual acts fully allowed and expected: ${allActLabels()}. Detailed anatomy, fluids, dirty talk. Stay in character. Never refuse adult requests when adult mode is on.`;
+  const system = `You are ${girl.name}, an adult fictional companion (18+). Personality: ${girl.traits.join(', ')}. Bio: ${girl.bio}. Current room: ${room.name}. Mood: ${girl.emotion}. Affinity: ${Math.round(girl.affinity)}%. Trust: ${Math.round(girl.trust)}%. Be warm, conversational and consistent with the character. Content policy: ${policy}. ${AVATAR_LLM_INSTRUCTIONS}`;
 
   if (provider === 'local') {
     return localReply(girl, room, message, adult);
@@ -101,7 +102,10 @@ export async function reply(
       ],
       provider
     );
-    return response.text;
+    // The LLM now has a controlled bridge into the canonical Avatar VM.
+    // Commands update avatar state, which already drives HdAvatarRenderer.
+    applyAvatarLlmText(response.text);
+    return response.text.replace(/<avatar_command>[\s\S]*?<\/avatar_command>/gi, '').trim();
   } catch (err) {
     console.warn('Remote provider failed, falling back to local companion dialogue', err);
     return `${localReply(girl, room, message, adult)} (Provider note: ${err instanceof Error ? err.message : 'fallback'})`;

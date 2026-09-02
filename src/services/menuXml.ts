@@ -56,6 +56,15 @@ export const DEFAULT_MENU: MenuItem[] = [
   { id: 'save', kind: 'Button', section: 'options', label: 'SAVE', title: 'Save avatar' }
 ];
 
+const CANONICAL_IDS: Record<string, string> = {
+  catMakeup: 'makeup',
+  catAvatar: 'categories'
+};
+
+export function canonicalMenuId(id: string): string {
+  return CANONICAL_IDS[id] ?? id;
+}
+
 function attr(el: Element, name: string): string {
   return el.getAttribute(`android:${name}`) ?? el.getAttribute(name) ?? '';
 }
@@ -83,12 +92,17 @@ function parseMenuXml(xml: string): MenuItem[] {
   if (doc.getElementsByTagName('parsererror').length || !doc.documentElement) throw new Error('malformed menu XML');
   const controls = Array.from(doc.querySelectorAll('Button,CheckBox,EditText,TextView'));
   const items: MenuItem[] = [];
+  const seen = new Set<string>();
   for (const el of controls) {
     const rawId = cleanId(attr(el, 'id'));
     if (!rawId) throw new Error('menu control missing android:id');
-    const id = rawId === 'catMakeup' ? 'makeup' : rawId;
+    const id = canonicalMenuId(rawId);
     const section = sectionFor(el);
     if (!section) continue;
+    // XML is an override, not a second copy of the same control. Canonical
+    // IDs keep old cat* aliases from producing duplicate dock tabs.
+    if (seen.has(id)) continue;
+    seen.add(id);
     const kind = el.tagName as MenuItem['kind'];
     const label = attr(el, 'text').trim() || undefined;
     const title = attr(el, 'contentDescription').trim() || undefined;
@@ -110,10 +124,12 @@ export async function loadMenuXml(): Promise<MenuItem[]> {
 }
 
 export function menuLabel(items: MenuItem[], id: string): string {
-  return items.find(i => i.id === id)?.label ?? DEFAULT_MENU.find(i => i.id === id)?.label ?? id;
+  const canonicalId = canonicalMenuId(id);
+  return items.find(i => i.id === canonicalId)?.label ?? DEFAULT_MENU.find(i => i.id === canonicalId)?.label ?? canonicalId;
 }
 export function menuTitle(items: MenuItem[], id: string): string {
-  return items.find(i => i.id === id)?.title ?? DEFAULT_MENU.find(i => i.id === id)?.title ?? '';
+  const canonicalId = canonicalMenuId(id);
+  return items.find(i => i.id === canonicalId)?.title ?? DEFAULT_MENU.find(i => i.id === canonicalId)?.title ?? '';
 }
 export function menuSection(items: MenuItem[], section: MenuItem['section']): MenuItem[] {
   return items.filter(i => i.section === section);

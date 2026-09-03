@@ -5,12 +5,12 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.opengl.EGL14
 import android.opengl.EGLConfig
-import android.opengl.EGLContext
 import android.opengl.EGLDisplay
 import android.opengl.EGLSurface
 import android.opengl.GLES30
 import android.os.Handler
 import android.os.Looper
+import android.util.Base64
 import com.aura.avatarstudio.renderer.GltfAvatarLoader
 import com.aura.avatarstudio.renderer.HdAvatarRenderer
 import com.getcapacitor.JSObject
@@ -18,8 +18,7 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.PluginMethod
-import java.io.File
-import java.io.FileOutputStream
+import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -55,7 +54,7 @@ class AvatarStudioPlugin : Plugin() {
             try {
                 val result = renderOffscreen(host, asset, definition, width, height)
                 val out = JSObject()
-                out.put("path", result.path)
+                out.put("dataUrl", result.dataUrl)
                 out.put("width", result.width)
                 out.put("height", result.height)
                 Handler(Looper.getMainLooper()).post { call.resolve(out) }
@@ -67,7 +66,7 @@ class AvatarStudioPlugin : Plugin() {
         }.start()
     }
 
-    private data class RenderResult(val path: String, val width: Int, val height: Int)
+    private data class RenderResult(val dataUrl: String, val width: Int, val height: Int)
 
     private fun renderOffscreen(
         context: Activity,
@@ -103,7 +102,7 @@ class AvatarStudioPlugin : Plugin() {
             check(eglContext != EGL14.EGL_NO_CONTEXT) { "Could not create GLES3 context" }
 
             val surfaceAttrs = intArrayOf(EGL14.EGL_WIDTH, width, EGL14.EGL_HEIGHT, height, EGL14.EGL_NONE)
-            val surface = EGL14.eglCreatePbufferSurface(display, config, surfaceAttrs, 0)
+            val surface: EGLSurface = EGL14.eglCreatePbufferSurface(display, config, surfaceAttrs, 0)
             check(surface != EGL14.EGL_NO_SURFACE) { "Could not create render surface" }
 
             try {
@@ -138,14 +137,12 @@ class AvatarStudioPlugin : Plugin() {
                     bitmap.setPixels(row, 0, width, 0, y, width, 1)
                 }
 
-                val outputDir = File(context.cacheDir, "native-hd").apply { mkdirs() }
-                val output = File(outputDir, "grok-${System.currentTimeMillis()}-${width}x$height.png")
-                FileOutputStream(output).use { stream ->
-                    check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) { "PNG encode failed" }
-                }
+                val compressed = ByteArrayOutputStream()
+                check(bitmap.compress(Bitmap.CompressFormat.JPEG, 94, compressed)) { "JPEG encode failed" }
                 bitmap.recycle()
                 renderer.clearAvatar()
-                return RenderResult(output.absolutePath, width, height)
+                val dataUrl = "data:image/jpeg;base64," + Base64.encodeToString(compressed.toByteArray(), Base64.NO_WRAP)
+                return RenderResult(dataUrl, width, height)
             } finally {
                 EGL14.eglMakeCurrent(display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
                 EGL14.eglDestroySurface(display, surface)
@@ -156,7 +153,7 @@ class AvatarStudioPlugin : Plugin() {
         }
     }
 
-    /** Apply the canonical definition to native render policy without inventing geometry. */
+    /** Apply canonical render policy only where the current GLB supports it. */
     private fun applyDefinition(renderer: HdAvatarRenderer, definition: NativeAvatarDefinition) {
         renderer.exposure = when {
             definition.skin.contains("02", true) || definition.skin.contains("03", true) -> 1.12f

@@ -1,9 +1,11 @@
-const AGE_KEY = 'grok-girls-age-confirmed-v1';
+import { isAgeConfirmed as ageConfirmed, confirmAdultAge as markAdult } from './settingsState';
 
+/** Has the 18+ gate been confirmed? (canonical settings record) */
 export function isAgeConfirmed(): boolean {
-  try { return localStorage.getItem(AGE_KEY) === '18+'; } catch { return false; }
+  return ageConfirmed();
 }
 
+/** Record the 18+ confirmation (canonical settings record). */
 export function confirmAdultAge(): void {
-  try { localStorage.setItem(AGE_KEY, '18+'); } catch {}
+  markAdult();
 }

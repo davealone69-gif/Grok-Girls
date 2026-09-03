@@ -37,78 +37,66 @@ export interface SelfHostResult {
   jobId?: string;
 }
 
-/* ------------------------------- storage ------------------------------ */
-const K_BASE = 'grok-girls-selfhosted-base';
-const K_TYPE = 'grok-girls-selfhosted-type';
-const K_CKPT = 'grok-girls-selfhosted-ckpt';
-const K_SAMPLER = 'grok-girls-selfhosted-sampler';
-const K_UPSCALER = 'grok-girls-selfhosted-upscaler';
-const K_HIRES = 'grok-girls-selfhosted-hires';
-const K_LORAS = 'grok-girls-selfhosted-loras';
-
-function lsGet(k: string): string {
-  try {
-    return localStorage.getItem(k) || '';
-  } catch {
-    return '';
-  }
-}
-function lsSet(k: string, v: string) {
-  try {
-    localStorage.setItem(k, v);
-  } catch {}
-}
+/* ------------------------------- storage (canonical settings record) */
+import {
+  getSelfHostBase as shGetBase,
+  saveSelfHostBase as shSetBase,
+  getSelfHostType as shGetType,
+  saveSelfHostType as shSetType,
+  getSelfHostCheckpoint as shGetCkpt,
+  saveSelfHostCheckpoint as shSetCkpt,
+  getSelfHostSampler as shGetSampler,
+  saveSelfHostSampler as shSetSampler,
+  getSelfHostUpscaler as shGetUpscaler,
+  saveSelfHostUpscaler as shSetUpscaler,
+  getSelfHostHiresFix as shGetHires,
+  saveSelfHostHiresFix as shSetHires,
+  getSelfHostLoras as shGetLoras,
+  saveSelfHostLoras as shSetLoras
+} from './settingsState';
 
 export function getServerBase(): string {
-  return lsGet(K_BASE);
+  return shGetBase();
 }
 export function saveServerBase(url: string) {
-  lsSet(K_BASE, url.trim().replace(/\/+$/, ''));
+  shSetBase(url);
 }
 export function getServerType(): SelfHostServerType {
-  const t = lsGet(K_TYPE);
+  const t = shGetType();
   return t === 'a1111' || t === 'comfy' ? t : 'unknown';
 }
 export function saveServerType(t: SelfHostServerType) {
-  lsSet(K_TYPE, t);
+  shSetType(t);
 }
 export function getCheckpoint(): string {
-  return lsGet(K_CKPT);
+  return shGetCkpt();
 }
 export function saveCheckpoint(name: string) {
-  lsSet(K_CKPT, name);
+  shSetCkpt(name);
 }
 export function getSampler(): string {
-  return lsGet(K_SAMPLER);
+  return shGetSampler();
 }
 export function saveSampler(name: string) {
-  lsSet(K_SAMPLER, name);
+  shSetSampler(name);
 }
 export function getUpscaler(): string {
-  return lsGet(K_UPSCALER);
+  return shGetUpscaler();
 }
 export function saveUpscaler(name: string) {
-  lsSet(K_UPSCALER, name);
+  shSetUpscaler(name);
 }
 export function getHiresFix(): boolean {
-  return lsGet(K_HIRES) === '1';
+  return shGetHires();
 }
 export function saveHiresFix(v: boolean) {
-  lsSet(K_HIRES, v ? '1' : '0');
+  shSetHires(v);
 }
 export function loadLoraSlots(): LoraSlot[] {
-  try {
-    const raw = lsGet(K_LORAS);
-    const parsed = raw ? (JSON.parse(raw) as LoraSlot[]) : [];
-    return Array.isArray(parsed) ? parsed.slice(0, 3) : [];
-  } catch {
-    return [];
-  }
+  return shGetLoras();
 }
 export function saveLoraSlots(slots: LoraSlot[]) {
-  try {
-    lsSet(K_LORAS, JSON.stringify(slots.slice(0, 3)));
-  } catch {}
+  shSetLoras(slots);
 }
 
 

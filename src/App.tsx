@@ -130,6 +130,14 @@ if (typeof window !== 'undefined') {
 }
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
 import { isAgeConfirmed, confirmAdultAge } from './services/ageGate';
+import {
+  getAdultFlag,
+  setAdultFlag,
+  getProviderPref,
+  saveProviderPref,
+  getGenerationSettings,
+  saveGenerationSettings
+} from './services/settingsState';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
 import { NSFW_NEGATIVE } from './services/adultActs';
 import { adultOptions, defaultAdultSelections } from './services/adultOptions';
@@ -162,8 +170,6 @@ type InspectorSection =
   | 'tattoos'
   | 'augments';
 type DockTab = 'style' | 'color' | 'makeup' | 'eyebrows' | 'scene' | 'categories';
-
-const ADULT_KEY = 'grok-girls-adult-v1';
 
 function defaultDraft(g: Girl): AvatarDraft {
   return {
@@ -234,13 +240,7 @@ export default function App() {
     () => (loadGirls(seedGirls)[0] || seedGirls[0]).id
   );
   const [view, setView] = useState<ActiveView>('builder');
-  const [adult, setAdult] = useState(() => {
-    try {
-      return localStorage.getItem(ADULT_KEY) === '1';
-    } catch {
-      return true;
-    }
-  });
+  const [adult, setAdult] = useState<boolean>(() => getAdultFlag());
 
   const girl = useMemo(
     () => girls.find(g => g.id === selectedId) || girls[0] || seedGirls[0],
@@ -314,9 +314,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    try {
-      localStorage.setItem(ADULT_KEY, adult ? '1' : '0');
-    } catch {}
+    setAdultFlag(adult);
   }, [adult]);
 
 
@@ -458,33 +456,15 @@ export default function App() {
   const [galleryFilter, setGalleryFilter] = useState<'all' | 'local' | 'openrouter' | 'gemini' | 'custom' | 'selfhosted'>('all');
   const [deleteArmedId, setDeleteArmedId] = useState<string | null>(null);
   const personaImportRef = useRef<HTMLInputElement>(null);
-  const [provider, setProvider] = useState<ProviderName>(() => {
-    try {
-      const v = localStorage.getItem('grok-girls-provider-v1');
-      if (v === 'local' || v === 'openrouter' || v === 'gemini' || v === 'custom' || v === 'selfhosted')
-        return v;
-    } catch {}
-    return 'local';
-  });
+  const [provider, setProvider] = useState<ProviderName>(() => getProviderPref('image'));
   useEffect(() => {
-    try {
-      localStorage.setItem('grok-girls-provider-v1', provider);
-    } catch {}
+    saveProviderPref('image', provider);
   }, [provider]);
   // H1: chat has its OWN engine selector — picking SELF-HOSTED for renders
   // no longer breaks chat. The footer ENGINE drives generation only.
-  const [chatProvider, setChatProvider] = useState<ProviderName>(() => {
-    try {
-      const v = localStorage.getItem('grok-girls-chat-provider-v1');
-      if (v === 'local' || v === 'openrouter' || v === 'gemini' || v === 'custom' || v === 'selfhosted')
-        return v;
-    } catch {}
-    return 'local';
-  });
+  const [chatProvider, setChatProvider] = useState<ProviderName>(() => getProviderPref('chat'));
   useEffect(() => {
-    try {
-      localStorage.setItem('grok-girls-chat-provider-v1', chatProvider);
-    } catch {}
+    saveProviderPref('chat', chatProvider);
   }, [chatProvider]);
   const adultChatPinWarnRef = useRef(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -742,50 +722,21 @@ export default function App() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [immersive, setImmersive] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [negativePrompt, setNegativePrompt] = useState(() => {
-    try {
-      return localStorage.getItem('grok-girls-neg-v1') || '';
-    } catch {
-      return '';
-    }
-  });
-  const [seedInput, setSeedInput] = useState(() => {
-    try {
-      return localStorage.getItem('grok-girls-seed-v1') || '';
-    } catch {
-      return '';
-    }
-  });
-  const [stepsInput, setStepsInput] = useState(() => {
-    try {
-      return Number(localStorage.getItem('grok-girls-steps-v1')) || 28;
-    } catch {
-      return 28;
-    }
-  });
-  const [cfgInput, setCfgInput] = useState(() => {
-    try {
-      return Number(localStorage.getItem('grok-girls-cfg-v1')) || 7;
-    } catch {
-      return 7;
-    }
-  });
-  const [renderSize, setRenderSize] = useState(() => {
-    try {
-      return Number(localStorage.getItem('grok-girls-size-v1')) || 1024;
-    } catch {
-      return 1024;
-    }
-  });
+  const genPrefs = useMemo(() => getGenerationSettings(), []);
+  const [negativePrompt, setNegativePrompt] = useState(() => genPrefs.negative);
+  const [seedInput, setSeedInput] = useState(() => genPrefs.seed);
+  const [stepsInput, setStepsInput] = useState(() => genPrefs.steps);
+  const [cfgInput, setCfgInput] = useState(() => genPrefs.cfg);
+  const [renderSize, setRenderSize] = useState(() => genPrefs.size);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('grok-girls-neg-v1', negativePrompt);
-      localStorage.setItem('grok-girls-seed-v1', seedInput);
-      localStorage.setItem('grok-girls-steps-v1', String(stepsInput));
-      localStorage.setItem('grok-girls-cfg-v1', String(cfgInput));
-      localStorage.setItem('grok-girls-size-v1', String(renderSize));
-    } catch {}
+    saveGenerationSettings({
+      negative: negativePrompt,
+      seed: seedInput,
+      steps: stepsInput,
+      cfg: cfgInput,
+      size: renderSize
+    });
   }, [negativePrompt, seedInput, stepsInput, cfgInput, renderSize]);
   const [stats, setStats] = useState<StudioStats>(() => loadStats());
   const [statsOpen, setStatsOpen] = useState(false);

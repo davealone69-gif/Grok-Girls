@@ -1,7 +1,16 @@
 import { generateSelfHosted, getServerBase } from './selfHosted';
+import {
+  getConnectionApiKey,
+  saveConnectionApiKey,
+  getConnectionEndpoint,
+  saveConnectionEndpoint,
+  getConnectionModel,
+  saveConnectionModel
+} from './settingsState';
 
 export type ProviderName = 'local' | 'openrouter' | 'gemini' | 'custom' | 'selfhosted';
 export type Mode = 'image' | 'video';
+export type ProviderMode = Mode | 'chat';
 
 export interface GenerationRequest {
   prompt: string;
@@ -30,29 +39,23 @@ export interface ChatMessage {
 
 const env = () => (import.meta.env || {}) as Record<string, string | undefined>;
 
+/** Saved API key for a provider (canonical record; env var as fallback). */
 export function getSavedApiKey(p: string): string {
-  try {
-    const val = localStorage.getItem(`grok-girls-key-${p.toLowerCase()}`);
-    if (val && val.trim()) return val.trim();
-  } catch {}
+  const saved = getConnectionApiKey(p);
+  if (saved && saved.trim()) return saved.trim();
   return env()[`VITE_${p.toUpperCase()}_API_KEY`] ?? '';
 }
 
 export function saveApiKey(p: string, key: string) {
-  try {
-    localStorage.setItem(`grok-girls-key-${p.toLowerCase()}`, key.trim());
-  } catch {}
+  saveConnectionApiKey(p, key);
 }
 
-export function getSavedEndpoint(p: string, m?: Mode | 'chat'): string {
-  try {
-    if (m) {
-      const modeKey = localStorage.getItem(`grok-girls-endpoint-${p.toLowerCase()}-${m}`);
-      if (modeKey && modeKey.trim()) return modeKey.trim();
-    }
-    const genericKey = localStorage.getItem(`grok-girls-endpoint-${p.toLowerCase()}`);
-    if (genericKey && genericKey.trim()) return genericKey.trim();
-  } catch {}
+/** Saved endpoint for a provider+mode (mode-specific then generic). */
+export function getSavedEndpoint(p: string, m?: ProviderMode): string {
+  const modeKey = m ? getConnectionEndpoint(p, m) : '';
+  if (modeKey && modeKey.trim()) return modeKey.trim();
+  const genericKey = getConnectionEndpoint(p);
+  if (genericKey && genericKey.trim()) return genericKey.trim();
   if (m) {
     const fromEnv = env()[`VITE_${p.toUpperCase()}_${m.toUpperCase()}_ENDPOINT`];
     if (fromEnv) return fromEnv;
@@ -60,34 +63,19 @@ export function getSavedEndpoint(p: string, m?: Mode | 'chat'): string {
   return env()[`VITE_${p.toUpperCase()}_ENDPOINT`] ?? '';
 }
 
-export function saveEndpoint(p: string, url: string, m?: Mode | 'chat') {
-  try {
-    if (m) {
-      localStorage.setItem(`grok-girls-endpoint-${p.toLowerCase()}-${m}`, url.trim());
-    } else {
-      localStorage.setItem(`grok-girls-endpoint-${p.toLowerCase()}`, url.trim());
-    }
-  } catch {}
+export function saveEndpoint(p: string, url: string, m?: ProviderMode) {
+  saveConnectionEndpoint(p, url, m);
 }
 
-export function getSavedModel(p: string, m?: Mode | 'chat'): string {
-  try {
-    const k = m
-      ? `grok-girls-model-${p.toLowerCase()}-${m}`
-      : `grok-girls-model-${p.toLowerCase()}`;
-    const v = localStorage.getItem(k);
-    if (v && v.trim()) return v.trim();
-  } catch {}
+/** Saved model name for a provider (+optional mode). */
+export function getSavedModel(p: string, m?: ProviderMode): string {
+  const v = m ? getConnectionModel(p, m) : getConnectionModel(p);
+  if (v && v.trim()) return v.trim();
   return '';
 }
 
-export function saveModel(p: string, model: string, m?: Mode | 'chat') {
-  try {
-    const k = m
-      ? `grok-girls-model-${p.toLowerCase()}-${m}`
-      : `grok-girls-model-${p.toLowerCase()}`;
-    localStorage.setItem(k, model.trim());
-  } catch {}
+export function saveModel(p: string, model: string, m?: ProviderMode) {
+  saveConnectionModel(p, model, m);
 }
 
 /* ------------------------------------------------------------------ */

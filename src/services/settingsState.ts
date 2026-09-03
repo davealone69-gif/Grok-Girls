@@ -104,7 +104,10 @@ const LEGACY = {
   shSampler: 'grok-girls-selfhosted-sampler',
   shUpscaler: 'grok-girls-selfhosted-upscaler',
   shHires: 'grok-girls-selfhosted-hires',
-  shLoras: 'grok-girls-selfhosted-loras'
+  shLoras: 'grok-girls-selfhosted-loras',
+  hermesUrl: 'grok-girls-hermes-url-v1',
+  hermesModel: 'grok-girls-hermes-model-v1',
+  hermesEnabled: 'grok-girls-hermes-enabled-v1'
 } as const;
 
 function lsGet(k: string): string | null {
@@ -201,6 +204,12 @@ function foldLegacy(): SettingsState {
     s.selfHost.loras = [];
   }
 
+  // Hermes (local LLM) was written to its own keys before the canonical
+  // record existed; fold them when present (enabled honours an explicit '0').
+  s.hermes.url = lsGet(LEGACY.hermesUrl) ?? '';
+  s.hermes.model = lsGet(LEGACY.hermesModel) ?? '';
+  s.hermes.enabled = lsGet(LEGACY.hermesEnabled) === '1';
+
   return s;
 }
 
@@ -230,6 +239,9 @@ function overlayLegacyGaps(s: SettingsState): SettingsState {
   if (out.selfHost.upscaler === '') out.selfHost.upscaler = legacy.selfHost.upscaler;
   if (out.selfHost.hiresFix === false) out.selfHost.hiresFix = legacy.selfHost.hiresFix;
   if (out.selfHost.loras.length === 0) out.selfHost.loras = legacy.selfHost.loras;
+  if (out.hermes.url === d.hermes.url) out.hermes.url = legacy.hermes.url;
+  if (out.hermes.model === d.hermes.model) out.hermes.model = legacy.hermes.model;
+  if (out.hermes.enabled === d.hermes.enabled) out.hermes.enabled = legacy.hermes.enabled;
   for (const p of Object.keys(legacy.connections)) {
     const conn = out.connections[p];
     const lconn = legacy.connections[p];
@@ -313,6 +325,9 @@ export function saveSettings(next: SettingsState): void {
   lsSet(LEGACY.shUpscaler, next.selfHost.upscaler);
   lsSet(LEGACY.shHires, next.selfHost.hiresFix ? '1' : '0');
   lsSet(LEGACY.shLoras, JSON.stringify(next.selfHost.loras.slice(0, 3)));
+  lsSet(LEGACY.hermesUrl, next.hermes.url);
+  lsSet(LEGACY.hermesModel, next.hermes.model);
+  lsSet(LEGACY.hermesEnabled, next.hermes.enabled ? '1' : '0');
 }
 
 /** Mutate + persist in one step (invalidate cache first). */

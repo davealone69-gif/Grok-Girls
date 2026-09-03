@@ -41,7 +41,13 @@ export const HAIR_RICH = [
   'high ponytail',
   'messy bun with wisps',
   'asymmetric pixie crop',
-  'wet-look waves'
+  'wet-look waves',
+  // Remaining styles the canonical Hair category can apply (Braids / Mohawk /
+  // Bald): they must be selectable from the same rich list, so the accordion
+  // select and randomizer can always display a category-applied hair style.
+  'twin braids with ribbon ties',
+  'shaved sides with mohawk crest',
+  'bald, shaved head'
 ];
 
 export const SKIN_RICH = [

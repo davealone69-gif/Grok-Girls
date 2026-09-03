@@ -1,4 +1,5 @@
 import { getSavedApiKey, getSavedEndpoint, getSavedModel, saveApiKey, saveEndpoint, saveModel } from './providers';
+import { saveHermesSettings } from './settingsState';
 
 const HERMES_URL_KEY = 'grok-girls-hermes-url-v1';
 const HERMES_ENABLED_KEY = 'grok-girls-hermes-enabled-v1';
@@ -40,10 +41,14 @@ export function saveHermesConfig(url: string, model: string, apiKey = '', enable
   saveModel('custom', cleanModel, 'chat');
   saveApiKey('custom', apiKey);
   saveModel('custom', cleanModel);
+  // Canonical SettingsState stays the single source of truth; its save
+  // mirrors back to the legacy keys above for older readers.
+  saveHermesSettings({ url: cleanUrl, model: cleanModel, enabled });
 }
 
 export function setHermesEnabled(enabled: boolean) {
   storageSet(HERMES_ENABLED_KEY, enabled ? '1' : '0');
+  saveHermesSettings({ enabled });
 }
 
 export function hermesChatEndpoint(url = getHermesUrl()): string {

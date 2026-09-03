@@ -1,0 +1,3 @@
+-keep class com.google.android.filament.** { *; }
+-keep class kotlinx.serialization.** { *; }
+-keepclassmembers class ai.grokgirls.studio.data.model.** { *; }

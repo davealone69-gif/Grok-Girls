@@ -20,7 +20,6 @@ import com.getcapacitor.PluginMethod
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import javax.microedition.khronos.egl.EGLConfig
 
 /** Native Android bridge for the real GLES3 HD avatar renderer. */
 @CapacitorPlugin(name = "AvatarStudio")
@@ -81,7 +80,7 @@ class AvatarStudioPlugin : Plugin() {
         check(EGL14.eglInitialize(display, version, 0, version, 1)) { "EGL initialization failed" }
 
         try {
-            val configs = arrayOfNulls<EGLConfig>(1)
+            val configs = arrayOfNulls<android.opengl.EGLConfig>(1)
             val count = IntArray(1)
             val configAttrs = intArrayOf(
                 EGL14.EGL_RENDERABLE_TYPE, 0x40,
@@ -108,7 +107,10 @@ class AvatarStudioPlugin : Plugin() {
             try {
                 check(EGL14.eglMakeCurrent(display, surface, surface, eglContext)) { "Could not bind EGL context" }
                 val renderer = HdAvatarRenderer(context)
-                renderer.onSurfaceCreated(null, config)
+                // HdAvatarRenderer exposes the legacy GLSurfaceView callback type.
+                // The callback's config is not consumed by the renderer, so pass null
+                // while EGL14 owns the actual android.opengl.EGLConfig.
+                renderer.onSurfaceCreated(null, null)
                 renderer.setAvatar(GltfAvatarLoader(context).loadFromAssets(asset))
                 applyDefinition(renderer, definition)
                 renderer.onSurfaceChanged(null, width, height)

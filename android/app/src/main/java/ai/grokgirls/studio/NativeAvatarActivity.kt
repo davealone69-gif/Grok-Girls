@@ -9,17 +9,7 @@ import android.view.WindowManager
 import com.aura.avatarstudio.renderer.GltfAvatarLoader
 import com.aura.avatarstudio.renderer.HdAvatarRenderer
 
-/**
- * Native 3D avatar viewport — the Kotlin/GLES3 counterpart of the in-app
- * WebGL viewport (src/renderer/HdAvatarRenderer.ts mirrors the same engine).
- *
- * Loads a rigged GLB from assets (default "avatars/my_avatar.glb", override
- * via the [EXTRA_AVATAR] intent extra), rendered with the full PBR pipeline:
- * skinning, morph targets, animation, runtime IBL + ACES tone mapping.
- *
- * Drag to orbit, pinch to zoom. Launch from JS via AvatarStudioPlugin:
- *   Capacitor.Plugins.AvatarStudio.openViewport({ avatar: 'avatars/foo.glb' })
- */
+/** Fullscreen interactive native GLES3 HD avatar viewport. */
 class NativeAvatarActivity : Activity() {
 
     private lateinit var renderer: HdAvatarRenderer
@@ -32,22 +22,36 @@ class NativeAvatarActivity : Activity() {
 
         renderer = HdAvatarRenderer(this)
         val asset = intent.getStringExtra(EXTRA_AVATAR) ?: DEFAULT_AVATAR
+        val definition = NativeAvatarDefinition.parse(intent.getStringExtra(EXTRA_DEFINITION))
 
-        val glView = GLSurfaceView(this).apply {
+        val view = GLSurfaceView(this).apply {
             setEGLContextClientVersion(3)
             setEGLConfigChooser(8, 8, 8, 8, 24, 8)
             preserveEGLContextOnPause = true
             setRenderer(renderer)
             renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
         }
-        this.glView = glView
-        setContentView(glView)
+        glView = view
+        setContentView(view)
 
-        glView.queueEvent {
-            renderer.setAvatar(
-                GltfAvatarLoader(this@NativeAvatarActivity)
-                    .loadFromAssets(asset)
-            )
+        view.queueEvent {
+            val loaded = GltfAvatarLoader(this@NativeAvatarActivity).loadFromAssets(asset)
+            renderer.setAvatar(loaded)
+            applyDefinition(definition)
+        }
+    }
+
+    private fun applyDefinition(definition: NativeAvatarDefinition) {
+        renderer.exposure = when {
+            definition.skin.contains("02", true) || definition.skin.contains("03", true) -> 1.12f
+            definition.skin.contains("04", true) || definition.skin.contains("05", true) -> 1.08f
+            else -> 1.15f
+        }
+        renderer.iblIntensity = if (definition.augmentations != "None") 1.0f else 0.9f
+        renderer.cameraTarget = when (definition.age.lowercase()) {
+            "young adult" -> floatArrayOf(0f, 0.81f, 0f)
+            "mature" -> floatArrayOf(0f, 0.86f, 0f)
+            else -> floatArrayOf(0f, 0.85f, 0f)
         }
     }
 
@@ -61,7 +65,6 @@ class NativeAvatarActivity : Activity() {
         super.onPause()
     }
 
-    // ---- touch controls --------------------------------------------------
     private var lastX = 0f
     private var lastY = 0f
     private var pinchBase = 1f
@@ -72,33 +75,23 @@ class NativeAvatarActivity : Activity() {
                 lastX = event.x
                 lastY = event.y
             }
-
             MotionEvent.ACTION_POINTER_DOWN -> {
                 pinchBase = touchDistance(event)
                 lastX = event.x
                 lastY = event.y
             }
-
             MotionEvent.ACTION_MOVE -> {
                 if (event.pointerCount >= 2) {
                     val d = touchDistance(event)
-                    if (pinchBase > 0f && d > 0f) {
-                        renderer.zoomCamera(d / pinchBase)
-                    }
+                    if (pinchBase > 0f && d > 0f) renderer.zoomCamera(d / pinchBase)
                     pinchBase = d
                 } else {
-                    renderer.rotateCamera(
-                        event.x - lastX,
-                        event.y - lastY
-                    )
+                    renderer.rotateCamera(event.x - lastX, event.y - lastY)
                 }
                 lastX = event.x
                 lastY = event.y
             }
-
-            MotionEvent.ACTION_POINTER_UP -> {
-                pinchBase = 0f
-            }
+            MotionEvent.ACTION_POINTER_UP -> pinchBase = 0f
         }
         return true
     }
@@ -111,6 +104,7 @@ class NativeAvatarActivity : Activity() {
 
     companion object {
         const val EXTRA_AVATAR = "avatar"
+        const val EXTRA_DEFINITION = "definition"
         const val DEFAULT_AVATAR = "avatars/my_avatar.glb"
     }
 }

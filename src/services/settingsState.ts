@@ -65,12 +65,29 @@ export interface SelfHostSettings {
   loras: LoraSlot[];
 }
 
+export interface HermesCapabilities {
+  /** OpenAI-compatible chat completions */
+  chat: boolean;
+  /** /v1/models discovery */
+  models: boolean;
+  /** SSE token streaming */
+  streaming: boolean;
+  /** image generation (reserved; false) */
+  image: boolean;
+  /** video generation (reserved; false) */
+  video: boolean;
+}
+
 export interface HermesSettings {
   url: string;
   model: string;
   enabled: boolean;
   /** free-form extra configuration (future-proof; no UI yet) */
   config: Record<string, string>;
+  /** advertised capabilities of the canonical Hermes provider */
+  capabilities: HermesCapabilities;
+  /** last connection test outcome (models list on success) */
+  lastTest: { at: number; ok: boolean; models?: string[]; error?: string } | null;
 }
 
 export interface SettingsState {
@@ -136,7 +153,14 @@ export const DEFAULT_SETTINGS: SettingsState = {
     base: '', type: 'unknown', checkpoint: '', sampler: '', upscaler: '',
     hiresFix: false, loras: []
   },
-  hermes: { url: '', model: '', enabled: false, config: {} }
+  hermes: {
+    url: '',
+    model: '',
+    enabled: false,
+    config: {},
+    capabilities: { chat: true, models: true, streaming: true, image: false, video: false },
+    lastTest: null
+  }
 };
 
 /* --------------------------------------------------------- migration */
@@ -170,13 +194,13 @@ function foldLegacy(): SettingsState {
   s.generation.size = num(LEGACY.size, 1024);
 
   const validProvider = (v: string | null): ProviderName =>
-    v === 'openrouter' || v === 'gemini' || v === 'custom' || v === 'selfhosted'
+    v === 'openrouter' || v === 'gemini' || v === 'custom' || v === 'selfhosted' || v === 'hermes'
       ? v
       : 'local';
   s.provider.image = validProvider(lsGet(LEGACY.provider));
   s.provider.chat = validProvider(lsGet(LEGACY.chatProvider));
 
-  for (const p of ['openrouter', 'gemini', 'custom']) {
+  for (const p of ['openrouter', 'gemini', 'custom', 'hermes']) {
     const conn: ProviderConnection = { apiKey: '', endpoints: {}, models: {} };
     conn.apiKey = lsGet(`${LEGACY.key}${p}`) ?? '';
     for (const m of ['generic', 'image', 'video', 'chat'] as const) {
@@ -273,7 +297,13 @@ function sanitize(raw: Record<string, unknown>): SettingsState {
     provider: { ...DEFAULT_SETTINGS.provider, ...pv },
     connections: { ...((raw.connections ?? {}) as Record<string, ProviderConnection>) },
     selfHost: { ...DEFAULT_SETTINGS.selfHost, ...sh, loras: Array.isArray(sh.loras) ? sh.loras.slice(0, 3) : [] },
-    hermes: { ...DEFAULT_SETTINGS.hermes, ...hm, config: { ...(hm.config ?? {}) } }
+    hermes: {
+      ...DEFAULT_SETTINGS.hermes,
+      ...hm,
+      config: { ...(hm.config ?? {}) },
+      capabilities: { ...DEFAULT_SETTINGS.hermes.capabilities, ...((hm.capabilities ?? {}) as Partial<HermesCapabilities>) },
+      lastTest: hm.lastTest ?? null
+    }
   };
   return overlayLegacyGaps(s);
 }

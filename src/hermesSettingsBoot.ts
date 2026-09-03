@@ -1,5 +1,5 @@
-import { getSavedApiKey, saveApiKey, saveEndpoint, saveModel } from './services/providers';
-import { getHermesModel, getHermesUrl, hermesChatEndpoint, saveHermesConfig, testHermesConnection } from './services/hermes';
+import { getHermesApiKey, getHermesModel, getHermesUrl, saveHermesConfig, testHermesConnection } from './services/hermes';
+import { saveProviderPref } from './services/settingsState';
 
 const SECTION_ID = 'grok-hermes-settings-section';
 
@@ -49,17 +49,29 @@ function mount() {
   const key = section.querySelector<HTMLInputElement>('#grok-hermes-key')!;
   const enabled = section.querySelector<HTMLInputElement>('#grok-hermes-enabled')!;
   const status = section.querySelector<HTMLElement>('#grok-hermes-status')!;
+  {
+    const last = (() => {
+      try {
+        const rec = JSON.parse(localStorage.getItem('grok-girls-settings-v1') || 'null');
+        return rec?.hermes?.lastTest ?? null;
+      } catch { return null; }
+    })();
+    if (last) status.textContent = last.ok
+      ? `✓ Last test: connected · ${(last.models || []).length} model(s)`
+      : `✕ Last test: ${String(last.error || 'failed').slice(0, 90)}`;
+  }
   url.value = getHermesUrl();
   model.value = getHermesModel();
-  key.value = getSavedApiKey('custom');
+  key.value = getHermesApiKey();
   enabled.checked = (() => {
     try { return localStorage.getItem('grok-girls-hermes-enabled-v1') === '1'; } catch { return false; }
   })();
 
   const persist = () => {
+    // Canonical SettingsState is the single source; it mirrors legacy keys.
     saveHermesConfig(url.value, model.value, key.value, enabled.checked);
-    saveEndpoint('custom', hermesChatEndpoint(url.value), 'chat');
-    saveModel('custom', model.value, 'chat');
+    // Once configured + enabled, Hermes becomes the active chat engine.
+    if (enabled.checked) saveProviderPref('chat', 'hermes');
   };
 
   section.querySelector<HTMLButtonElement>('#grok-hermes-test')!.onclick = async () => {
@@ -84,10 +96,10 @@ function mount() {
     persist();
     const select = document.querySelector<HTMLSelectElement>('.mini-provider-select');
     if (select) {
-      select.value = 'custom';
+      select.value = 'hermes';
       select.dispatchEvent(new Event('change', { bubbles: true }));
     }
-    status.textContent = '✓ Hermes saved and selected for chat';
+    status.textContent = '✓ Hermes enabled and selected as the chat engine';
   };
 
   url.addEventListener('change', persist);

@@ -139,6 +139,7 @@ import {
   saveGenerationSettings
 } from './services/settingsState';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
+import { getHermesModel, isHermesEnabled, setHermesEnabled } from './services/hermes';
 import { NSFW_NEGATIVE } from './services/adultActs';
 import { adultOptions, defaultAdultSelections } from './services/adultOptions';
 import { downloadMedia, exportGallery, importGallery } from './services/media';
@@ -522,6 +523,26 @@ export default function App() {
   const [cubeMode, setCubeMode] = useState(false);
   const avatar3dRef = useRef<HdAvatarRenderer | null>(null);
   const avatarCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    (window as unknown as Record<string, unknown>).__grokGirlsApplySpecExt = (patch: {
+      canonical: { category: string; value: string }[];
+      draft: Record<string, string>;
+      lighting?: string | null;
+    }) => {
+      // Rich draft fields + lighting (already validated by avatarSpec):
+      // canonical lanes travel through __grokGirlsVm.setOption instead.
+      let count = 0;
+      if (patch.draft && Object.keys(patch.draft).length) {
+        setDraft(d => ({ ...d, ...patch.draft }));
+        count += Object.keys(patch.draft).length;
+      }
+      if (patch.lighting) {
+        setLightingMode(patch.lighting as Parameters<typeof setLightingMode>[0]);
+        count += 1;
+      }
+      return count;
+    };
+  }, [avatarVm]);
   useEffect(() => {
     (window as unknown as Record<string, unknown>).__grokGirlsVm = avatarVm;
     (window as unknown as Record<string, unknown>).__grokGirlsPreview = {
@@ -1415,16 +1436,32 @@ export default function App() {
     try {
       // M5: 18+ conversations never go to cloud chat providers — the
       // self-hosted / local engines are the only sanctioned adult path.
-      const adultPinned = adult && chatProvider !== 'local' && chatProvider !== 'selfhosted';
+      const adultPinned = adult && chatProvider !== 'local' && chatProvider !== 'selfhosted' && chatProvider !== 'hermes';
       const chatEngine = adultPinned ? 'local' : chatProvider;
       if (adultPinned && !adultChatPinWarnRef.current) {
         adultChatPinWarnRef.current = true;
         showToast('18+ mode: chat pinned to LOCAL — cloud chat engines are not used for adult conversations');
       }
-      const answer = await reply(girl, room, next, text, chatEngine, adult);
+      const aid = String(now + 1);
+      const hermesStreaming = chatEngine === 'hermes';
+      // Hermes streams tokens straight into the growing assistant bubble.
+      if (hermesStreaming) {
+        setChat([...next, { id: aid, role: 'assistant', text: '', createdAt: now + 1 }]);
+      }
+      const answer = await reply(girl, room, next, text, chatEngine, adult, {
+        onDelta: partial => setChat(cs => cs.map(m => (m.id === aid ? { ...m, text: partial } : m))),
+        onSpec: outcome => {
+          if (!outcome.present) return;
+          if (outcome.applied > 0) {
+            showToast(`✓ Hermes applied ${outcome.applied} catalog-validated change(s) to your avatar`);
+          } else if (outcome.rejected > 0) {
+            showToast(`Hermes suggestions didn't match the catalog (${outcome.rejected} rejected) — nothing changed`);
+          }
+        }
+      });
       const out: ChatMessage[] = [
         ...next,
-        { id: String(now + 1), role: 'assistant', text: answer, createdAt: now + 1 }
+        { id: aid, role: 'assistant', text: answer, createdAt: now + 1 }
       ];
       setChat(out);
       saveChat(girl.id, out);
@@ -2949,15 +2986,39 @@ export default function App() {
                 <select
                   className="mini-provider-select"
                   value={chatProvider}
-                  onChange={e => setChatProvider(e.target.value as ProviderName)}
+                  onChange={e => {
+                    const v = e.target.value as ProviderName;
+                    // picking Hermes IS the enable gesture at runtime
+                    if (v === 'hermes') setHermesEnabled(true);
+                    setChatProvider(v);
+                  }}
                   title="Chat AI engine"
                 >
                   <option value="local">LOCAL</option>
+                  <option value="hermes">HERMES (LOCAL)</option>
                   <option value="openrouter">OPENROUTER</option>
                   <option value="gemini">GEMINI</option>
                   <option value="custom">CUSTOM</option>
                   <option value="selfhosted">SELF-HOSTED</option>
                 </select>
+                {chatProvider === 'hermes' && (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      letterSpacing: 1,
+                      color: isHermesEnabled() ? '#7ff0bd' : '#ff6b8a',
+                      background: isHermesEnabled() ? 'rgba(127,240,189,.1)' : 'rgba(255,107,138,.12)',
+                      border: `1px solid ${isHermesEnabled() ? 'rgba(127,240,189,.4)' : 'rgba(255,107,138,.4)'}`,
+                      borderRadius: 999,
+                      padding: '4px 10px',
+                      whiteSpace: 'nowrap'
+                    }}
+                    title={isHermesEnabled() ? `Hermes engine ready — ${getHermesModel()}` : 'Hermes disabled — enable it in AI Settings'}
+                  >
+                    🧠 {isHermesEnabled() ? 'HERMES · ' + String(getHermesModel().split('/').pop() ?? getHermesModel()).slice(0, 18) : 'HERMES · OFF'}
+                  </span>
+                )}
                 <button className="prompt-mini-btn" onClick={exportChatLog} title="Export chat log as JSON">
                   EXPORT LOG
                 </button>

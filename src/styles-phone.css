@@ -789,6 +789,19 @@
     border-radius: 0 !important;
     padding-bottom: calc(var(--mobile-nav-h) + 6px) !important;
   }
+  .app-container.mobile .companion-header {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    align-items: center !important;
+  }
+  .app-container.mobile .companion-header .mini-provider-select {
+    max-width: 132px;
+  }
+  .app-container.mobile .companion-header > div:last-child {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 100%;
+  }
 }
 
 /* ==========================================================================

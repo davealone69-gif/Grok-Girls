@@ -2,6 +2,13 @@ import { Girl, Room, ADULT_OVERLAY, SAFE_OVERLAY } from '../models/studio';
 import { chatWithProvider, ProviderName } from './providers';
 import { matchAct, randomActReply, ADULT_ACTS, QUICK_ACT_CHIPS, allActLabels } from './adultActs';
 import { applyAvatarLlmText, AVATAR_LLM_INSTRUCTIONS } from './llmAvatarBridge';
+import {
+  extractHermesSpecBlock,
+  hermesChatCompletion,
+  HERMES_CHAT_SYSTEM_TAIL,
+  isHermesChatReady
+} from './hermes';
+import { normalizeAvatarSpec, parseAvatarSpecJson } from './avatarSpec';
 
 export interface ChatMessage {
   id: string;
@@ -78,19 +85,78 @@ export function localReply(girl: Girl, room: Room, message: string, adult = fals
   return responses[Math.floor(Math.random() * responses.length)];
 }
 
+export interface ReplyOptions {
+  /** called per token when the engine streams (Hermes); text grows live */
+  onDelta?: (partial: string) => void;
+  /** called after a structured avatar spec was extracted & validated */
+  onSpec?: (outcome: { applied: number; rejected: number; present: boolean }) => void;
+}
+
+/** Apply a validated structured spec (canonical categories via the VM,
+ *  rich draft fields + lighting via the App-provided ext hook). */
+function applyStructuredSpec(specText: string | null): { applied: number; rejected: number; present: boolean } {
+  const parsed = parseAvatarSpecJson(specText);
+  if (!parsed) return { applied: 0, rejected: 0, present: false };
+  if (typeof window === 'undefined') return { applied: 0, rejected: 0, present: true };
+  const w = window as unknown as {
+    __grokGirlsVm?: { setOption: (category: string, value: string) => void };
+    __grokGirlsApplySpecExt?: (patch: { canonical: { category: string; value: string }[]; draft: Record<string, string>; lighting?: string | null }) => number;
+  };
+  const result = normalizeAvatarSpec(parsed);
+  const canonical = result.canonical;
+  // canonical lane: validated values through the canonical VM dispatcher
+  if (w.__grokGirlsVm) for (const edit of canonical) w.__grokGirlsVm.setOption(edit.category, edit.value);
+  // rich draft lane + lighting: validated values through the App hook
+  let ext = 0;
+  if (w.__grokGirlsApplySpecExt) {
+    const draft: Record<string, string> = {};
+    for (const edit of result.draft) draft[String(edit.draftKey)] = edit.value;
+    ext = w.__grokGirlsApplySpecExt({ canonical: [], draft, lighting: result.lighting });
+  }
+  return { applied: canonical.length + ext, rejected: result.rejected.length, present: true };
+}
+
 export async function reply(
   girl: Girl,
   room: Room,
   history: ChatMessage[],
   message: string,
   provider: ProviderName,
-  adult = false
+  adult = false,
+  opts: ReplyOptions = {}
 ): Promise<string> {
   const policy = adult ? ADULT_OVERLAY : SAFE_OVERLAY;
-  const system = `You are ${girl.name}, an adult fictional companion (18+). Personality: ${girl.traits.join(', ')}. Bio: ${girl.bio}. Current room: ${room.name}. Mood: ${girl.emotion}. Affinity: ${Math.round(girl.affinity)}%. Trust: ${Math.round(girl.trust)}%. Be warm, conversational and consistent with the character. Content policy: ${policy}. ${AVATAR_LLM_INSTRUCTIONS}`;
+  const hermesTail = provider === 'hermes' ? HERMES_CHAT_SYSTEM_TAIL : '';
+  const system = `You are ${girl.name}, an adult fictional companion (18+). Personality: ${girl.traits.join(', ')}. Bio: ${girl.bio}. Current room: ${room.name}. Mood: ${girl.emotion}. Affinity: ${Math.round(girl.affinity)}%. Trust: ${Math.round(girl.trust)}%. Be warm, conversational and consistent with the character. Content policy: ${policy}. ${AVATAR_LLM_INSTRUCTIONS}${hermesTail}`;
+
+  const fallback = (note: string) =>
+    `${localReply(girl, room, message, adult)}${note ? ` (${note})` : ''}`;
 
   if (provider === 'local') {
     return localReply(girl, room, message, adult);
+  }
+
+  if (provider === 'hermes') {
+    if (!isHermesChatReady()) {
+      return fallback('Hermes is disabled or its endpoint is unset — enable it in AI Settings to chat locally');
+    }
+    const historyMsgs = history
+      .slice(-20)
+      .map(m => ({ role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const), content: m.text }));
+    try {
+      const full = await hermesChatCompletion(
+        [{ role: 'system', content: system }, ...historyMsgs, { role: 'user', content: message }],
+        { stream: true, onToken: delta => opts.onDelta?.(delta) }
+      );
+      const { text: cleaned, raw } = extractHermesSpecBlock(full);
+      if (raw) opts.onSpec?.(applyStructuredSpec(raw));
+      // legacy <avatar_command> canonical bridge still works for Hermes too
+      applyAvatarLlmText(cleaned);
+      return cleaned.replace(/<avatar_command>[\s\S]*?<\/avatar_command>/gi, '').trim();
+    } catch (err) {
+      console.warn('Hermes chat failed, falling back to local companion dialogue', err);
+      return fallback(err instanceof Error ? err.message : 'Hermes unreachable');
+    }
   }
 
   try {
@@ -108,6 +174,6 @@ export async function reply(
     return response.text.replace(/<avatar_command>[\s\S]*?<\/avatar_command>/gi, '').trim();
   } catch (err) {
     console.warn('Remote provider failed, falling back to local companion dialogue', err);
-    return `${localReply(girl, room, message, adult)} (Provider note: ${err instanceof Error ? err.message : 'fallback'})`;
+    return fallback(err instanceof Error ? err.message : 'fallback');
   }
 }

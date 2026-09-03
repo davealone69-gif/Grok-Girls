@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-SUITES = ["audit_suite.py", "glb_suite.py", "stress_suite.py"]
+SUITES = ["audit_suite.py", "glb_suite.py", "stress_suite.py", "hermes_suite.py"]
 TIMEOUT_S = 900
 STRESS_CHECKS = {
     "double-click -> gallery items": lambda v: v == 1,

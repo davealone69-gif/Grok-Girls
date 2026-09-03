@@ -1,8 +1,14 @@
 import type { AvatarDefinition } from '../models/avatarDefinition';
+import { canonicalOptionFor } from './avatarSpec';
 
 export interface AvatarLlmCommand {
   category: 'gender' | 'skin' | 'head' | 'age' | 'hair' | 'eyes' | 'face' | 'body' | 'tattoos' | 'augmentations' | 'outfit';
   value: string;
+}
+
+export interface AvatarLlmApplyResult {
+  applied: number;
+  rejected: { category: string; value: string; reason: string }[];
 }
 
 const CATEGORIES = new Set<AvatarLlmCommand['category']>([
@@ -27,15 +33,25 @@ export function parseAvatarLlmCommands(text: string): AvatarLlmCommand[] {
   return commands;
 }
 
-export function applyAvatarLlmCommands(commands: AvatarLlmCommand[]): number {
-  if (typeof window === 'undefined') return 0;
+/** Apply validated canonical commands through the canonical VM. */
+export function applyAvatarLlmCommands(commands: AvatarLlmCommand[]): AvatarLlmApplyResult {
+  const result: AvatarLlmApplyResult = { applied: 0, rejected: [] };
+  if (typeof window === 'undefined') return result;
   const vm = (window as unknown as { __grokGirlsVm?: { setOption: (category: string, value: string) => void; get?: () => AvatarDefinition } }).__grokGirlsVm;
-  if (!vm) return 0;
-  for (const command of commands) vm.setOption(command.category, command.value);
-  return commands.length;
+  if (!vm) return result;
+  for (const command of commands) {
+    const res = canonicalOptionFor(command.category, command.value);
+    if ('canonical' in res) {
+      vm.setOption(command.category, res.canonical);
+      result.applied += 1;
+    } else {
+      result.rejected.push({ category: command.category, value: command.value, reason: res.error });
+    }
+  }
+  return result;
 }
 
-export function applyAvatarLlmText(text: string): number {
+export function applyAvatarLlmText(text: string): AvatarLlmApplyResult {
   return applyAvatarLlmCommands(parseAvatarLlmCommands(text));
 }
 

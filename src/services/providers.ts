@@ -1,4 +1,6 @@
 import { generateSelfHosted, getServerBase } from './selfHosted';
+import { extractHermesSpecBlock, hermesChatCompletion, isHermesChatReady } from './hermes';
+import { HERMES_CHAT_SYSTEM_TAIL } from './hermes';
 import {
   getConnectionApiKey,
   saveConnectionApiKey,
@@ -8,7 +10,7 @@ import {
   saveConnectionModel
 } from './settingsState';
 
-export type ProviderName = 'local' | 'openrouter' | 'gemini' | 'custom' | 'selfhosted';
+export type ProviderName = 'local' | 'openrouter' | 'gemini' | 'custom' | 'selfhosted' | 'hermes';
 export type Mode = 'image' | 'video';
 export type ProviderMode = Mode | 'chat';
 
@@ -859,6 +861,25 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
     if (!r.ok) throw new Error(`Gemini HTTP ${r.status}`);
     const d = await r.json();
     return { provider: 'gemini' as const, text: d.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? 'No response.' };
+  }
+
+  if (preferred === 'hermes') {
+    // First-class provider: route straight to the Hermes adapter (the
+    // UI normally streams through chat.ts; this non-streaming branch is
+    // the safety net for direct callers).
+    if (!isHermesChatReady()) {
+      return {
+        provider: 'hermes' as const,
+        text: 'Hermes is not enabled or its endpoint is unset. Enable it in AI Settings (Settings → Nous Hermes) to chat locally.',
+        warning: 'Hermes disabled or no endpoint.'
+      };
+    }
+    const system = messages.find(m => m.role === 'system')?.content ?? '';
+    const body = messages.filter(m => m.role !== 'system');
+    const prompt = [...(system ? [{ role: 'system' as const, content: system + HERMES_CHAT_SYSTEM_TAIL }] : []), ...body];
+    const text = await hermesChatCompletion(prompt, { stream: false });
+    const { text: cleaned } = extractHermesSpecBlock(text);
+    return { provider: 'hermes' as const, text: cleaned };
   }
 
   const key = getSavedApiKey('custom');

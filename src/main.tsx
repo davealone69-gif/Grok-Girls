@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import './renderer/ResultCanvasCompat';
 import { installRendererDiagnostics } from './renderer/RendererDiagnostics';
+import './hermesSettingsBoot';
 import './menu-mobile.css';
 import './styles-landscape-fix.css';
 import './styles-s24-viewport.css';

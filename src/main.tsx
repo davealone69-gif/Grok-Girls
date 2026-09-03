@@ -6,6 +6,7 @@ import { installRendererDiagnostics } from './renderer/RendererDiagnostics';
 import './hermesSettingsBoot';
 import './nativeAvatarBridge';
 import './styles-phone.css';
+import './styles-phone-final.css';
 
 installRendererDiagnostics();
 

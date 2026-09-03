@@ -1,0 +1,44 @@
+name: Compose App Build
+
+on:
+  push:
+    branches: [ compose-rewrite ]
+  pull_request:
+    branches: [ main, compose-rewrite ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app-compose
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Restore full-size Gradle memory
+        run: |
+          sed -i 's/-Xmx[0-9]*m/-Xmx4096m/' gradle.properties
+          sed -i 's/^org.gradle.parallel=false/org.gradle.parallel=true/' gradle.properties
+          sed -i '/kotlin.compiler.execution.strategy=in-process/d' gradle.properties
+          sed -i 's/^org.gradle.workers.max=1/org.gradle.workers.max=4/' gradle.properties
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Assemble debug APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: grok-girls-studio-debug
+          path: app-compose/app/build/outputs/apk/debug/*.apk

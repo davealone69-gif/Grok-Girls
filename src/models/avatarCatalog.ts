@@ -71,6 +71,11 @@ export interface CategorySpec {
   id: CanonicalCategoryId;
   title: string;
   options: CanonicalOption[];
+  /** Dock-panel list (Kotlin parity). Defaults to all options; skin keeps
+   *  its historical 6 tones and head its 4, while the interchange
+   *  vocabulary may carry more (Tone 07–08 / Head 05–08 exist in stored
+   *  definitions via the rich skin/head lists). */
+  panelOptions?: string[];
   /** first option is not always the default (age default = Adult) */
   defaultValue: string;
 }
@@ -155,8 +160,14 @@ const outfitOptions: CanonicalOption[] = [
 
 export const AVATAR_CATEGORY_SPECS: CategorySpec[] = [
   { id: 'gender', title: 'Gender', options: genderOptions, defaultValue: 'Female' },
-  { id: 'skin', title: 'Skin', options: skinOptions, defaultValue: 'Tone 01' },
-  { id: 'head', title: 'Head', options: headOptions, defaultValue: 'Head 01' },
+  {
+    id: 'skin', title: 'Skin', options: skinOptions, defaultValue: 'Tone 01',
+    panelOptions: skinOptions.slice(0, 6).map(o => o.value)
+  },
+  {
+    id: 'head', title: 'Head', options: headOptions, defaultValue: 'Head 01',
+    panelOptions: headOptions.slice(0, 4).map(o => o.value)
+  },
   { id: 'age', title: 'Age', options: ageOptions, defaultValue: 'Adult' },
   { id: 'hair', title: 'Hair', options: hairOptions, defaultValue: 'Short' },
   { id: 'eyes', title: 'Eyes', options: eyesOptions, defaultValue: 'Natural' },
@@ -173,11 +184,12 @@ export interface AvatarCategory {
   options: string[];
 }
 
-/** Display catalog for the dock CATEGORIES panel (value-only lists). */
+/** Display catalog for the dock CATEGORIES panel (value-only lists;
+ *  skin/head use their Kotlin-parity panel subsets). */
 export const AVATAR_CATEGORIES: AvatarCategory[] = AVATAR_CATEGORY_SPECS.map(s => ({
   id: s.id,
   title: s.title,
-  options: s.options.map(o => o.value)
+  options: (s.panelOptions ?? s.options.map(o => o.value))
 }));
 
 export function categorySpec(id: string): CategorySpec | undefined {

@@ -79,9 +79,42 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 
 ## Verified
 
-`:app:compileDebugKotlin` — **BUILD SUCCESSFUL**. Resource merge, manifest
-processing, and dexing also pass locally; only the final `mergeDebugGlobalSynthetics`
-/packaging step exceeds the 2 GB sandbox, which CI covers.
+`:app:assembleDebug` — **BUILD SUCCESSFUL**. Produces a 47 MB debug APK:
+
+```
+package: ai.grokgirls.studio.debug   versionName 1.0.0
+minSdkVersion 26   targetSdkVersion 35   compileSdk 35
+uses-permission: android.permission.INTERNET
+20 Filament native libraries (arm64-v8a, armeabi-v7a, x86, x86_64)
+assets/presets/*.jpg + assets/scenes/*.jpg bundled
+adaptive launcher icon across all five density buckets
+```
+
+Not yet done: no on-device/emulator run, so this is a compile-and-package
+guarantee rather than a runtime one. The engine clients are written against
+the documented A1111 / ComfyUI / Imagen / OpenRouter APIs but have not been
+exercised against live servers.
+
+## Render engines
+
+| Engine | Endpoint | Notes |
+|---|---|---|
+| **Local** | — | On-device Canvas renderer. No server, no key. Draws from the persona's real hair/skin/eye/lip colours, scene accent and hair length. |
+| **Self-Hosted** | auto | Probes `/sdapi/v1/sd-models` then `/system_stats` to pick A1111 or ComfyUI. |
+| **AUTOMATIC1111** | `/sdapi/v1/txt2img` | Negative prompt, steps, CFG, seed, sampler, hires-fix, checkpoint override, `<lora:name:weight>`. Live progress from `/sdapi/v1/progress`. |
+| **ComfyUI** | `/prompt` → `/history` → `/view` | Full generated txt2img graph. |
+| **Gemini** | Imagen 3 `:predict` | API key from Settings. |
+| **OpenRouter** | `/chat/completions` | Configurable image-model slug. |
+
+Every engine implements `ImageEngine`, so adding another is one file plus a
+line in `EngineRegistry`.
+
+## Persistence
+
+State is written atomically to `filesDir/studio-state.json` (personas,
+gallery index, chat logs, settings, server config, stats) and render bytes
+to `filesDir/renders/`. The ViewModel autosaves on every mutation and
+restores on launch. Export/import/reset live in Settings → Data.
 
 ## Filament assets
 

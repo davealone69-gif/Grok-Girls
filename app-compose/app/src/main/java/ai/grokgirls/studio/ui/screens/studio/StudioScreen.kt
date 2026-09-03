@@ -229,7 +229,7 @@ fun StudioScreen(vm: StudioViewModel, nav: NavHostController) {
         PromptSheet(
             prompt = PromptEngine.compile(p),
             settings = settings,
-            onSettings = { vm.repo.setSettings(it) },
+            onSettings = { vm.setSettings(it) },
             onDismiss = { showPrompt = false },
         )
     }

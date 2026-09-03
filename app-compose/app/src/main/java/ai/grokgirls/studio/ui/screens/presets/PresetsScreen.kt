@@ -39,7 +39,7 @@ fun PresetsScreen(vm: StudioViewModel, nav: NavHostController) {
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { vm.repo.add(Persona(name = "Persona ${personas.size + 1}",
+                onClick = { vm.addPersona(Persona(name = "Persona ${personas.size + 1}",
                     previewAsset = "presets/preset_ruby.jpg")); nav.navigate(Dest.STUDIO.route) },
                 icon = { Icon(Icons.Rounded.Add, null) },
                 text = { Text("NEW") },
@@ -65,9 +65,9 @@ fun PresetsScreen(vm: StudioViewModel, nav: NavHostController) {
                 items(filtered, key = { it.id }) { p ->
                     PresetCard(
                         p, p.id == activeId,
-                        onLoad = { vm.repo.select(p.id); nav.navigate(Dest.STUDIO.route) },
-                        onDuplicate = { vm.repo.duplicate(p.id) },
-                        onDelete = { vm.repo.delete(p.id) },
+                        onLoad = { vm.select(p.id); nav.navigate(Dest.STUDIO.route) },
+                        onDuplicate = { vm.duplicate(p.id) },
+                        onDelete = { vm.deletePersona(p.id) },
                     )
                 }
             }

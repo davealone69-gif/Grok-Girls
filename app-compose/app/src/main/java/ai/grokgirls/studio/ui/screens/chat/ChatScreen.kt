@@ -103,7 +103,7 @@ fun ChatScreen(vm: StudioViewModel) {
                 contentPadding = PaddingValues(horizontal = 16.dp),
             ) {
                 items(quickReplies.size) { i ->
-                    SuggestionChip({ vm.repo.send(quickReplies[i]) }, { Text(quickReplies[i]) },
+                    SuggestionChip({ vm.send(quickReplies[i]) }, { Text(quickReplies[i]) },
                         shape = MaterialTheme.shapes.small)
                 }
             }
@@ -119,7 +119,7 @@ fun ChatScreen(vm: StudioViewModel) {
                 )
                 Spacer(Modifier.width(8.dp))
                 FilledIconButton(
-                    { if (draft.isNotBlank()) { vm.repo.send(draft.trim()); draft = "" } },
+                    { if (draft.isNotBlank()) { vm.send(draft.trim()); draft = "" } },
                     Modifier.size(52.dp),
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary),

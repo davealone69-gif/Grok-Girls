@@ -117,12 +117,12 @@ fun GalleryScreen(vm: StudioViewModel) {
                             color = Color(0xAAFFFFFF), maxLines = 3)
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            IconButton({ vm.repo.toggleFavorite(g.id) }) {
+                            IconButton({ vm.toggleFavorite(g.id) }) {
                                 Icon(if (g.favorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                                     "Favourite", tint = MaterialTheme.colorScheme.primary) }
                             IconButton({}) { Icon(Icons.Rounded.Download, "Download", tint = Color.White) }
                             IconButton({}) { Icon(Icons.Rounded.Wallpaper, "Set viewport", tint = Color.White) }
-                            IconButton({ vm.repo.deleteRender(g.id); lightbox = null }) {
+                            IconButton({ vm.deleteRender(g.id); lightbox = null }) {
                                 Icon(Icons.Rounded.DeleteOutline, "Delete",
                                     tint = MaterialTheme.colorScheme.error) }
                         }

@@ -31,6 +31,16 @@ import ai.grokgirls.studio.ui.screens.video.VideoScreen
 @Composable
 fun AppShell(vm: StudioViewModel = viewModel()) {
     val nav = rememberNavController()
+    val snackbar = remember { SnackbarHostState() }
+    val toast by vm.toast.collectAsState()
+
+    LaunchedEffect(toast) {
+        toast?.let {
+            snackbar.showSnackbar(it)
+            vm.dismissToast()
+        }
+    }
+
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val personas by vm.repo.personas.collectAsState()
@@ -67,6 +77,7 @@ fun AppShell(vm: StudioViewModel = viewModel()) {
 
             Scaffold(
                 containerColor = Color.Transparent,
+                snackbarHost = { SnackbarHost(snackbar) },
                 bottomBar = {
                     if (!wide) {
                         NavigationBar(

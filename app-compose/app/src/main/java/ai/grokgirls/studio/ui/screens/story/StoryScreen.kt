@@ -92,11 +92,11 @@ fun StoryScreen(vm: StudioViewModel) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     FlowRowActions(ch.actions, enabled = !locked) {
-                        vm.repo.setChapter(i)
+                        vm.setChapter(i)
                         vm.generate()
                     }
                     if (!locked) {
-                        TextButton({ vm.repo.setChapter(i) }, Modifier.padding(8.dp)) {
+                        TextButton({ vm.setChapter(i) }, Modifier.padding(8.dp)) {
                             Text(if (isCurrent) "CURRENT CHAPTER" else "JUMP TO CHAPTER",
                                 style = MaterialTheme.typography.labelMedium)
                         }

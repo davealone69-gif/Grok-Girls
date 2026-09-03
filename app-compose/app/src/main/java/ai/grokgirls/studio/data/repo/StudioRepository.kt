@@ -26,6 +26,9 @@ class StudioRepository {
     private val _settings = MutableStateFlow(RenderSettings())
     val settings: StateFlow<RenderSettings> = _settings.asStateFlow()
 
+    private val _server = MutableStateFlow(ServerConfig())
+    val server: StateFlow<ServerConfig> = _server.asStateFlow()
+
     private val _stats = MutableStateFlow(Stats())
     val stats: StateFlow<Stats> = _stats.asStateFlow()
 
@@ -58,6 +61,7 @@ class StudioRepository {
     }
 
     fun setSettings(s: RenderSettings) { _settings.value = s }
+    fun setServer(s: ServerConfig) { _server.value = s }
     fun setAdult(v: Boolean) { _adult.value = v }
     fun setChapter(i: Int) {
         _chapter.value = i
@@ -89,6 +93,38 @@ class StudioRepository {
             messages = _stats.value.messages + 1,
             affinity = (_stats.value.affinity + 2).coerceAtMost(100),
         )
+    }
+
+    fun snapshot() = StudioSnapshot(
+        personas = _personas.value,
+        activeId = _activeId.value,
+        gallery = _gallery.value,
+        messages = _messages.value,
+        settings = _settings.value,
+        server = _server.value,
+        stats = _stats.value,
+        adultMode = _adult.value,
+        chapter = _chapter.value,
+    )
+
+    fun restore(s: StudioSnapshot) {
+        if (s.personas.isEmpty()) return
+        _personas.value = s.personas
+        _activeId.value = s.personas.firstOrNull { it.id == s.activeId }?.id ?: s.personas.first().id
+        _gallery.value = s.gallery
+        _messages.value = s.messages
+        _settings.value = s.settings
+        _server.value = s.server
+        _stats.value = s.stats
+        _adult.value = s.adultMode
+        _chapter.value = s.chapter
+    }
+
+    fun importPersonas(list: List<Persona>) {
+        if (list.isEmpty()) return
+        _personas.value = _personas.value + list
+        _stats.value = _stats.value.copy(imports = _stats.value.imports + list.size)
+        _activeId.value = list.first().id
     }
 
     private fun seedPersonas() = listOf(

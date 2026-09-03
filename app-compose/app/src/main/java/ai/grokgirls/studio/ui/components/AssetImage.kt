@@ -9,8 +9,13 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import java.io.File
 
-/** Loads a bitmap from the APK assets folder, cached per path. */
+/**
+ * Loads an image either from the APK assets folder (relative path such as
+ * "presets/preset_ruby.jpg") or from internal storage (absolute path produced
+ * by a render). Decoded off the composition thread and cached by path.
+ */
 @Composable
 fun AssetImage(
     path: String,
@@ -21,7 +26,15 @@ fun AssetImage(
     val ctx = LocalContext.current
     val bmp by produceState<ImageBitmap?>(null, path) {
         value = runCatching {
-            ctx.assets.open(path).use { android.graphics.BitmapFactory.decodeStream(it) }.asImageBitmap()
+            if (path.startsWith("/")) {
+                val f = File(path)
+                if (!f.exists()) null
+                else android.graphics.BitmapFactory.decodeFile(path)?.asImageBitmap()
+            } else {
+                ctx.assets.open(path).use {
+                    android.graphics.BitmapFactory.decodeStream(it)
+                }?.asImageBitmap()
+            }
         }.getOrNull()
     }
     Box(modifier) {

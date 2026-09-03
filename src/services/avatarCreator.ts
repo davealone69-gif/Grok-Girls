@@ -1,4 +1,5 @@
 import { AdultSelections, buildAdultPrompt } from './adultOptions';
+import { GENDER_RICH, BODY_RICH, EYE_RICH, FACE_RICH, HAIR_RICH, SKIN_RICH } from '../models/avatarCatalog';
 
 export interface AvatarDraft {
   id: string;
@@ -38,15 +39,16 @@ export interface AvatarDraft {
 }
 
 export const avatarOptions = {
-  gender: ['female', 'nonbinary', 'android'] as const,
+  // Canonical-tied vocabularies come from the master catalog (one home):
+  gender: GENDER_RICH,
   ethnicity: ['caucasian', 'mixed', 'cybernetic', 'east asian', 'latina', 'black', 'middle eastern', 'nordic'],
-  bodyType: ['hourglass', 'curvy', 'petite', 'slim', 'athletic'],
-  eyeColor: ['dark brown', 'ruby red', 'hazel', 'emerald green', 'violet neon', 'ice blue', 'gray'],
+  bodyType: BODY_RICH,
+  eyeColor: EYE_RICH,
   eyeShape: ['almond', 'cat-eye', 'round', 'hooded', 'seductive', 'upturned'],
-  faceShape: ['oval', 'heart', 'diamond', 'sharp', 'round', 'square'],
+  faceShape: FACE_RICH,
   hairColor: ['vibrant ruby red', 'electric purple', 'jet black', 'platinum silver', 'dark burgundy', 'champagne blonde', 'auburn', 'neon cyan'],
-  hairStyle: ['layered waves bob', 'cyber undercut with side sweep', 'long glamorous waves', 'sleek straight bob', 'high ponytail', 'messy bun with wisps', 'asymmetric pixie crop', 'wet-look waves'],
-  skinTone: ['fair porcelain', 'pale ivory', 'light warm', 'olive', 'golden tan', 'deep bronze', 'rich espresso', 'cybernetic pale'],
+  hairStyle: HAIR_RICH,
+  skinTone: SKIN_RICH,
   outfit: [
     'red and black lace corset lingerie with matching satin panties, sheer fishnet stockings, and ruby velvet choker',
     'cyberpunk high-collar leather jacket with neon purple piping over techwear top',

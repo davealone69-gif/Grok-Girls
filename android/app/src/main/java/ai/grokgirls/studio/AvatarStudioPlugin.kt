@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.opengl.EGL14
-import android.opengl.EGLConfig
 import android.opengl.EGLDisplay
 import android.opengl.EGLSurface
 import android.opengl.GLES30
@@ -21,6 +20,7 @@ import com.getcapacitor.PluginMethod
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import javax.microedition.khronos.egl.EGLConfig
 
 /** Native Android bridge for the real GLES3 HD avatar renderer. */
 @CapacitorPlugin(name = "AvatarStudio")

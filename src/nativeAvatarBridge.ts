@@ -1,6 +1,5 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { addGalleryItem } from './services/gallery';
-import { convertFileSrc } from '@capacitor/core';
 
 interface AvatarStudioPlugin {
   openViewport(options?: { avatar?: string; definition?: string }): Promise<void>;
@@ -9,11 +8,10 @@ interface AvatarStudioPlugin {
     definition?: string;
     width?: number;
     height?: number;
-  }): Promise<{ path: string; width: number; height: number }>;
+  }): Promise<{ dataUrl: string; width: number; height: number }>;
 }
 
 const AvatarStudio = registerPlugin<AvatarStudioPlugin>('AvatarStudio');
-
 const DEFAULT_AVATAR = 'avatars/my_avatar.glb';
 
 type WindowWithGrokBridge = Window & {
@@ -26,14 +24,6 @@ function currentDefinition(): Record<string, string> {
     return value && typeof value === 'object' ? value : {};
   } catch {
     return {};
-  }
-}
-
-function nativeFileUrl(path: string): string {
-  try {
-    return convertFileSrc(path);
-  } catch {
-    return path;
   }
 }
 
@@ -59,11 +49,7 @@ export async function renderNativeHdAvatar(
     width,
     height
   });
-  return {
-    url: nativeFileUrl(result.path),
-    width: result.width,
-    height: result.height
-  };
+  return { url: result.dataUrl, width: result.width, height: result.height };
 }
 
 function installNativeActions(): void {
@@ -75,7 +61,6 @@ function installNativeActions(): void {
       const target = event.target as HTMLElement | null;
       const button = target?.closest<HTMLButtonElement>('button');
       if (!button) return;
-
       const title = button.getAttribute('title') || '';
       const isHd = title === 'On-device HD renderer' || button.classList.contains('native-hd');
       if (!isHd) return;
@@ -83,23 +68,20 @@ function installNativeActions(): void {
       event.preventDefault();
       event.stopImmediatePropagation();
       if (button.disabled) return;
-
       button.disabled = true;
+
       void (async () => {
         try {
-          const rendered = await renderNativeHdAvatar(currentDefinition(), 1920, 1080);
+          const definition = currentDefinition();
+          const rendered = await renderNativeHdAvatar(definition, 1920, 1080);
           await addGalleryItem({
-            avatarId: 'native-hd',
+            avatarId: definition.gender || 'native-hd',
             mode: 'image',
-            prompt: 'NATIVE HD RENDER · Android GLES3 · canonical AvatarDefinition',
+            prompt: `NATIVE HD RENDER · ${definition.gender} · ${definition.skin} · ${definition.hair} · ${definition.outfit}`,
             assetUrl: rendered.url,
             provider: 'hdrenderer'
           });
-          window.dispatchEvent(
-            new CustomEvent('grok-native-hd-complete', {
-              detail: rendered
-            })
-          );
+          window.dispatchEvent(new CustomEvent('grok-native-hd-complete', { detail: rendered }));
         } catch (error) {
           window.dispatchEvent(
             new CustomEvent('grok-native-hd-error', {

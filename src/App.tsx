@@ -24,9 +24,19 @@ import { AvatarParameters, DEFAULT_AVATAR_PARAMETERS } from './renderer/avatar/A
 import { Skeleton, Bone } from './renderer/avatar/Skeleton';
 import { MorphController } from './renderer/avatar/MorphTarget';
 import { DEFAULT_AVATAR_MATERIAL } from './renderer/avatar/AvatarMaterial';
-import { createProceduralSkinTextures, destroyProceduralSkinTextures, createThicknessTexture, destroyThicknessTexture } from './renderer/ProceduralSkinTextures';
+import {
+  createProceduralSkinTextures,
+  destroyProceduralSkinTextures,
+  createThicknessTexture,
+  destroyThicknessTexture,
+  createSpecularTexture,
+  destroySpecularTexture,
+  createPoreTexture,
+  destroyPoreTexture,
+  createWrinkleTexture,
+  destroyWrinkleTexture
+} from './renderer/ProceduralSkinTextures';
 import { DEFAULT_ADVANCED_SKIN_MATERIAL } from './renderer/AdvancedSkinMaterial';
-import { createSpecularTexture, destroySpecularTexture, createPoreTexture, destroyPoreTexture, createWrinkleTexture, destroyWrinkleTexture } from './renderer/ProceduralSkinTextures';
 import { MorphShader } from './renderer/MorphShader';
 import { createFaceControls, applyFaceControls, FaceExpressionController, BlinkController } from './renderer/avatar/FaceControls';
 import { correctiveRules, evaluateCorrectives } from './renderer/avatar/Correctives';
@@ -43,9 +53,10 @@ import { createIblPipeline, destroyIblPipeline, generateStudioEnvironment, DEFAU
 import { CinematicPipeline, CinematicRenderer, createFullscreenTriangle } from './renderer/CinematicPipeline';
 import { probeCapabilities, createRenderTarget, checkFramebufferComplete } from './renderer/RenderTarget';
 import { parseGlb } from './renderer/avatar/GlbLoader';
-import { readAccessor } from './renderer/avatar/GltfAccessor';
+import { readAccessor, toFloat32 } from './renderer/avatar/GltfAccessor';
 import { loadAvatarGlb, disposeAvatarAsset, updateSkeleton } from './renderer/avatar/GltfAvatar';
 import { computeGlobalTransforms, evaluateSkins } from './renderer/avatar/GltfSkeleton';
+import { uploadGltfTexture, loadGltfImage } from './renderer/avatar/GltfImages';
 import { HDFrameRenderer } from './renderer/HDFrameRenderer';
 import { RenderResolution, RENDER_RESOLUTIONS } from './renderer/RenderResolution';
 import { HDRenderTarget } from './renderer/HDRenderTarget';
@@ -107,19 +118,29 @@ if (typeof window !== 'undefined') {
     checkFramebufferComplete,
     parseGlb,
     readAccessor,
+    toFloat32,
     loadAvatarGlb,
     disposeAvatarAsset,
     updateSkeleton,
     computeGlobalTransforms,
-    evaluateSkins
+    evaluateSkins,
+    uploadGltfTexture,
+    loadGltfImage
   };
 }
 import { getImageDataUrl, getImageUrl, isRasterDataUrl, putImage } from './services/assetStore';
 import { isAgeConfirmed, confirmAdultAge } from './services/ageGate';
+import {
+  getAdultFlag,
+  setAdultFlag,
+  getProviderPref,
+  saveProviderPref,
+  getGenerationSettings,
+  saveGenerationSettings
+} from './services/settingsState';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
 import { NSFW_NEGATIVE } from './services/adultActs';
 import { adultOptions, defaultAdultSelections } from './services/adultOptions';
-import { saveAvatar } from './services/avatarEditor';
 import { downloadMedia, exportGallery, importGallery } from './services/media';
 import { stripePaymentLink } from './services/stripe';
 import {
@@ -149,8 +170,6 @@ type InspectorSection =
   | 'tattoos'
   | 'augments';
 type DockTab = 'style' | 'color' | 'makeup' | 'eyebrows' | 'scene' | 'categories';
-
-const ADULT_KEY = 'grok-girls-adult-v1';
 
 function defaultDraft(g: Girl): AvatarDraft {
   return {
@@ -221,13 +240,7 @@ export default function App() {
     () => (loadGirls(seedGirls)[0] || seedGirls[0]).id
   );
   const [view, setView] = useState<ActiveView>('builder');
-  const [adult, setAdult] = useState(() => {
-    try {
-      return localStorage.getItem(ADULT_KEY) === '1';
-    } catch {
-      return true;
-    }
-  });
+  const [adult, setAdult] = useState<boolean>(() => getAdultFlag());
 
   const girl = useMemo(
     () => girls.find(g => g.id === selectedId) || girls[0] || seedGirls[0],
@@ -301,9 +314,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    try {
-      localStorage.setItem(ADULT_KEY, adult ? '1' : '0');
-    } catch {}
+    setAdultFlag(adult);
   }, [adult]);
 
 
@@ -445,33 +456,15 @@ export default function App() {
   const [galleryFilter, setGalleryFilter] = useState<'all' | 'local' | 'openrouter' | 'gemini' | 'custom' | 'selfhosted'>('all');
   const [deleteArmedId, setDeleteArmedId] = useState<string | null>(null);
   const personaImportRef = useRef<HTMLInputElement>(null);
-  const [provider, setProvider] = useState<ProviderName>(() => {
-    try {
-      const v = localStorage.getItem('grok-girls-provider-v1');
-      if (v === 'local' || v === 'openrouter' || v === 'gemini' || v === 'custom' || v === 'selfhosted')
-        return v;
-    } catch {}
-    return 'local';
-  });
+  const [provider, setProvider] = useState<ProviderName>(() => getProviderPref('image'));
   useEffect(() => {
-    try {
-      localStorage.setItem('grok-girls-provider-v1', provider);
-    } catch {}
+    saveProviderPref('image', provider);
   }, [provider]);
   // H1: chat has its OWN engine selector — picking SELF-HOSTED for renders
   // no longer breaks chat. The footer ENGINE drives generation only.
-  const [chatProvider, setChatProvider] = useState<ProviderName>(() => {
-    try {
-      const v = localStorage.getItem('grok-girls-chat-provider-v1');
-      if (v === 'local' || v === 'openrouter' || v === 'gemini' || v === 'custom' || v === 'selfhosted')
-        return v;
-    } catch {}
-    return 'local';
-  });
+  const [chatProvider, setChatProvider] = useState<ProviderName>(() => getProviderPref('chat'));
   useEffect(() => {
-    try {
-      localStorage.setItem('grok-girls-chat-provider-v1', chatProvider);
-    } catch {}
+    saveProviderPref('chat', chatProvider);
   }, [chatProvider]);
   const adultChatPinWarnRef = useRef(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -518,6 +511,10 @@ export default function App() {
       setExpressionIntensity: (v: number) => avatar3dRef.current?.setExpressionIntensity(v),
       setWrinkleStrength: (v: number) => avatar3dRef.current?.setWrinkleStrength(v),
       loadGlb: (data: ArrayBuffer) => avatar3dRef.current?.loadGlb(data),
+      setGlbMorphWeights: (w: number[]) => avatar3dRef.current?.setGlbMorphWeights(w),
+      glbInfo: () => avatar3dRef.current?.glbInfo() ?? null,
+      setGlbScale: (s: number) => avatar3dRef.current?.setGlbScale(s),
+      setAvatarVisible: (v: boolean) => avatar3dRef.current?.setAvatarVisible(v),
       setKeyLight: (x: number, y: number, z: number) => avatar3dRef.current?.setKeyLight(x, y, z),
       setParameters: (p: AvatarParameters) => avatar3dRef.current?.setParameters(p),
       setAutoRotate: (v: boolean) => avatar3dRef.current?.setAutoRotate(v),
@@ -725,50 +722,21 @@ export default function App() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [immersive, setImmersive] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [negativePrompt, setNegativePrompt] = useState(() => {
-    try {
-      return localStorage.getItem('grok-girls-neg-v1') || '';
-    } catch {
-      return '';
-    }
-  });
-  const [seedInput, setSeedInput] = useState(() => {
-    try {
-      return localStorage.getItem('grok-girls-seed-v1') || '';
-    } catch {
-      return '';
-    }
-  });
-  const [stepsInput, setStepsInput] = useState(() => {
-    try {
-      return Number(localStorage.getItem('grok-girls-steps-v1')) || 28;
-    } catch {
-      return 28;
-    }
-  });
-  const [cfgInput, setCfgInput] = useState(() => {
-    try {
-      return Number(localStorage.getItem('grok-girls-cfg-v1')) || 7;
-    } catch {
-      return 7;
-    }
-  });
-  const [renderSize, setRenderSize] = useState(() => {
-    try {
-      return Number(localStorage.getItem('grok-girls-size-v1')) || 1024;
-    } catch {
-      return 1024;
-    }
-  });
+  const genPrefs = useMemo(() => getGenerationSettings(), []);
+  const [negativePrompt, setNegativePrompt] = useState(() => genPrefs.negative);
+  const [seedInput, setSeedInput] = useState(() => genPrefs.seed);
+  const [stepsInput, setStepsInput] = useState(() => genPrefs.steps);
+  const [cfgInput, setCfgInput] = useState(() => genPrefs.cfg);
+  const [renderSize, setRenderSize] = useState(() => genPrefs.size);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('grok-girls-neg-v1', negativePrompt);
-      localStorage.setItem('grok-girls-seed-v1', seedInput);
-      localStorage.setItem('grok-girls-steps-v1', String(stepsInput));
-      localStorage.setItem('grok-girls-cfg-v1', String(cfgInput));
-      localStorage.setItem('grok-girls-size-v1', String(renderSize));
-    } catch {}
+    saveGenerationSettings({
+      negative: negativePrompt,
+      seed: seedInput,
+      steps: stepsInput,
+      cfg: cfgInput,
+      size: renderSize
+    });
   }, [negativePrompt, seedInput, stepsInput, cfgInput, renderSize]);
   const [stats, setStats] = useState<StudioStats>(() => loadStats());
   const [statsOpen, setStatsOpen] = useState(false);
@@ -903,9 +871,6 @@ export default function App() {
       storageWarnRef.current = true;
       showToast('⚠ Browser storage is full — changes are session-only. Export/clear gallery items to free space.');
     }
-    try {
-      saveAvatar({ ...girl, ...patch });
-    } catch {}
   };
 
   /** Set a persona photo: raster data URLs move into IndexedDB (assetKey),
@@ -926,9 +891,6 @@ export default function App() {
       storageWarnRef.current = true;
       showToast('⚠ Browser storage is full — changes are session-only. Export/clear gallery items to free space.');
     }
-    try {
-      saveAvatar({ ...girl, ...final });
-    } catch {}
   };
 
   const selectGirl = (id: string) => {
@@ -2205,7 +2167,7 @@ export default function App() {
             <button
               className={`hud-btn ${cubeMode ? 'live-active' : ''}`}
               onClick={() => setCubeMode(v => !v)}
-              title="Interactive 3D viewport (native HDRenderView demo)"
+              title="Interactive 3D avatar viewport"
             >
               <span>🧊</span> 3D
             </button>

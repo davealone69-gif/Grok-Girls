@@ -290,6 +290,21 @@ with sync_playwright() as p:
     pg.wait_for_timeout(200)
     outfit_opts = pg.locator(".category-option").all_inner_texts()
     chk("avatar categories: outfit has Armoured", "Armoured" in outfit_opts, str(outfit_opts))
+
+    # master-catalog drift guard: dock panel lists match the catalog exactly
+    panel_counts = {}
+    for cat_name in ["Head", "Hair", "Body", "Tattoos", "Augmentations", "Age", "Eyes", "Face"]:
+        pg.evaluate("(t) => { const bt = [...document.querySelectorAll('.category-btn')].find(x => x.textContent.trim() === t); if (bt) bt.click(); }", cat_name)
+        pg.wait_for_timeout(200)
+        panel_counts[cat_name] = pg.locator(".category-option").count()
+    chk("avatar catalog: panel option counts match the master catalog",
+        panel_counts == {"Head": 4, "Hair": 6, "Body": 5, "Tattoos": 5,
+                         "Augmentations": 5, "Age": 3, "Eyes": 4, "Face": 4},
+        str(panel_counts))
+    pg.evaluate("() => { const bt = [...document.querySelectorAll('.category-btn')].find(x => x.textContent.trim() === 'Gender'); if (bt) bt.click(); }")
+    pg.wait_for_timeout(200)
+
+    # ViewModel semantics (Kotlin AvatarDesignerViewModel mirror)
     pg.evaluate("() => window.__grokGirlsVm.setOption('age', 'Mature')")
     pg.wait_for_timeout(400)
     vm_age = pg.evaluate("() => window.__grokGirlsVm.get().age")
@@ -307,6 +322,34 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
     vm_hair = pg.evaluate("() => window.__grokGirlsVm.get().hair")
     chk("viewmodel: rich draft edit syncs into the VM", vm_hair == "Long", str(vm_hair))
+
+    # master-catalog round-trip guard: canonical apply -> draft representative ->
+    # re-sync must preserve the canonical value (no rep loss / keyword misread)
+    pg.evaluate("() => window.__grokGirlsVm.setOption('hair', 'Braids')")
+    pg.wait_for_timeout(400)
+    d_braids = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}')")
+    vm_braids = pg.evaluate("() => window.__grokGirlsVm.get().hair")
+    chk("avatar catalog: Braids apply writes its rich representative",
+        d_braids.get("hairStyle") == "twin braids with ribbon ties" and vm_braids == "Braids",
+        f"draft={d_braids.get('hairStyle')} vm={vm_braids}")
+    pg.evaluate("() => window.__grokGirlsVm.setOption('tattoos', 'Full')")
+    pg.wait_for_timeout(400)
+    d_full = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}')")
+    vm_full = pg.evaluate("() => window.__grokGirlsVm.get().tattoos")
+    chk("avatar catalog: Full tattoos apply writes its rich representative",
+        d_full.get("tattooStyle") == "blackwork full-sleeve and torso tattoo art"
+        and d_full.get("tattoosCount") == 12 and vm_full == "Full",
+        f"draft={d_full.get('tattooStyle')} vm={vm_full}")
+    # force a full draft->definition re-sync via a different field; the reps must
+    # still map back to Braids/Full (regression: reps lost to Short/Natural/Torso)
+    pg.evaluate("() => window.__grokGirlsVm.setOption('age', 'Young Adult')")
+    pg.wait_for_timeout(500)
+    vm2 = pg.evaluate("() => window.__grokGirlsVm.get()")
+    chk("avatar catalog: re-sync preserves Braids/Full (no rep drift)",
+        vm2.get("hair") == "Braids" and vm2.get("tattoos") == "Full" and vm2.get("age") == "Young Adult",
+        f"hair={vm2.get('hair')} tattoos={vm2.get('tattoos')} age={vm2.get('age')}")
+
+    # AvatarPreviewView (Kotlin custom View mirror): setAvatar invalidates the draw
     status0 = pg.locator(".preview-draw-status").inner_text()
     chk("preview view: onDraw status mirrors the definition", "AVATAR PREVIEW" in status0 and "Female" in status0, status0[:60])
     pg.evaluate("""() => window.__grokGirlsPreview.setAvatar({
@@ -440,6 +483,82 @@ with sync_playwright() as p:
     pg.wait_for_timeout(500)
     fb = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-draft-v1:ruby_noir')||'{}')")
     chk("avatar definition: missing ID falls back to Casual", "silk robe" in fb.get("outfit", ""), fb.get("outfit", "")[:60])
+
+    # settings consolidation: canonical record, legacy migration, corrupt fallback
+    spg = ctx.new_page()
+    spg.goto("http://localhost:8080/", wait_until="networkidle")
+    spg.wait_for_timeout(800)
+    spg.evaluate("""() => {
+      // simulate a pre-canonical install: no settings record, only legacy keys
+      localStorage.removeItem('grok-girls-settings-v1');
+      localStorage.setItem('grok-girls-adult-v1', '1');
+      localStorage.setItem('grok-girls-age-confirmed-v1', '18+');
+      localStorage.setItem('grok-girls-steps-v1', '35');
+      localStorage.setItem('grok-girls-cfg-v1', '9');
+      localStorage.setItem('grok-girls-size-v1', '768');
+      localStorage.setItem('grok-girls-provider-v1', 'gemini');
+      localStorage.setItem('grok-girls-chat-provider-v1', 'custom');
+      localStorage.setItem('grok-girls-key-gemini', 'gk9');
+      localStorage.setItem('grok-girls-endpoint-custom-chat', 'http://chat9');
+      localStorage.setItem('grok-girls-model-openrouter-image', 'model9');
+      localStorage.setItem('grok-girls-selfhosted-base', 'http://sh9');
+      localStorage.setItem('grok-girls-selfhosted-type', 'a1111');
+      localStorage.setItem('grok-girls-selfhosted-hires', '1');
+      localStorage.setItem('grok-girls-selfhosted-loras', '[{"name":"l9","weight":0.9}]');
+    }""")
+    spg.reload(wait_until="networkidle")
+    spg.wait_for_timeout(800)
+    s1 = spg.evaluate("""() => {
+      const c = JSON.parse(localStorage.getItem('grok-girls-settings-v1') || 'null');
+      return {
+        present: !!c,
+        gen: c && [c.generation.steps, c.generation.cfg, c.generation.size].join(','),
+        prov: c && [c.provider.image, c.provider.chat].join(','),
+        gate: c && [c.contentGate.adult, c.contentGate.ageConfirmed].join(','),
+        gemKey: c && c.connections.gemini && c.connections.gemini.apiKey,
+        ep: c && c.connections.custom && c.connections.custom.endpoints.chat,
+        model: c && c.connections.openrouter && c.connections.openrouter.models.image,
+        sh: c && [c.selfHost.base, c.selfHost.type, c.selfHost.hiresFix, (c.selfHost.loras || []).map(l => l.name).join('|')].join(','),
+        hermesDefault: c && c.hermes.url === '' && c.hermes.enabled === false && c.hermes.model === '',
+        legacyMirrored: localStorage.getItem('grok-girls-steps-v1') === '35'
+          && localStorage.getItem('grok-girls-provider-v1') === 'gemini'
+          && localStorage.getItem('grok-girls-key-gemini') === 'gk9'
+          && localStorage.getItem('grok-girls-selfhosted-hires') === '1'
+      };
+    }""")
+    chk("settings: legacy keys fold into one canonical record",
+        s1.get("present") and s1.get("gen") == "35,9,768" and s1.get("prov") == "gemini,custom"
+        and s1.get("gate") == "true,true" and s1.get("gemKey") == "gk9"
+        and s1.get("ep") == "http://chat9" and s1.get("model") == "model9"
+        and s1.get("sh") == "http://sh9,a1111,true,l9" and s1.get("hermesDefault"),
+        str(s1))
+    chk("settings: migration write-through keeps legacy keys in sync",
+        bool(s1) and s1.get("legacyMirrored"), str(s1))
+    # canonical record wins once migrated: a later legacy-only edit must not re-fold
+    spg.evaluate("() => localStorage.setItem('grok-girls-steps-v1', '99')")
+    spg.reload(wait_until="networkidle")
+    spg.wait_for_timeout(800)
+    s2 = spg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-settings-v1') || 'null')")
+    chk("settings: canonical record rules after migration (legacy edit ignored)",
+        bool(s2) and s2.get("generation", {}).get("steps") == 35,
+        str(s2 and s2.get("generation")))
+    # corrupt canonical record -> fold fallback from legacy, repair, no crash
+    spg.evaluate("""() => {
+      localStorage.setItem('grok-girls-settings-v1', '{broken json!!');
+      localStorage.setItem('grok-girls-steps-v1', '77');
+    }""")
+    spg.reload(wait_until="networkidle")
+    spg.wait_for_timeout(800)
+    s3 = spg.evaluate("""() => {
+      const raw = localStorage.getItem('grok-girls-settings-v1') || '';
+      let c = null;
+      try { c = JSON.parse(raw); } catch (e) {}
+      return { parses: !!c, steps: c ? c.generation.steps : -1 };
+    }""")
+    chk("settings: corrupt canonical record falls back to legacy and repairs",
+        bool(s3) and s3.get("parses") and s3.get("steps") == 77, str(s3))
+    spg.close()
+
     ctx.close()
 
     b.close()

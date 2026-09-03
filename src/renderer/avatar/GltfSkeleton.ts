@@ -105,7 +105,17 @@ export function computeGlobalTransforms(nodes: GltfNode[]): Mat4[] {
 export function evaluateSkins(asset: GltfAsset, globals: Mat4[]): Float32Array {
   const out = new Float32Array(MAX_JOINTS * 16);
   const skin = asset.json.skins?.[0];
-  if (!skin) return out;
+  if (!skin) {
+    // No skin: identity matrices so the skinned shader branch (always
+    // enabled for GLB draws) is a no-op for unskinned primitives.
+    for (let j = 0; j < MAX_JOINTS; j++) {
+      out[j * 16 + 0] = 1;
+      out[j * 16 + 5] = 1;
+      out[j * 16 + 10] = 1;
+      out[j * 16 + 15] = 1;
+    }
+    return out;
+  }
 
   const joints = skin.joints ?? [];
   let ibm: Float32Array = new Float32Array(0);

@@ -16,3 +16,8 @@ tsconfig.tsbuildinfo
 # python test artifacts
 __pycache__/
 *.pyc
+
+# sandbox/tool clutter
+.cache/
+.npm/
+.sudo_as_admin_successful

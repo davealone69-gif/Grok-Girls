@@ -62,8 +62,11 @@ function installNativeActions(): void {
       const button = target?.closest<HTMLButtonElement>('button');
       if (!button) return;
       const title = button.getAttribute('title') || '';
-      const isHd = title === 'On-device HD renderer' || button.classList.contains('native-hd');
-      if (!isHd) return;
+      const isNativeRender =
+        title === 'On-device HD renderer' ||
+        button.classList.contains('native-hd') ||
+        button.classList.contains('native-generate');
+      if (!isNativeRender) return;
 
       event.preventDefault();
       event.stopImmediatePropagation();

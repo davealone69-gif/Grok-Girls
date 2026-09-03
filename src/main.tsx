@@ -4,6 +4,7 @@ import App from './App';
 import './renderer/ResultCanvasCompat';
 import { installRendererDiagnostics } from './renderer/RendererDiagnostics';
 import './hermesSettingsBoot';
+import './nativeAvatarBridge';
 import './styles-phone.css';
 
 installRendererDiagnostics();

@@ -24,9 +24,19 @@ import { AvatarParameters, DEFAULT_AVATAR_PARAMETERS } from './renderer/avatar/A
 import { Skeleton, Bone } from './renderer/avatar/Skeleton';
 import { MorphController } from './renderer/avatar/MorphTarget';
 import { DEFAULT_AVATAR_MATERIAL } from './renderer/avatar/AvatarMaterial';
-import { createProceduralSkinTextures, destroyProceduralSkinTextures, createThicknessTexture, destroyThicknessTexture } from './renderer/ProceduralSkinTextures';
+import {
+  createProceduralSkinTextures,
+  destroyProceduralSkinTextures,
+  createThicknessTexture,
+  destroyThicknessTexture,
+  createSpecularTexture,
+  destroySpecularTexture,
+  createPoreTexture,
+  destroyPoreTexture,
+  createWrinkleTexture,
+  destroyWrinkleTexture
+} from './renderer/ProceduralSkinTextures';
 import { DEFAULT_ADVANCED_SKIN_MATERIAL } from './renderer/AdvancedSkinMaterial';
-import { createSpecularTexture, destroySpecularTexture, createPoreTexture, destroyPoreTexture, createWrinkleTexture, destroyWrinkleTexture } from './renderer/ProceduralSkinTextures';
 import { MorphShader } from './renderer/MorphShader';
 import { createFaceControls, applyFaceControls, FaceExpressionController, BlinkController } from './renderer/avatar/FaceControls';
 import { correctiveRules, evaluateCorrectives } from './renderer/avatar/Correctives';
@@ -123,7 +133,6 @@ import { isAgeConfirmed, confirmAdultAge } from './services/ageGate';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
 import { NSFW_NEGATIVE } from './services/adultActs';
 import { adultOptions, defaultAdultSelections } from './services/adultOptions';
-import { saveAvatar } from './services/avatarEditor';
 import { downloadMedia, exportGallery, importGallery } from './services/media';
 import { stripePaymentLink } from './services/stripe';
 import {
@@ -911,9 +920,6 @@ export default function App() {
       storageWarnRef.current = true;
       showToast('⚠ Browser storage is full — changes are session-only. Export/clear gallery items to free space.');
     }
-    try {
-      saveAvatar({ ...girl, ...patch });
-    } catch {}
   };
 
   /** Set a persona photo: raster data URLs move into IndexedDB (assetKey),
@@ -934,9 +940,6 @@ export default function App() {
       storageWarnRef.current = true;
       showToast('⚠ Browser storage is full — changes are session-only. Export/clear gallery items to free space.');
     }
-    try {
-      saveAvatar({ ...girl, ...final });
-    } catch {}
   };
 
   const selectGirl = (id: string) => {
@@ -2213,7 +2216,7 @@ export default function App() {
             <button
               className={`hud-btn ${cubeMode ? 'live-active' : ''}`}
               onClick={() => setCubeMode(v => !v)}
-              title="Interactive 3D viewport (native HDRenderView demo)"
+              title="Interactive 3D avatar viewport"
             >
               <span>🧊</span> 3D
             </button>

@@ -6,6 +6,18 @@ results = []
 def chk(name, cond, extra=""):
     results.append((name, bool(cond), extra))
 
+def tap_adult(pg, phone):
+    """Open the 18+ control: bottom-bar crown (desktop) or More sheet row (phone)."""
+    if phone:
+        open_st = pg.locator(".more-sheet").evaluate("el => el.classList.contains('open')")
+        if not open_st:
+            pg.locator(".rail-btn[title*='More']").first.click()
+            pg.wait_for_timeout(320)
+        pg.locator(".more-item.more-adult").first.click()
+    else:
+        pg.locator("button.crown-btn").first.click()
+    pg.wait_for_timeout(240)
+
 with sync_playwright() as p:
     b = p.chromium.launch()
 
@@ -13,8 +25,7 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={"width": 780, "height": 360})
     pg.goto("http://localhost:8080/", wait_until="networkidle")
     pg.wait_for_timeout(600)
-    pg.locator("button.crown-btn").first.click()
-    pg.wait_for_timeout(250)
+    tap_adult(pg, phone=True)
     if pg.locator("text=I AM 18+").count():
         pg.locator("text=I AM 18+").click()
         pg.wait_for_timeout(250)
@@ -41,23 +52,19 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={"width": 393, "height": 851})
     pg.goto("http://localhost:8080/", wait_until="networkidle")
     pg.wait_for_timeout(500)
-    pg.locator("button.crown-btn").first.click()
-    pg.wait_for_timeout(250)
+    tap_adult(pg, phone=True)
     chk("age gate: confirm dialog appears", pg.locator("text=I AM 18+").count() >= 1)
     chk("age gate: adult NOT enabled yet", pg.evaluate("localStorage.getItem('grok-girls-adult-v1') !== '1'"))
     pg.locator(".modal-card button", has_text="Cancel").first.click()
     pg.wait_for_timeout(200)
-    pg.locator("button.crown-btn").first.click()
-    pg.wait_for_timeout(200)
+    tap_adult(pg, phone=True)
     pg.locator("text=I AM 18+").click()
     pg.wait_for_timeout(250)
     chk("age gate: confirm enables adult", pg.evaluate("localStorage.getItem('grok-girls-adult-v1') === '1'"))
     chk("age gate: age stored", pg.evaluate("localStorage.getItem('grok-girls-age-confirmed-v1') === '18+'"))
-    pg.locator("button.crown-btn").first.click()
-    pg.wait_for_timeout(200)
+    tap_adult(pg, phone=True)
     chk("age gate: toggle off w/o dialog", pg.evaluate("localStorage.getItem('grok-girls-adult-v1') === '0'"))
-    pg.locator("button.crown-btn").first.click()
-    pg.wait_for_timeout(200)
+    tap_adult(pg, phone=True)
     chk("age gate: re-enable w/o dialog", pg.evaluate("localStorage.getItem('grok-girls-adult-v1') === '1'"))
     pg.close()
 

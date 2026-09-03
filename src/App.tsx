@@ -171,6 +171,22 @@ type InspectorSection =
   | 'augments';
 type DockTab = 'style' | 'color' | 'makeup' | 'eyebrows' | 'scene' | 'categories';
 
+/** Phone top-level destinations pinned in the bottom bar (5th slot = More).
+ *  Every other rail action stays reachable through the More sheet. */
+const MOBILE_PRIMARY: string[] = ['appearance', 'presets', 'gallery', 'chat'];
+
+/** Rail ids that open a builder edit section (accordion) on the phone. */
+const MOBILE_SECTION: Record<string, InspectorSection> = {
+  body: 'body',
+  clothing: 'clothing',
+  hair: 'hair',
+  face: 'face',
+  eyes: 'eyes',
+  accessories: 'clothing',
+  augments: 'augments',
+  tattoos: 'tattoos'
+};
+
 function defaultDraft(g: Girl): AvatarDraft {
   return {
     id: g.id,
@@ -344,12 +360,16 @@ export default function App() {
     }
   });
   const [mobileSheet, setMobileSheet] = useState<'none' | 'inspector'>('none');
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 900px)');
     const onChange = (e: MediaQueryListEvent) => {
       setIsMobile(e.matches);
-      if (!e.matches) setMobileSheet('none');
+      if (!e.matches) {
+        setMobileSheet('none');
+        setMoreOpen(false);
+      }
     };
     mq.addEventListener?.('change', onChange);
     return () => mq.removeEventListener?.('change', onChange);
@@ -358,7 +378,10 @@ export default function App() {
   const openSection = (sec: InspectorSection) => {
     setView('builder');
     setOpenSections(prev => ({ ...prev, [sec]: true }));
-    if (isMobile) setMobileSheet('inspector');
+    if (isMobile) {
+      setMobileSheet('inspector');
+      setMoreOpen(false);
+    }
   };
 
   /* --------------------------------------------- viewport & lighting */
@@ -644,6 +667,12 @@ export default function App() {
     }
   };
   const railAction = (id: string) => {
+    // On phones the rail lives in the More sheet; builder-section entries
+    // open their accordion in the bottom drawer via the canonical openSection.
+    if (isMobile && MOBILE_SECTION[id]) {
+      openSection(MOBILE_SECTION[id]);
+      return;
+    }
     const toView = (v: ActiveView) => {
       setView(v);
       if (isMobile) setMobileSheet('none');
@@ -1838,7 +1867,7 @@ export default function App() {
     <div
       className={`app-container ${immersive ? 'immersive' : ''} ${isMobile ? 'mobile' : ''} ${
         mobileSheet === 'inspector' ? 'inspector-open' : ''
-      }`}
+      } ${moreOpen ? 'more-open' : ''}`}
     >
       {/* 1. LEFT VERTICAL NAVIGATION RAIL */}
       <aside className="nav-rail">
@@ -1848,23 +1877,10 @@ export default function App() {
 
         <div className="rail-build-label">{menuLabel('rail_header')}</div>
 
-                <div className="rail-menu">
-          {isMobile && (
-            <button
-              className={`rail-btn ${mobileSheet === 'inspector' ? 'active' : ''}`}
-              onClick={() => {
-                setView('builder');
-                setMobileSheet('inspector');
-              }}
-              title="Edit Identity (inspector)"
-            >
-              <span className="rail-icon">✏️</span>
-              <span>Edit</span>
-            </button>
-          )}
-
+        <div className={`rail-menu ${isMobile ? 'rail-nowrap' : ''}`}>
           {menuSection(menuItems, 'rail')
             .filter(i => i.kind === 'Button')
+            .filter(b => !isMobile || MOBILE_PRIMARY.includes(b.id))
             .map(b => (
               <div key={b.id} style={{ display: 'contents' }}>
                 {(b.id === 'body' || b.id === 'help') && <div className="rail-spacer" />}
@@ -1881,33 +1897,48 @@ export default function App() {
         </div>
 
 <div className="rail-footer">
-          <button className="rail-btn" onClick={handleRandomize} title={menuTitle('random')}>
-            <span className="rail-icon">🎲</span>
-          </button>
+          {isMobile ? (
+            <button
+              className={`rail-btn ${moreOpen ? 'active' : ''}`}
+              onClick={() => {
+                setMoreOpen(o => !o);
+                setMobileSheet('none');
+              }}
+              title={moreOpen ? 'Close more' : 'More options'}
+            >
+              <span className="rail-icon">{moreOpen ? '✕' : '⋮'}</span>
+              <span>More</span>
+            </button>
+          ) : (
+            <>
+              <button className="rail-btn" onClick={handleRandomize} title={menuTitle('random')}>
+                <span className="rail-icon">🎲</span>
+              </button>
 
-          <button
-            className={`rail-btn ${statsOpen ? 'active' : ''}`}
-            onClick={() => setStatsOpen(true)}
-            title={menuTitle('stats')}
-          >
-            <span className="rail-icon">📊</span>
-          </button>
+              <button
+                className={`rail-btn ${statsOpen ? 'active' : ''}`}
+                onClick={() => setStatsOpen(true)}
+                title={menuTitle('stats')}
+              >
+                <span className="rail-icon">📊</span>
+              </button>
 
-          <button
-            className={`rail-btn crown-btn ${adult ? 'adult-active' : ''}`}
-            onClick={() => {
-              if (!adult && !isAgeConfirmed()) {
-                setAgeGateOpen(true);
-              } else {
-                setAdult(v => !v);
-              }
-            }}
-            title={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}
-          >
-            <span className="rail-icon">👑</span>
-            <span style={{ fontSize: 8 }}>{adult ? '18+ ON' : '18+'}</span>
-          </button>
-
+              <button
+                className={`rail-btn crown-btn ${adult ? 'adult-active' : ''}`}
+                onClick={() => {
+                  if (!adult && !isAgeConfirmed()) {
+                    setAgeGateOpen(true);
+                  } else {
+                    setAdult(v => !v);
+                  }
+                }}
+                title={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}
+              >
+                <span className="rail-icon">👑</span>
+                <span style={{ fontSize: 8 }}>{adult ? '18+ ON' : '18+'}</span>
+              </button>
+            </>
+          )}
         </div>
       </aside>
 
@@ -4067,11 +4098,85 @@ export default function App() {
         </div>
       )}
 
-      {/* MOBILE EDIT FAB */}
-      {isMobile && view === 'builder' && mobileSheet !== 'inspector' && (
-        <button className="mobile-edit-fab" onClick={() => setMobileSheet('inspector')}>
-          ✏️ EDIT IDENTITY
-        </button>
+      {/* MOBILE MORE SHEET (5th bottom-bar tab) */}
+      {isMobile && (
+        <>
+          <div
+            className={`more-backdrop ${moreOpen ? 'open' : ''}`}
+            onClick={() => setMoreOpen(false)}
+          />
+          <aside className={`more-sheet ${moreOpen ? 'open' : ''}`} aria-hidden={!moreOpen}>
+            <div className="more-sheet-grab" />
+            <div className="more-sheet-head">
+              <span className="more-sheet-title">MORE</span>
+              <button className="more-sheet-close" onClick={() => setMoreOpen(false)} title="Close more">
+                ✕
+              </button>
+            </div>
+            <div className="more-sheet-scroll">
+              <div className="more-group-label">STUDIO</div>
+              <div className="more-sheet-grid">
+                {menuSection(menuItems, 'rail')
+                  .filter(i => i.kind === 'Button')
+                  .filter(b => !MOBILE_PRIMARY.includes(b.id))
+                  .map(b => (
+                    <button
+                      key={b.id}
+                      className="more-item"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        railAction(b.id);
+                      }}
+                      title={menuTitle(b.id)}
+                    >
+                      <span className="more-item-icon">{RAIL_ICONS[b.id] || '•'}</span>
+                      <span>{menuLabel(b.id)}</span>
+                    </button>
+                  ))}
+              </div>
+              <div className="more-group-label">QUICK ACTIONS</div>
+              <div className="more-sheet-grid">
+                <button
+                  className="more-item"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    handleRandomize();
+                  }}
+                  title={menuTitle('random')}
+                >
+                  <span className="more-item-icon">🎲</span>
+                  <span>Randomize</span>
+                </button>
+                <button
+                  className="more-item"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setStatsOpen(true);
+                  }}
+                  title={menuTitle('stats')}
+                >
+                  <span className="more-item-icon">📊</span>
+                  <span>Stats</span>
+                </button>
+                <button
+                  className={`more-item more-adult ${adult ? 'active' : ''}`}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    if (!adult && !isAgeConfirmed()) {
+                      setAgeGateOpen(true);
+                    } else {
+                      setAdult(v => !v);
+                    }
+                  }}
+                  title={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}
+                >
+                  <span className="more-item-icon">👑</span>
+                  <span>{adult ? '18+ ON' : 'Adult 18+'}</span>
+                </button>
+              </div>
+            </div>
+          </aside>
+        </>
       )}
 
       {/* SETTINGS MODAL */}

@@ -1,0 +1,905 @@
+/* ==========================================================================
+   styles-phone.css — the SINGLE canonical phone/compact layer (≤900px).
+
+   Consolidates the four legacy hotfix sheets (menu-mobile, styles-landscape-
+   fix, styles-s24-viewport, styles-mobile-center-lock) into one coherent
+   layout and adds the current design system:
+
+     • 5-tab bottom bar  (Builder · Presets · Gallery · Chat · More)
+     • More bottom sheet (secondary destinations + randomize/stats/18+)
+     • bottom drawer editing surface (inspector panel slides from the bottom
+       so the avatar stays large and visible above it)
+     • portrait + landscape geometry, Android safe-area insets
+     • avatar-first stacking: header → stage → compact identity/dock rows
+
+   Loaded LAST from main.tsx so it owns the ≤900px cascade over styles.css.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+ * Global guards (apply at every width) — kept from the legacy hotfix layers.
+ * ------------------------------------------------------------------------ */
+
+/* The procedural/generated preview must remain a real, visible layout item:
+   no flex sizing, inherited zero-size parent, or stale transform may collapse
+   the avatar to a zero bounding box. */
+.viewport-stage {
+  min-width: 1px !important;
+  min-height: 1px !important;
+}
+
+.character-render-wrap {
+  flex: 1 1 auto !important;
+  min-width: 1px !important;
+  min-height: 1px !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.character-render-wrap .character-image {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  flex: 0 1 auto !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: 92% !important;
+  max-height: 94% !important;
+  min-width: 1px !important;
+  min-height: 1px !important;
+  object-fit: contain !important;
+  object-position: center center !important;
+  transform-origin: center center !important;
+}
+
+/* Variation cards remain one live hit target. The "USE THIS" layer is
+   intentionally visually hidden but keeps its existing selection handler;
+   "RE-ROLL" stays visible. */
+.variation-card {
+  position: relative;
+  cursor: pointer;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.variation-card .variation-actions {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  max-width: 100%;
+  display: block;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.variation-card .variation-actions button:first-child {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: transparent;
+  opacity: 0;
+  pointer-events: auto;
+  overflow: hidden;
+  text-indent: -9999px;
+  box-sizing: border-box;
+}
+
+.variation-card .variation-actions button:last-child {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 4;
+  width: auto;
+  min-width: 0;
+  pointer-events: auto;
+}
+
+/* ==========================================================================
+ * Phone base (≤900px, both orientations)
+ * ========================================================================== */
+@media (max-width: 900px) {
+  :root {
+    --mobile-nav-h: calc(58px + env(safe-area-inset-bottom, 0px));
+  }
+
+  html,
+  body,
+  #root {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  body {
+    width: 100dvw !important;
+    max-width: 100dvw !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  /* App shell: one fixed CSS-viewport layer (Android display cutouts are
+     handled with env() insets, never physical pixels). */
+  .app-container.mobile {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100dvw !important;
+    max-width: 100dvw !important;
+    min-width: 0 !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    transform: none !important;
+    translate: none !important;
+    left: auto !important;
+    right: auto !important;
+  }
+
+  /* The workspace is an absolute viewport layer sitting above the bar. */
+  .app-container.mobile .center-workspace {
+    position: absolute !important;
+    inset: 0 0 var(--mobile-nav-h) 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+    translate: none !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  /* No child may create its own horizontal coordinate system. */
+  .app-container.mobile .center-workspace > *,
+  .app-container.mobile .viewport-header,
+  .app-container.mobile .viewport-stage,
+  .app-container.mobile .angle-strip,
+  .app-container.mobile .lower-dock,
+  .app-container.mobile .identity-strip,
+  .app-container.mobile .dock-tabs,
+  .app-container.mobile .categories-panel {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  /* ----- Header: one compact row, actions scroll horizontally ----- */
+  .app-container.mobile .viewport-header {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 44px !important;
+    gap: 4px !important;
+    padding: 4px 8px 4px calc(8px + env(safe-area-inset-left, 0px)) !important;
+    overflow: hidden !important;
+    flex-wrap: nowrap !important;
+  }
+  .app-container.mobile .avatar-design-title {
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+  }
+  .app-container.mobile .avatar-design-title span {
+    display: none !important;
+  }
+  .app-container.mobile .avatar-design-title h2 {
+    font-size: 12px !important;
+    letter-spacing: 0.04em !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .app-container.mobile .native-action-row {
+    flex: 0 1 auto !important;
+    max-width: 62% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    gap: 4px !important;
+    margin-left: auto !important;
+    margin-right: 0 !important;
+    scrollbar-width: none;
+  }
+  .app-container.mobile .native-action {
+    padding: 7px 9px !important;
+    font-size: 8.5px !important;
+    white-space: nowrap;
+  }
+  .app-container.mobile .native-action-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app-container.mobile .viewport-tools-top .icon-tool-btn:nth-child(3),
+  .app-container.mobile .viewport-tools-top .icon-tool-btn:nth-child(8) {
+    display: none !important;
+  }
+
+  /* ----- Stage: the avatar owns the remaining vertical space ----- */
+  .app-container.mobile .viewport-stage {
+    position: relative !important;
+    flex: 1 1 auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 1px !important;
+    left: auto !important;
+    right: auto !important;
+    transform: none !important;
+    translate: none !important;
+    overflow: hidden !important;
+  }
+  .app-container.mobile .character-render-wrap {
+    position: absolute !important;
+    inset: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 4px !important;
+    display: grid !important;
+    place-items: center !important;
+  }
+  .app-container.mobile .character-image,
+  .app-container.mobile .hd3d-canvas {
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    transform: none !important;
+    translate: none !important;
+  }
+
+  /* HUD & lighting stay overlays on the stage corners, kept compact. */
+  .app-container.mobile .viewport-hud {
+    top: 8px !important;
+    right: calc(8px + env(safe-area-inset-right, 0px)) !important;
+    gap: 4px !important;
+    max-height: calc(100% - 16px);
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .app-container.mobile .hud-btn {
+    min-width: 36px !important;
+    min-height: 36px !important;
+    padding: 6px 8px !important;
+    font-size: 8px !important;
+    justify-content: center;
+  }
+  .app-container.mobile .viewport-lighting-bar {
+    bottom: 8px !important;
+    left: 50% !important;
+    transform: translateX(-50%);
+    max-width: calc(100% - 16px);
+    overflow-x: auto;
+  }
+
+  /* ----- Camera angles & compact edit strips below the avatar ----- */
+  .app-container.mobile .angle-strip {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 4px 8px !important;
+    gap: 6px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scrollbar-width: none;
+  }
+  .app-container.mobile .angle-strip::-webkit-scrollbar {
+    display: none;
+  }
+  .app-container.mobile .angle-btn {
+    min-width: 64px !important;
+    height: 36px !important;
+    font-size: 10px !important;
+    flex: 0 0 auto !important;
+  }
+
+  /* ----- Lower dock: identity quick-row + dock chips + scroll options ----- */
+  .app-container.mobile .lower-dock {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    max-height: 30dvh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    grid-template-columns: none;
+  }
+  .app-container.mobile .dock-hair-section {
+    padding: 8px 10px !important;
+    border-right: none !important;
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px;
+  }
+  .app-container.mobile .dock-tabs {
+    width: 100% !important;
+    gap: 6px !important;
+    margin-bottom: 4px !important;
+    padding-bottom: 4px !important;
+    border-bottom: 1px solid #1a1a29 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scrollbar-width: none;
+    flex: 0 0 auto !important;
+  }
+  .app-container.mobile .dock-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .app-container.mobile .dock-tab {
+    flex: 0 0 auto !important;
+    white-space: nowrap;
+    padding: 7px 12px !important;
+  }
+  .app-container.mobile .dock-hair-content {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  /* Horizontal option strips inside the dock scroll themselves instead of
+     widening the page (flex items need min-width: 0 to shrink). */
+  .app-container.mobile .dock-hair-content > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    scrollbar-width: none;
+  }
+  .app-container.mobile .dock-hair-content::-webkit-scrollbar {
+    display: none;
+  }
+  .app-container.mobile .identity-strip {
+    flex-wrap: wrap !important;
+    gap: 5px !important;
+    padding: 6px 8px !important;
+  }
+  .app-container.mobile .identity-avatar-id {
+    width: 110px !important;
+  }
+  .app-container.mobile .identity-btn {
+    height: 28px !important;
+    font-size: 9px !important;
+    padding: 0 9px !important;
+  }
+  .app-container.mobile .identity-strip-title {
+    font-size: 9px !important;
+  }
+  .app-container.mobile .dock-preview-section,
+  .app-container.mobile .dock-addons-section {
+    display: none !important;
+  }
+  .app-container.mobile .categories-panel {
+    flex-direction: row !important;
+    gap: 8px !important;
+    align-items: flex-start;
+  }
+  .app-container.mobile .categories-list {
+    width: 118px !important;
+    flex: 0 0 auto !important;
+  }
+  .app-container.mobile .categories-options {
+    min-width: 0 !important;
+    align-content: flex-start;
+  }
+
+  /* ----- Footer: compact, last in flow so it sits above the nav bar ----- */
+  .app-container.mobile .master-footer {
+    position: static !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
+    height: 52px !important;
+    min-height: 52px !important;
+    max-height: 52px !important;
+    padding: 0 10px !important;
+    gap: 8px !important;
+    z-index: 80 !important;
+    flex-shrink: 0 !important;
+  }
+  .app-container.mobile .master-footer .avatar-id-tag,
+  .app-container.mobile .master-footer .btn-load-outfit {
+    display: none !important;
+  }
+  .app-container.mobile .footer-left {
+    display: flex !important;
+    flex: 0 1 auto !important;
+    align-items: center !important;
+    gap: 4px !important;
+    min-width: 0 !important;
+  }
+  .app-container.mobile .footer-right {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+  }
+  .app-container.mobile .btn-cancel,
+  .app-container.mobile .btn-batch,
+  .app-container.mobile .btn-generate-media {
+    padding: 8px 10px !important;
+    font-size: 9.5px !important;
+    white-space: nowrap;
+  }
+  .app-container.mobile .master-footer .footer-right {
+    justify-content: flex-end;
+  }
+  .app-container.mobile .footer-provider-wrap {
+    font-size: 8px !important;
+  }
+  .app-container.mobile .footer-provider-select {
+    font-size: 10px !important;
+    padding: 4px !important;
+  }
+
+  /* ----- Bottom navigation: 5 equal tabs, never scrolls ----- */
+  .app-container.mobile .nav-rail {
+    position: fixed !important;
+    inset: auto 0 0 0 !important;
+    width: 100dvw !important;
+    max-width: 100dvw !important;
+    min-width: 0 !important;
+    height: var(--mobile-nav-h) !important;
+    min-height: var(--mobile-nav-h) !important;
+    margin: 0 !important;
+    padding: 3px 0 0 !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+    background: rgba(12, 12, 20, 0.96) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid #2a2a40 !important;
+    border-right: none !important;
+    z-index: 900 !important;
+  }
+  .app-container.mobile .brand-logo,
+  .app-container.mobile .rail-build-label,
+  .app-container.mobile .rail-spacer {
+    display: none !important;
+  }
+  .app-container.mobile .rail-menu {
+    flex: 4 1 0% !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+    gap: 2px !important;
+    overflow: hidden !important;
+  }
+  .app-container.mobile .rail-menu > div {
+    display: contents !important;
+  }
+  .app-container.mobile .rail-menu .rail-btn,
+  .app-container.mobile .rail-footer .rail-btn {
+    flex: 1 1 0% !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: auto !important;
+    margin: 2px 2px 4px !important;
+    padding: 4px 2px 2px !important;
+    border-radius: 12px !important;
+    gap: 2px !important;
+    font-size: 8.5px !important;
+    letter-spacing: 0.01em !important;
+    text-transform: none !important;
+  }
+  .app-container.mobile .rail-menu .rail-btn .rail-icon,
+  .app-container.mobile .rail-footer .rail-btn .rail-icon {
+    font-size: 19px !important;
+    line-height: 1;
+  }
+  .app-container.mobile .rail-btn.active {
+    background: linear-gradient(180deg, rgba(144, 78, 221, 0.28), rgba(144, 78, 221, 0.12)) !important;
+    box-shadow: inset 0 0 0 1px rgba(144, 78, 221, 0.55) !important;
+  }
+  .app-container.mobile .rail-btn.active:before {
+    top: auto !important;
+    left: 30% !important;
+    right: 30% !important;
+    bottom: 1px !important;
+    width: auto !important;
+    height: 2px !important;
+    border-radius: 2px !important;
+    box-shadow: none !important;
+  }
+  /* Footer slot = the 5th tab (More). In-flow, same metrics as rail tabs. */
+  .app-container.mobile .rail-footer {
+    display: flex !important;
+    flex: 1 1 0% !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: static !important;
+    border-top: none !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+    gap: 2px !important;
+    pointer-events: auto !important;
+    background: transparent !important;
+  }
+  .app-container.mobile .rail-footer > .rail-btn {
+    display: flex !important;
+  }
+  .app-container.mobile .rail-footer > .rail-btn:not(:first-child) {
+    display: none !important;
+  }
+
+  /* ----- Presets drawer is desktop-only; views own the stage ----- */
+  .app-container.mobile .presets-drawer {
+    display: none !important;
+  }
+
+  /* ----- More sheet (bottom) ----- */
+  .more-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 4, 10, 0.55);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    z-index: 940;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+  }
+  .more-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .more-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--mobile-nav-h);
+    z-index: 950;
+    background: #0d0d18;
+    border: 1px solid #26263c;
+    border-bottom: none;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    max-height: min(62dvh, calc(100dvh - var(--mobile-nav-h) - 48px));
+    transform: translateY(calc(100% + 90px));
+    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.25, 1);
+    pointer-events: none;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .more-sheet.open {
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  .more-sheet-grab {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 4px;
+    border-radius: 4px;
+    background: #3a3a55;
+    margin: 8px auto 4px;
+  }
+  .more-sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 14px 8px;
+  }
+  .more-sheet-title {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    color: #c9a2ff;
+  }
+  .more-sheet-close {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: #161626;
+    border: 1px solid #26263c;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 800;
+    display: grid;
+    place-items: center;
+  }
+  .more-sheet-scroll {
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    padding: 0 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .more-group-label {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    color: #6a7080;
+    padding: 8px 2px 0;
+  }
+  .more-sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .more-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    min-height: 48px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: #151524;
+    border: 1px solid #232338;
+    color: #e8eaf2;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: left;
+  }
+  .more-item:active {
+    background: #1e1e33;
+  }
+  .more-item-icon {
+    font-size: 18px;
+    flex: 0 0 auto;
+    width: 24px;
+    text-align: center;
+  }
+  .more-item span:last-child {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .more-item.more-adult.active {
+    border-color: #e6204080;
+    background: #e6204026;
+    color: #ffd0dc;
+  }
+
+  /* ----- Inspector becomes a bottom drawer above the bar ----- */
+  .app-container.mobile .inspector-panel {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    bottom: var(--mobile-nav-h) !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: min(60dvh, calc(100dvh - var(--mobile-nav-h) - 56px));
+    transform: translateY(calc(100% + 90px)) !important;
+    transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.25, 1) !important;
+    pointer-events: none !important;
+    border-left: none !important;
+    border-top: 1px solid #2a2a40 !important;
+    border-radius: 20px 20px 0 0 !important;
+    background: #0c0c16 !important;
+    box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.65) !important;
+    z-index: 960 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .app-container.mobile.inspector-open .inspector-panel {
+    transform: translateY(0) !important;
+    pointer-events: auto !important;
+  }
+  .app-container.mobile .inspector-scroll {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    padding: 4px 10px 14px !important;
+  }
+  .app-container.mobile .mobile-sheet-close {
+    flex: 0 0 auto;
+    align-self: flex-end;
+    margin: 8px 10px 0;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: #161626;
+    border: 1px solid #26263c;
+    color: #cfd3dd;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+  }
+  .app-container.mobile .mobile-backdrop {
+    z-index: 955 !important;
+  }
+
+  /* Toast / status above the bar */
+  .app-container.mobile .toast {
+    bottom: calc(var(--mobile-nav-h) + 12px) !important;
+    left: 16px !important;
+    right: 16px !important;
+    transform: none !important;
+    max-width: calc(100% - 32px);
+    margin: 0 auto;
+    text-align: center;
+    white-space: normal;
+    z-index: 2400;
+  }
+  .app-container.mobile .status-line {
+    bottom: calc(var(--mobile-nav-h) + 10px) !important;
+    right: 12px !important;
+    left: 12px !important;
+    max-width: none;
+    text-align: center;
+  }
+
+  /* Companion overlay (chat) sits above the bar */
+  .app-container.mobile .companion-overlay-dock {
+    inset: 0 !important;
+    bottom: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    padding-bottom: calc(var(--mobile-nav-h) + 6px) !important;
+  }
+}
+
+/* ==========================================================================
+ * Narrow portrait (≤480px wide)
+ * ========================================================================== */
+@media (max-width: 480px) and (orientation: portrait) {
+  .app-container.mobile .viewport-header {
+    min-height: 42px !important;
+    padding-top: 3px !important;
+    padding-bottom: 3px !important;
+  }
+  .app-container.mobile .native-action-row {
+    max-width: 54% !important;
+  }
+  .app-container.mobile .lower-dock {
+    max-height: 28dvh !important;
+  }
+  .app-container.mobile .identity-strip .identity-btn.identity-save {
+    margin-left: auto;
+  }
+  .app-container.mobile .angle-strip {
+    display: none !important;
+  }
+  /* Engine picker stays on narrow phones (provider switching is a core
+     control) — compacted, label off. */
+  .app-container.mobile .footer-provider-wrap {
+    flex: 0 0 auto !important;
+    margin: 0 !important;
+    gap: 2px !important;
+  }
+  .app-container.mobile .footer-provider-wrap > span {
+    display: none !important;
+  }
+  .app-container.mobile .footer-provider-select {
+    padding: 2px 4px !important;
+    font-size: 9px !important;
+    max-width: 98px;
+  }
+  .app-container.mobile .btn-cancel,
+  .app-container.mobile .btn-batch,
+  .app-container.mobile .btn-generate-media {
+    padding: 5px 8px !important;
+    font-size: 8.5px !important;
+  }
+  .app-container.mobile .master-footer .btn-batch {
+    display: none !important;
+  }
+  .app-container.mobile .save-main-btn {
+    padding: 5px 8px !important;
+    font-size: 8.5px !important;
+    letter-spacing: 0.02em !important;
+  }
+  .app-container.mobile .save-arrow-btn {
+    padding: 5px 8px !important;
+    width: auto !important;
+  }
+  .app-container.mobile .avatar-design-title h2 {
+    font-size: 11px !important;
+  }
+}
+
+/* ==========================================================================
+ * Phone landscape (≤900px wide, short)
+ * ========================================================================== */
+@media (max-width: 900px) and (orientation: landscape) {
+  .app-container.mobile .center-workspace {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .app-container.mobile .viewport-header {
+    min-height: 34px !important;
+    padding: 2px 8px !important;
+  }
+  .app-container.mobile .nav-rail {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .app-container.mobile .angle-strip {
+    display: none !important;
+  }
+  .app-container.mobile .identity-strip {
+    flex-wrap: nowrap !important;
+    padding: 3px 6px !important;
+    gap: 4px !important;
+    overflow-x: auto !important;
+    scrollbar-width: none;
+  }
+  .app-container.mobile .identity-strip::-webkit-scrollbar {
+    display: none;
+  }
+  .app-container.mobile .identity-strip-title,
+  .app-container.mobile .identity-avatar-id {
+    display: none !important;
+  }
+  .app-container.mobile .identity-btn {
+    height: 24px !important;
+    padding: 0 8px !important;
+    font-size: 8px !important;
+    flex: 0 0 auto !important;
+  }
+  .app-container.mobile .lower-dock {
+    max-height: 26dvh !important;
+  }
+  .app-container.mobile .master-footer {
+    height: 42px !important;
+    min-height: 42px !important;
+  }
+  .app-container.mobile .inspector-panel {
+    max-height: min(56dvh, calc(100dvh - var(--mobile-nav-h) - 24px)) !important;
+  }
+  .app-container.mobile .more-sheet {
+    max-height: min(78dvh, calc(100dvh - var(--mobile-nav-h) - 20px)) !important;
+  }
+}

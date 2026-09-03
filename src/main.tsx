@@ -4,10 +4,7 @@ import App from './App';
 import './renderer/ResultCanvasCompat';
 import { installRendererDiagnostics } from './renderer/RendererDiagnostics';
 import './hermesSettingsBoot';
-import './menu-mobile.css';
-import './styles-landscape-fix.css';
-import './styles-s24-viewport.css';
-import './styles-mobile-center-lock.css';
+import './styles-phone.css';
 
 installRendererDiagnostics();
 

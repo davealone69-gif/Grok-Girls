@@ -23,7 +23,7 @@ jobs:
           node-version: 22
           cache: npm
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Dependency pin guard
         run: |
           if grep -q '"latest"' package.json; then
@@ -54,7 +54,7 @@ jobs:
           node-version: 22
           cache: npm
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -96,7 +96,7 @@ jobs:
             fi
             if [ "$attempt" -lt 5 ]; then
               delay=$((attempt * 10))
-              echo "npm audit failed, retrying in ${delay}s (transient registry failures such as HTTP 503 are retried)"
+              echo "npm audit failed, retrying in ${delay}s"
               sleep "$delay"
             fi
           done
@@ -128,7 +128,7 @@ jobs:
       - name: Install Android SDK packages
         run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Build web app
         run: npm run build
       - name: Sync Capacitor Android

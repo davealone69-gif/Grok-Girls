@@ -86,7 +86,22 @@ jobs:
           kill $(jobs -p) 2>/dev/null || true
           exit $RC
       - name: Dependency security gate
-        run: npm audit --audit-level=high
+        run: |
+          set -u
+          for attempt in 1 2 3 4 5; do
+            echo "npm audit attempt $attempt/5"
+            if npm audit --audit-level=high; then
+              echo "npm audit passed"
+              exit 0
+            fi
+            if [ "$attempt" -lt 5 ]; then
+              delay=$((attempt * 10))
+              echo "npm audit failed, retrying in ${delay}s (transient registry failures such as HTTP 503 are retried)"
+              sleep "$delay"
+            fi
+          done
+          echo "ERROR: npm audit failed after 5 attempts"
+          exit 1
 
   android:
     name: Android APK

@@ -15,11 +15,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: {fetch-depth: 0}
-      - name: Gradle
-        if: ${{ hashFiles('gradlew') != '' }}
-        run: |
-          chmod +x gradlew
-          ./gradlew lint test assembleDebug --continue --stacktrace --console=plain
+
+      # ---------------------------------------------------------------
+      # Toolchain. Java and the Android SDK must be in place BEFORE
+      # codeql-action/init, because autobuild runs the Gradle build that
+      # produces the Kotlin/Java database.
+      #
+      # setup-android installs the obsolete `tools` package by default;
+      # Google removed it from the repository, so sdkmanager exits 1.
+      # packages: '' disables that and the explicit install follows.
+      # ---------------------------------------------------------------
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # ---------------------------------------------------------------
+      # Node checks. `npm run build` also produces dist/, which the next
+      # step syncs into the Android project — the APK embeds the web
+      # bundle, so Gradle cannot assemble without it.
+      # ---------------------------------------------------------------
       - name: Node
         if: ${{ hashFiles('package.json') != '' }}
         run: |
@@ -28,10 +59,41 @@ jobs:
           npm run test --if-present
           npm run lint --if-present
           npm run build --if-present
-      - name: Python
-        if: ${{ hashFiles('**/*.py') != '' }}
-        run: python -m compileall -q .
+
+      # ---------------------------------------------------------------
+      # Make sure the Android project is complete before autobuild.
+      # android/ is committed, but three things are generated and absent
+      # from a fresh checkout:
+      #   - android/app/src/main/assets/public (the built web bundle)
+      #   - android/app/capacitor.build.gradle + plugin wiring
+      #   - android/local.properties (sdk.dir)
+      # Without these, autobuild's Gradle run fails and CodeQL silently
+      # produces an empty java-kotlin database.
+      # ---------------------------------------------------------------
+      - name: Prepare Android project for CodeQL
+        run: |
+          npx cap sync android
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+          chmod +x android/gradlew
+          test -d android/app/src/main/assets/public
+
       - uses: github/codeql-action/init@v3
         with:
           languages: javascript-typescript,python,java-kotlin
+
+      # ---------------------------------------------------------------
+      # Autobuild. The Gradle build runs HERE, under CodeQL's tracer, so
+      # the 27 Kotlin/Java sources are extracted. Building Android before
+      # init would leave the compiler output cached and the extractor
+      # with nothing to observe, so no Android build runs earlier.
+      # ---------------------------------------------------------------
+      - name: Autobuild
+        run: |
+          cd android
+          ./gradlew assembleDebug
+
+      - name: Python
+        if: ${{ hashFiles('**/*.py') != '' }}
+        run: python -m compileall -q .
+
       - uses: github/codeql-action/analyze@v3

@@ -123,8 +123,13 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: gradle
+      # packages: '' stops the action installing the obsolete `tools`
+      # package, which Google removed from the repository — sdkmanager
+      # exits 1 with "Failed to find package 'tools'" and fails the job.
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: ''
       - name: Install Android SDK packages
         run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - name: Install dependencies

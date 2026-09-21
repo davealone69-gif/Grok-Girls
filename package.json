@@ -10,8 +10,8 @@
     "android": "npm run build && npx cap sync android && cd android && ./gradlew assembleDebug",
     "android:release": "npm run build && npx cap sync android && cd android && ./gradlew assembleRelease",
     "pwa:preview": "vite preview",
-    "lint": "eslint src",
-    "lint:fix": "eslint src --fix"
+    "lint": "node -e \"require('fs').existsSync('tools/lint/node_modules/.bin/eslint')||process.exit(1)\" || npm --prefix tools/lint ci --no-audit --no-fund && tools/lint/node_modules/.bin/eslint src",
+    "lint:fix": "node -e \"require('fs').existsSync('tools/lint/node_modules/.bin/eslint')||process.exit(1)\" || npm --prefix tools/lint ci --no-audit --no-fund && tools/lint/node_modules/.bin/eslint src --fix"
   },
   "dependencies": {
     "@capacitor/android": "8.5.0",

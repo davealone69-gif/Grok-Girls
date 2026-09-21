@@ -240,8 +240,21 @@ export function applyCategoryOption(d: AvatarDraft, categoryId: string, option: 
  * canonical apply always round-trips to itself), then exact rich table,
  * then keyword fallback for freeform values. */
 
+/**
+ * Normalise an arbitrary draft field to a lowercase token.
+ *
+ * These values come from persisted state, imported persona JSON and model
+ * output, so they are NOT guaranteed to be strings. `(rich || '').trim()`
+ * throws `TypeError: rich.trim is not a function` for any truthy non-string
+ * (a number, an object, an array), which propagated out of canonicalValueOf
+ * and broke the dock UI. Anything that is not a string is treated as absent.
+ */
+function normaliseToken(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
 function hairToCanonical(rich: string | undefined): string {
-  const r = (rich || '').trim().toLowerCase();
+  const r = normaliseToken(rich);
   if (!r) return 'Short';
   // exact rich vocabulary + canonical representatives
   const exact: Record<string, string> = {
@@ -268,7 +281,7 @@ function hairToCanonical(rich: string | undefined): string {
 }
 
 function bodyToCanonical(rich: string | undefined): string {
-  const r = (rich || '').trim().toLowerCase();
+  const r = normaliseToken(rich);
   // representative-first so canonical reps round-trip
   if (r === 'slim') return 'Slim';
   if (r === 'athletic') return 'Athletic';
@@ -284,7 +297,7 @@ function bodyToCanonical(rich: string | undefined): string {
 }
 
 function faceToCanonical(rich: string | undefined): string {
-  const r = (rich || '').trim().toLowerCase();
+  const r = normaliseToken(rich);
   if (r === 'oval' || r === 'heart' || r === 'round') return 'Soft';
   if (r === 'diamond') return 'Angular';
   if (r === 'sharp' || r === 'square') return 'Sharp';
@@ -292,7 +305,7 @@ function faceToCanonical(rich: string | undefined): string {
 }
 
 function eyesToCanonical(rich: string | undefined): string {
-  const r = (rich || '').trim().toLowerCase();
+  const r = normaliseToken(rich);
   // representative-first
   if (r === 'hazel') return 'Natural';
   if (r === 'violet neon' || r === 'cybernetic pale') return 'Cyber';
@@ -304,7 +317,7 @@ function eyesToCanonical(rich: string | undefined): string {
 }
 
 const skinToCanonical = (rich: string | undefined): string => {
-  const idx = SKIN_RICH.indexOf((rich || '').trim().toLowerCase());
+  const idx = SKIN_RICH.indexOf(normaliseToken(rich));
   return `Tone ${pad2(Math.max(0, idx) + 1)}`; // unknown -> Tone 01
 };
 
@@ -323,7 +336,7 @@ const genderToCanonical = (g: AvatarDraft['gender'] | undefined): string =>
   g === 'nonbinary' ? 'Non-binary' : g === 'android' ? 'Android' : 'Female';
 
 const tattoosToCanonical = (style: string | undefined): string => {
-  const t = (style || '').trim().toLowerCase();
+  const t = normaliseToken(style);
   if (!t || t === 'none') return 'None';
   // representative-first so canonical applies round-trip (Full's rep string
   // contains "torso" and must not be re-read as Torso)
@@ -342,7 +355,7 @@ const tattoosToCanonical = (style: string | undefined): string => {
 };
 
 const augmentToCanonical = (style: string | undefined): string => {
-  const a = (style || '').trim().toLowerCase();
+  const a = normaliseToken(style);
   if (!a || a === 'none') return 'None';
   const reps: Record<string, string> = {
     'cybernetic glowing eye implants': 'Eyes',
@@ -359,7 +372,7 @@ const augmentToCanonical = (style: string | undefined): string => {
 };
 
 const outfitToCanonical = (outfit: string | undefined): string => {
-  const o = (outfit || '').trim().toLowerCase();
+  const o = normaliseToken(outfit);
   const reps: Record<string, string> = {
     'luxury silk robe with delicate lace bralette': 'Casual',
     'leather crop biker jacket with lace bralette and high-waist leather pants': 'Street',

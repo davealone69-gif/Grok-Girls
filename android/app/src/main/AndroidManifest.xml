@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- allowBackup was "true", which let Android Auto Backup copy the
+         WebView's localStorage (which holds the user's provider API keys) to
+         Google Drive and adb backup. This app is explicitly phone-local, so
+         backup is disabled outright. dataExtractionRules covers Android 12+
+         (cloud backup + device-to-device transfer). -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

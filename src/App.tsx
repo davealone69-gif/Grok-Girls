@@ -680,6 +680,10 @@ export default function App() {
       case 'import': return view === 'import';
       case 'body': return openSections.body && view === 'builder';
       case 'clothing': return openSections.clothing && view === 'builder';
+      // 'accessories' opens the clothing accordion (see railAction below), so
+      // it has to report the same active state. Without this case the rail
+      // entry could never highlight, even though the click worked.
+      case 'accessories': return openSections.clothing && view === 'builder';
       case 'hair': return view === 'builder' && dockTab === 'style';
       case 'face': return openSections.face && view === 'builder';
       case 'eyes': return openSections.eyes && view === 'builder';

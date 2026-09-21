@@ -5,6 +5,7 @@ import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDele
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
+import { setSdEnabled } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
 import { DEFAULT_MENU, loadMenuXml, MenuItem, menuSection } from './services/menuXml';
 import {
@@ -139,7 +140,14 @@ import {
   saveGenerationSettings
 } from './services/settingsState';
 import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './services/chat';
-import { getHermesModel, isHermesEnabled, setHermesEnabled } from './services/hermes';
+import {
+  enhancePromptWithOllama,
+  ensureOllamaRunning,
+  getOllamaModel,
+  setOllamaEnabled,
+  ollamaStatus,
+  type OllamaServerState
+} from './services/ollama';
 import { NSFW_NEGATIVE } from './services/adultActs';
 import { adultOptions, defaultAdultSelections } from './services/adultOptions';
 import { downloadMedia, exportGallery, importGallery } from './services/media';
@@ -807,6 +815,36 @@ export default function App() {
     toastTimer.current = window.setTimeout(() => setToast(null), 2800);
   }, []);
 
+  /* ----------------------------------------------- on-device Ollama --- */
+  // Live server state behind the chat header chip. Polled only while the
+  // OLLAMA engine is actually selected, so it costs nothing otherwise.
+  const [ollamaState, setOllamaState] = useState<OllamaServerState>('unknown');
+
+  useEffect(() => {
+    if (chatProvider !== 'ollama') return;
+    let alive = true;
+    const tick = async () => {
+      const st = await ollamaStatus();
+      if (alive) setOllamaState(st.state);
+    };
+    void tick();
+    const id = window.setInterval(tick, 15000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, [chatProvider]);
+
+  const startOllamaFromChat = useCallback(async () => {
+    setOllamaState('starting');
+    showToast('Starting the on-device Ollama server…');
+    const res = await ensureOllamaRunning(undefined, {
+      onState: s => setOllamaState(s)
+    });
+    setOllamaState(res.ok ? 'running' : 'stopped');
+    showToast(res.message);
+  }, [showToast]);
+
   const bumpAndCelebrate = (key: keyof StudioStats, n = 1) => {
     const prev = loadStats();
     const next = bumpStat(key, n);
@@ -1112,6 +1150,25 @@ export default function App() {
 
   const compiledPrompt = promptOverride.trim() ? promptOverride.trim() : buildDraftPrompt(draft, adult);
 
+  // On-device prompt enhancement. Ollama serves TEXT models, so it improves
+  // the prompt; the pixels still come from the selected render engine.
+  const [enhancing, setEnhancing] = useState(false);
+  const enhancePrompt = useCallback(async () => {
+    if (enhancing) return;
+    setEnhancing(true);
+    showToast('Enhancing prompt on-device…');
+    try {
+      const improved = await enhancePromptWithOllama(compiledPrompt, { adult });
+      setPromptOverride(improved);
+      showToast('✓ Prompt enhanced by the on-device model');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Prompt enhancement failed');
+    } finally {
+      setEnhancing(false);
+    }
+  }, [enhancing, compiledPrompt, adult, showToast]);
+
+
   // The app's own procedural render — used whenever there is no saved photo
   // (default viewport, thumbnails, angle previews). No bundled photos needed.
   const proceduralPreviewSvg = useMemo(
@@ -1305,7 +1362,7 @@ export default function App() {
 
   const isProceduralUrl = (u: string) => u.startsWith('blob:') || u.startsWith('data:image/svg+xml');
 
-  const useVariation = async (v: { url?: string; provider: string; prompt: string }) => {
+  const applyVariation = async (v: { url?: string; provider: string; prompt: string }) => {
     if (!v.url) return;
     if (isProceduralUrl(v.url)) {
       // Procedural preview: show it this session only — never overwrite the saved photo.
@@ -1436,16 +1493,20 @@ export default function App() {
     try {
       // M5: 18+ conversations never go to cloud chat providers — the
       // self-hosted / local engines are the only sanctioned adult path.
-      const adultPinned = adult && chatProvider !== 'local' && chatProvider !== 'selfhosted' && chatProvider !== 'hermes';
+      const adultPinned =
+        adult &&
+        chatProvider !== 'local' &&
+        chatProvider !== 'selfhosted' &&
+        chatProvider !== 'ollama';
       const chatEngine = adultPinned ? 'local' : chatProvider;
       if (adultPinned && !adultChatPinWarnRef.current) {
         adultChatPinWarnRef.current = true;
         showToast('18+ mode: chat pinned to LOCAL — cloud chat engines are not used for adult conversations');
       }
       const aid = String(now + 1);
-      const hermesStreaming = chatEngine === 'hermes';
-      // Hermes streams tokens straight into the growing assistant bubble.
-      if (hermesStreaming) {
+      const streamingEngine = chatEngine === 'ollama';
+      // On-device engines stream tokens into the growing assistant bubble.
+      if (streamingEngine) {
         setChat([...next, { id: aid, role: 'assistant', text: '', createdAt: now + 1 }]);
       }
       const answer = await reply(girl, room, next, text, chatEngine, adult, {
@@ -1453,9 +1514,9 @@ export default function App() {
         onSpec: outcome => {
           if (!outcome.present) return;
           if (outcome.applied > 0) {
-            showToast(`✓ Hermes applied ${outcome.applied} catalog-validated change(s) to your avatar`);
+            showToast(`✓ Ollama applied ${outcome.applied} catalog-validated change(s) to your avatar`);
           } else if (outcome.rejected > 0) {
-            showToast(`Hermes suggestions didn't match the catalog (${outcome.rejected} rejected) — nothing changed`);
+            showToast(`Model suggestions didn't match the catalog (${outcome.rejected} rejected) — nothing changed`);
           }
         }
       });
@@ -1555,7 +1616,7 @@ export default function App() {
   };
 
   /* ----------------------------------------------------------- gallery */
-  const useAsViewport = (item: GalleryItem) => {
+  const applyItemToViewport = (item: GalleryItem) => {
     if (!item.assetUrl) return;
     if (isProceduralUrl(item.assetUrl)) {
       // Procedural/local render: session-only viewport override, never persisted.
@@ -2334,6 +2395,14 @@ export default function App() {
                   >
                     REBUILD
                   </button>
+                  <button
+                    className="prompt-mini-btn"
+                    disabled={enhancing}
+                    onClick={() => void enhancePrompt()}
+                    title="Rewrite this prompt with the on-device Ollama model (no internet)"
+                  >
+                    {enhancing ? 'ENHANCING…' : '🦙 ENHANCE'}
+                  </button>
                   <button className="prompt-mini-btn" onClick={() => setPromptOpen(false)}>
                     ✕
                   </button>
@@ -2771,9 +2840,15 @@ export default function App() {
             <select
               className="footer-provider-select"
               value={provider}
-              onChange={e => setProvider(e.target.value as ProviderName)}
+              onChange={e => {
+                const v = e.target.value as ProviderName;
+                // picking a local engine IS the enable gesture at runtime
+                if (v === 'sdlocal') setSdEnabled(true);
+                setProvider(v);
+              }}
             >
               <option value="local">LOCAL</option>
+              <option value="sdlocal">SD LOCAL (ON-DEVICE)</option>
               <option value="openrouter">OPENROUTER</option>
               <option value="gemini">GEMINI</option>
               <option value="custom">CUSTOM</option>
@@ -2988,35 +3063,49 @@ export default function App() {
                   value={chatProvider}
                   onChange={e => {
                     const v = e.target.value as ProviderName;
-                    // picking Hermes IS the enable gesture at runtime
-                    if (v === 'hermes') setHermesEnabled(true);
+                    // picking a local engine IS the enable gesture at runtime
+                    if (v === 'ollama') setOllamaEnabled(true);
                     setChatProvider(v);
                   }}
                   title="Chat AI engine"
                 >
                   <option value="local">LOCAL</option>
-                  <option value="hermes">HERMES (LOCAL)</option>
+                  <option value="ollama">OLLAMA (ON-DEVICE)</option>
                   <option value="openrouter">OPENROUTER</option>
                   <option value="gemini">GEMINI</option>
                   <option value="custom">CUSTOM</option>
                   <option value="selfhosted">SELF-HOSTED</option>
                 </select>
-                {chatProvider === 'hermes' && (
+                {chatProvider === 'ollama' && (
                   <span
                     style={{
                       fontSize: 10,
                       fontWeight: 800,
                       letterSpacing: 1,
-                      color: isHermesEnabled() ? '#7ff0bd' : '#ff6b8a',
-                      background: isHermesEnabled() ? 'rgba(127,240,189,.1)' : 'rgba(255,107,138,.12)',
-                      border: `1px solid ${isHermesEnabled() ? 'rgba(127,240,189,.4)' : 'rgba(255,107,138,.4)'}`,
+                      color: ollamaState === 'running' ? '#7ff0bd' : ollamaState === 'starting' ? '#ffd166' : '#ff6b8a',
+                      background:
+                        ollamaState === 'running' ? 'rgba(127,240,189,.1)' : ollamaState === 'starting' ? 'rgba(255,209,102,.12)' : 'rgba(255,107,138,.12)',
+                      border: `1px solid ${ollamaState === 'running' ? 'rgba(127,240,189,.4)' : ollamaState === 'starting' ? 'rgba(255,209,102,.4)' : 'rgba(255,107,138,.4)'}`,
                       borderRadius: 999,
                       padding: '4px 10px',
-                      whiteSpace: 'nowrap'
+                      whiteSpace: 'nowrap',
+                      cursor: ollamaState === 'running' ? 'default' : 'pointer'
                     }}
-                    title={isHermesEnabled() ? `Hermes engine ready — ${getHermesModel()}` : 'Hermes disabled — enable it in AI Settings'}
+                    title={
+                      ollamaState === 'running'
+                        ? `On-device Ollama ready — ${getOllamaModel()} @ 127.0.0.1:11434`
+                        : 'Ollama is not running — click to start it, or open Termux and run "ollama serve"'
+                    }
+                    onClick={() => {
+                      if (ollamaState === 'running') return;
+                      void startOllamaFromChat();
+                    }}
                   >
-                    🧠 {isHermesEnabled() ? 'HERMES · ' + String(getHermesModel().split('/').pop() ?? getHermesModel()).slice(0, 18) : 'HERMES · OFF'}
+                    🦙 {ollamaState === 'running'
+                      ? String(getOllamaModel()).slice(0, 18)
+                      : ollamaState === 'starting'
+                        ? 'STARTING…'
+                        : 'OFFLINE · START'}
                   </span>
                 )}
                 <button className="prompt-mini-btn" onClick={exportChatLog} title="Export chat log as JSON">
@@ -3257,7 +3346,7 @@ export default function App() {
                       >
                         {item.favorite ? '★' : '☆'}
                       </button>
-                      <button onClick={() => useAsViewport(item)} title="Set as viewport preview">
+                      <button onClick={() => applyItemToViewport(item)} title="Set as viewport preview">
                         🖥
                       </button>
                       {item.assetUrl && (
@@ -4021,7 +4110,7 @@ export default function App() {
                     )}
                     <span className="gallery-provider">#{i + 1} · {v.provider.toUpperCase()}</span>
                     <div className="variation-actions">
-                      <button onClick={() => useVariation(v)} disabled={!v.url}>
+                      <button onClick={() => applyVariation(v)} disabled={!v.url}>
                         USE THIS
                       </button>
                       <button onClick={() => rerollVariation(i)} disabled={busy}>
@@ -4071,7 +4160,7 @@ export default function App() {
                 >
                   {lightboxItem.favorite ? '★' : '☆'}
                 </button>
-                <button onClick={() => useAsViewport(lightboxItem)} title="Set as viewport preview">
+                <button onClick={() => applyItemToViewport(lightboxItem)} title="Set as viewport preview">
                   🖥
                 </button>
                 {lightboxItem.assetUrl && (

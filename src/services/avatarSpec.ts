@@ -1,7 +1,7 @@
 /* ------------------------------------------------------------------ */
 /* avatarSpec — structured avatar/scene command vocabulary.            */
 /*                                                                     */
-/* Converts plain-language spec values produced by an LLM (Hermes)     */
+/* Converts plain-language spec values produced by an LLM (Ollama)     */
 /* into validated edits:                                               */
 /*   hair=… hairColor=… body=… eyes=… makeup=… outfit=…                */
 /*   scene=… lighting=… pose=…                                         */

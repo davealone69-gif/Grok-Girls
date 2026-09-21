@@ -24,6 +24,10 @@ export function parseGlb(data: ArrayBuffer): GltfAsset {
     const chunk = data.slice(offset, offset + chunkLength);
     offset += chunkLength;
     if (chunkType === JSON_CHUNK) {
+      // GLB pads the JSON chunk with trailing NUL bytes to a 4-byte
+      // boundary (spec 4.4.2) — stripping them is required, so the
+      // control character in this pattern is deliberate.
+      // eslint-disable-next-line no-control-regex
       const text = new TextDecoder().decode(chunk).replace(/\u0000+$/g, '').trim();
       json = JSON.parse(text) as GltfJson;
     } else if (chunkType === BIN_CHUNK) {

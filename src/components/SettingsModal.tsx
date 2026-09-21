@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import OllamaPanel from './OllamaPanel';
+import SdLocalPanel from './SdLocalPanel';
 import {
   getSavedApiKey,
   saveApiKey,
@@ -10,7 +12,6 @@ import {
 import {
   A1111_SAMPLERS,
   A1111_UPSCALERS,
-  SelfHostServerType,
   SelfHostStatus,
   fetchLoras,
   fetchModels,
@@ -216,6 +217,12 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         )}
 
         <div className="settings-sections">
+          {/* OLLAMA — phone-local on-device LLM (first-class) */}
+          <OllamaPanel onNotice={msg => { setSavedStatus(msg); window.setTimeout(() => setSavedStatus(''), 4000); }} />
+
+          {/* STABLE DIFFUSION — phone-local on-device image engine (:1234) */}
+          <SdLocalPanel onNotice={msg => { setSavedStatus(msg); window.setTimeout(() => setSavedStatus(''), 4000); }} />
+
           {/* SELF-HOSTED */}
           <div className="settings-section selfhosted-section">
             <div className="settings-section-title">🖥️ SELF-HOSTED SERVER — A1111 / ComfyUI</div>

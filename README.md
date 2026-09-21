@@ -35,6 +35,36 @@ AAA-style cyberpunk / gothic-glamour **character creator & companion studio** �
 - **Premium modal** — feature list + Stripe payment-link redirect (configure link in `src/services/keys.ts`).
 - **Help modal** — in-app guide (Esc closes any overlay) + keyboard shortcuts: `R` rotate · `Z` zoom · `P` prompt editor · `G` generate · `S` save · `V` video studio · `C` chat · `F` fullscreen · `Ctrl+Z` / `Ctrl+Y` undo/redo · `←`/`→` lightbox navigation.
 
+## 🦙 On-device Ollama (phone-local, first-class)
+
+Run the LLM **on the phone itself** — no API key, no LAN IP, no Wi-Fi, no
+internet. Select **OLLAMA (ON-DEVICE)** in the chat engine selector and
+configure it in ⚙ Settings → **🦙 Ollama — On-Device LLM**.
+
+- **Server:** `http://127.0.0.1:11434` · OpenAI-compatible API at `/v1`
+- **Default model:** `llama3.2:1b` (fastest on phone CPU)
+- **Settings console:** live status dot, **CHECK SERVER**, **START SERVER**,
+  installed-model chips, `ollama pull` with a progress bar, suggested
+  phone-sized models, and enable / auto-start / streaming / temperature
+  controls.
+- **Auto-start layer:** if nothing is listening on 11434 the app can launch
+  `ollama serve` through Termux and wait for the API to answer — the chat
+  header chip doubles as a one-tap start button.
+- **Streaming:** tokens land live in the chat bubble, and the on-device
+  engine drives the same 🧬 structured avatar edits as Hermes.
+- **18+ chat stays on-device** — adult conversations are never routed to a
+  cloud engine.
+
+> **Why a native bridge?** Inside the Android app the HTTP call is made by
+> Kotlin (`OllamaLocalPlugin`), which sidesteps the two things that block a
+> WebView from reaching loopback: Ollama's CORS origin check and Android's
+> mixed-content rule (`https://localhost` → `http://127.0.0.1`). In a
+> desktop browser the app uses `fetch` instead — start the server as
+> `OLLAMA_ORIGINS=* ollama serve`, or the browser will block it (the app
+> says so explicitly).
+
+Full findings and verification: [`ollama-integration-audit.md`](ollama-integration-audit.md).
+
 ## 🖥️ Self-hosted engine (first-class)
 
 Select **SELF-HOSTED** in the footer ENGINE selector and configure it in ⚙ Settings → Self-Hosted Server:

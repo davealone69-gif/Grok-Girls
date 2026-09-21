@@ -1111,7 +1111,6 @@ export class HdAvatarRenderer {
     shader.bindTexture(1, 'uIrisNormalTexture', textures.irisNormal);
     shader.bindTexture(2, 'uScleraTexture', textures.sclera);
 
-    const offsets = [-1, 1];
     for (let i = 0; i < 2; i++) {
       shader.setMatrix4('uModel', this.eyeModelMatrix(i));
       this.eyeMeshes[i].draw(gl);

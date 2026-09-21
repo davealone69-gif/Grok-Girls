@@ -29,4 +29,19 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps({"images": [png]}).encode())
     def log_message(self, *a): pass
 
-HTTPServer(("0.0.0.0", 7860), H).serve_forever()
+
+def serve_forever(port=7860):
+    """Start the mock in a daemon thread and return the server.
+
+    The audit suite needs this running on 7860; without it the quota /
+    IndexedDB checks fail with "Failed to fetch" because nothing answers.
+    """
+    import threading
+    from http.server import ThreadingHTTPServer
+    srv = ThreadingHTTPServer(("0.0.0.0", port), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+if __name__ == "__main__":
+    HTTPServer(("0.0.0.0", 7860), H).serve_forever()

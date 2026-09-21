@@ -1,4 +1,4 @@
-import { deleteImage, getImageDataUrl, getImageMeta, getImageUrl, isRasterDataUrl, putImage } from './assetStore';
+import { deleteImage, getImageMeta, getImageUrl, isRasterDataUrl, putImage } from './assetStore';
 
 export interface GalleryItem {
   id: string;

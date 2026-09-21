@@ -14,6 +14,13 @@ public class MainActivity extends BridgeActivity {
     // Native 3D avatar viewport (Kotlin/GLES3 engine, see NativeAvatarActivity).
     // JS: await Capacitor.Plugins.AvatarStudio.openViewport({...})
     registerPlugin(AvatarStudioPlugin.class);
+    // Phone-local Ollama bridge (native HTTP: no CORS, no mixed-content
+    // block, can start the server). JS: Capacitor.Plugins.OllamaLocal
+    registerPlugin(OllamaLocalPlugin.class);
+    // Phone-local Stable Diffusion bridge (image half of the local stack,
+    // sd-server on :1234 — separate port and lifecycle from Ollama's
+    // :11434). JS: Capacitor.Plugins.SdLocal
+    registerPlugin(SdLocalPlugin.class);
     // Keep the studio UI out from under the phone's system bars (status bar
     // and navigation buttons). Without this, Android draws the WebView
     // edge-to-edge and the GENERATE / SAVE footer ends up hidden behind the

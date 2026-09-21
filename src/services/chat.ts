@@ -1,14 +1,10 @@
 import { Girl, Room, ADULT_OVERLAY, SAFE_OVERLAY } from '../models/studio';
 import { chatWithProvider, ProviderName } from './providers';
-import { matchAct, randomActReply, ADULT_ACTS, QUICK_ACT_CHIPS, allActLabels } from './adultActs';
+import { matchAct, randomActReply, ADULT_ACTS, QUICK_ACT_CHIPS } from './adultActs';
 import { applyAvatarLlmText, AVATAR_LLM_INSTRUCTIONS } from './llmAvatarBridge';
-import {
-  extractHermesSpecBlock,
-  hermesChatCompletion,
-  HERMES_CHAT_SYSTEM_TAIL,
-  isHermesChatReady
-} from './hermes';
+import { extractSpecBlock, SPEC_MARKER, SPEC_SYSTEM_TAIL } from './specProtocol';
 import { normalizeAvatarSpec, parseAvatarSpecJson } from './avatarSpec';
+import { isOllamaChatReady, ollamaChatCompletion, getOllamaConfig } from './ollama';
 
 export interface ChatMessage {
   id: string;
@@ -86,10 +82,23 @@ export function localReply(girl: Girl, room: Room, message: string, adult = fals
 }
 
 export interface ReplyOptions {
-  /** called per token when the engine streams (Hermes); text grows live */
+  /** called per token when the engine streams (Ollama); text grows live */
   onDelta?: (partial: string) => void;
   /** called after a structured avatar spec was extracted & validated */
   onSpec?: (outcome: { applied: number; rejected: number; present: boolean }) => void;
+}
+
+/** Build a token sink that accumulates deltas and reports the growing
+ *  reply (the onDelta contract is "partial", not "the last token"), with
+ *  the trailing 🧬 spec line hidden from the live bubble. */
+function streamAccumulator(onDelta?: (partial: string) => void): (delta: string) => void {
+  let full = '';
+  return (delta: string) => {
+    if (!onDelta) return;
+    full += delta;
+    const marker = full.indexOf(SPEC_MARKER);
+    onDelta(marker === -1 ? full : full.slice(0, marker).replace(/\s+$/, ''));
+  };
 }
 
 /** Apply a validated structured spec (canonical categories via the VM,
@@ -126,8 +135,10 @@ export async function reply(
   opts: ReplyOptions = {}
 ): Promise<string> {
   const policy = adult ? ADULT_OVERLAY : SAFE_OVERLAY;
-  const hermesTail = provider === 'hermes' ? HERMES_CHAT_SYSTEM_TAIL : '';
-  const system = `You are ${girl.name}, an adult fictional companion (18+). Personality: ${girl.traits.join(', ')}. Bio: ${girl.bio}. Current room: ${room.name}. Mood: ${girl.emotion}. Affinity: ${Math.round(girl.affinity)}%. Trust: ${Math.round(girl.trust)}%. Be warm, conversational and consistent with the character. Content policy: ${policy}. ${AVATAR_LLM_INSTRUCTIONS}${hermesTail}`;
+  // The on-device Ollama engine understands the 🧬 structured avatar-spec
+  // tail — a single-line contract owned by the app, not by any server.
+  const specTail = provider === 'ollama' ? SPEC_SYSTEM_TAIL : '';
+  const system = `You are ${girl.name}, an adult fictional companion (18+). Personality: ${girl.traits.join(', ')}. Bio: ${girl.bio}. Current room: ${room.name}. Mood: ${girl.emotion}. Affinity: ${Math.round(girl.affinity)}%. Trust: ${Math.round(girl.trust)}%. Be warm, conversational and consistent with the character. Content policy: ${policy}. ${AVATAR_LLM_INSTRUCTIONS}${specTail}`;
 
   const fallback = (note: string) =>
     `${localReply(girl, room, message, adult)}${note ? ` (${note})` : ''}`;
@@ -136,26 +147,31 @@ export async function reply(
     return localReply(girl, room, message, adult);
   }
 
-  if (provider === 'hermes') {
-    if (!isHermesChatReady()) {
-      return fallback('Hermes is disabled or its endpoint is unset — enable it in AI Settings to chat locally');
+  if (provider === 'ollama') {
+    if (!isOllamaChatReady()) {
+      return fallback('Ollama is off — enable it in ⚙ Settings → Ollama (On-Device) to chat fully offline');
     }
+    const cfg = getOllamaConfig();
     const historyMsgs = history
       .slice(-20)
       .map(m => ({ role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const), content: m.text }));
     try {
-      const full = await hermesChatCompletion(
+      const full = await ollamaChatCompletion(
         [{ role: 'system', content: system }, ...historyMsgs, { role: 'user', content: message }],
-        { stream: true, onToken: delta => opts.onDelta?.(delta) }
+        {
+          stream: cfg.streaming,
+          temperature: cfg.temperature,
+          onToken: streamAccumulator(opts.onDelta)
+        }
       );
-      const { text: cleaned, raw } = extractHermesSpecBlock(full);
+      const { text: cleaned, raw } = extractSpecBlock(full);
       if (raw) opts.onSpec?.(applyStructuredSpec(raw));
-      // legacy <avatar_command> canonical bridge still works for Hermes too
+      // the legacy <avatar_command> canonical bridge works here too
       applyAvatarLlmText(cleaned);
       return cleaned.replace(/<avatar_command>[\s\S]*?<\/avatar_command>/gi, '').trim();
     } catch (err) {
-      console.warn('Hermes chat failed, falling back to local companion dialogue', err);
-      return fallback(err instanceof Error ? err.message : 'Hermes unreachable');
+      console.warn('Ollama chat failed, falling back to local companion dialogue', err);
+      return fallback(err instanceof Error ? err.message : 'Ollama unreachable');
     }
   }
 

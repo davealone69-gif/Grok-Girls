@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext HTTP is allowed ONLY for loopback and RFC1918 LAN addresses.
+  Loopback carries the two phone-local servers:
+    127.0.0.1:11434 — Ollama (text / LLM)
+    127.0.0.1:1234  — sd-server (Stable Diffusion images)
+  LAN covers the optional self-hosted A1111/ComfyUI render server.
+  domain-config is port-agnostic, so both loopback ports are covered by
+  the 127.0.0.1 entry. Everything else stays HTTPS-only, so this does
+  not weaken the app generally.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">::1</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

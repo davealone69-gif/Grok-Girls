@@ -65,29 +65,42 @@ export interface SelfHostSettings {
   loras: LoraSlot[];
 }
 
-export interface HermesCapabilities {
-  /** OpenAI-compatible chat completions */
-  chat: boolean;
-  /** /v1/models discovery */
-  models: boolean;
-  /** SSE token streaming */
+/** Phone-local Ollama server (OpenAI-compatible at <base>/v1). */
+export interface OllamaSettings {
+  /** native root, e.g. http://127.0.0.1:11434 (no /v1) */
+  base: string;
+  /** model tag, e.g. llama3.2:1b */
+  model: string;
+  /** Ollama is the selected/allowed local engine */
+  enabled: boolean;
+  /** try to launch the server when it is not listening */
+  autoStart: boolean;
+  /** stream tokens (SSE / native bridge events) */
   streaming: boolean;
-  /** image generation (reserved; false) */
-  image: boolean;
-  /** video generation (reserved; false) */
-  video: boolean;
+  /** sampling temperature used for chat */
+  temperature: number;
+  /** last connection test outcome */
+  lastTest: { at: number; ok: boolean; models?: string[]; error?: string } | null;
 }
 
-export interface HermesSettings {
-  url: string;
-  model: string;
+/** Phone-local Stable Diffusion server (A1111-compatible at <base>/sdapi/v1). */
+export interface SdLocalSettings {
+  /** native root, e.g. http://127.0.0.1:1234 (no /sdapi) */
+  base: string;
+  /** local SD is the selected/allowed image engine */
   enabled: boolean;
-  /** free-form extra configuration (future-proof; no UI yet) */
-  config: Record<string, string>;
-  /** advertised capabilities of the canonical Hermes provider */
-  capabilities: HermesCapabilities;
-  /** last connection test outcome (models list on success) */
-  lastTest: { at: number; ok: boolean; models?: string[]; error?: string } | null;
+  /** try to launch the server when it is not listening */
+  autoStart: boolean;
+  /** default sampling steps */
+  steps: number;
+  /** default classifier-free guidance scale */
+  cfgScale: number;
+  /** default square render size in px */
+  size: number;
+  /** default negative prompt appended to every render */
+  negative: string;
+  /** last connection test outcome */
+  lastTest: { at: number; ok: boolean; error?: string } | null;
 }
 
 export interface SettingsState {
@@ -97,7 +110,8 @@ export interface SettingsState {
   provider: ProviderPrefs;
   connections: Record<string, ProviderConnection>;
   selfHost: SelfHostSettings;
-  hermes: HermesSettings;
+  ollama: OllamaSettings;
+  sdLocal: SdLocalSettings;
 }
 
 /* ------------------------------------------------------------ legacy */
@@ -122,9 +136,13 @@ const LEGACY = {
   shUpscaler: 'grok-girls-selfhosted-upscaler',
   shHires: 'grok-girls-selfhosted-hires',
   shLoras: 'grok-girls-selfhosted-loras',
-  hermesUrl: 'grok-girls-hermes-url-v1',
-  hermesModel: 'grok-girls-hermes-model-v1',
-  hermesEnabled: 'grok-girls-hermes-enabled-v1'
+  ollamaBase: 'grok-girls-ollama-base-v1',
+  ollamaModel: 'grok-girls-ollama-model-v1',
+  ollamaEnabled: 'grok-girls-ollama-enabled-v1',
+  ollamaAutoStart: 'grok-girls-ollama-autostart-v1',
+  sdBase: 'grok-girls-sdlocal-base-v1',
+  sdEnabled: 'grok-girls-sdlocal-enabled-v1',
+  sdAutoStart: 'grok-girls-sdlocal-autostart-v1'
 } as const;
 
 function lsGet(k: string): string | null {
@@ -153,12 +171,23 @@ export const DEFAULT_SETTINGS: SettingsState = {
     base: '', type: 'unknown', checkpoint: '', sampler: '', upscaler: '',
     hiresFix: false, loras: []
   },
-  hermes: {
-    url: '',
-    model: '',
+  ollama: {
+    base: 'http://127.0.0.1:11434',
+    model: 'llama3.2:1b',
     enabled: false,
-    config: {},
-    capabilities: { chat: true, models: true, streaming: true, image: false, video: false },
+    autoStart: true,
+    streaming: true,
+    temperature: 0.8,
+    lastTest: null
+  },
+  sdLocal: {
+    base: 'http://127.0.0.1:1234',
+    enabled: false,
+    autoStart: true,
+    steps: 24,
+    cfgScale: 7,
+    size: 512,
+    negative: '',
     lastTest: null
   }
 };
@@ -194,13 +223,13 @@ function foldLegacy(): SettingsState {
   s.generation.size = num(LEGACY.size, 1024);
 
   const validProvider = (v: string | null): ProviderName =>
-    v === 'openrouter' || v === 'gemini' || v === 'custom' || v === 'selfhosted' || v === 'hermes'
+    v === 'openrouter' || v === 'gemini' || v === 'custom' || v === 'selfhosted' || v === 'ollama' || v === 'sdlocal'
       ? v
       : 'local';
   s.provider.image = validProvider(lsGet(LEGACY.provider));
   s.provider.chat = validProvider(lsGet(LEGACY.chatProvider));
 
-  for (const p of ['openrouter', 'gemini', 'custom', 'hermes']) {
+  for (const p of ['openrouter', 'gemini', 'custom', 'ollama']) {
     const conn: ProviderConnection = { apiKey: '', endpoints: {}, models: {} };
     conn.apiKey = lsGet(`${LEGACY.key}${p}`) ?? '';
     for (const m of ['generic', 'image', 'video', 'chat'] as const) {
@@ -228,11 +257,21 @@ function foldLegacy(): SettingsState {
     s.selfHost.loras = [];
   }
 
-  // Hermes (local LLM) was written to its own keys before the canonical
-  // record existed; fold them when present (enabled honours an explicit '0').
-  s.hermes.url = lsGet(LEGACY.hermesUrl) ?? '';
-  s.hermes.model = lsGet(LEGACY.hermesModel) ?? '';
-  s.hermes.enabled = lsGet(LEGACY.hermesEnabled) === '1';
+  // Ollama (phone-local llama.cpp replacement) — standalone keys fold in;
+  // an absent base/model keeps the published 127.0.0.1:11434 default.
+  s.ollama.base = lsGet(LEGACY.ollamaBase) || DEFAULT_SETTINGS.ollama.base;
+  s.ollama.model = lsGet(LEGACY.ollamaModel) || DEFAULT_SETTINGS.ollama.model;
+  s.ollama.enabled = lsGet(LEGACY.ollamaEnabled) === '1';
+  s.sdLocal.base = lsGet(LEGACY.sdBase) || DEFAULT_SETTINGS.sdLocal.base;
+  s.sdLocal.enabled = lsGet(LEGACY.sdEnabled) === '1';
+  {
+    const rawSd = lsGet(LEGACY.sdAutoStart);
+    s.sdLocal.autoStart = rawSd === null ? DEFAULT_SETTINGS.sdLocal.autoStart : rawSd === '1';
+  }
+  {
+    const raw = lsGet(LEGACY.ollamaAutoStart);
+    s.ollama.autoStart = raw === null ? DEFAULT_SETTINGS.ollama.autoStart : raw === '1';
+  }
 
   return s;
 }
@@ -245,7 +284,7 @@ function overlayLegacyGaps(s: SettingsState): SettingsState {
   const out = { ...s, contentGate: { ...s.contentGate }, generation: { ...s.generation },
     provider: { ...s.provider }, connections: { ...s.connections },
     selfHost: { ...s.selfHost, loras: [...s.selfHost.loras] },
-    hermes: { ...s.hermes, config: { ...s.hermes.config } } };
+    ollama: { ...s.ollama }, sdLocal: { ...s.sdLocal } };
   // only touch fields still at their default
   const d = DEFAULT_SETTINGS;
   if (out.contentGate.ageConfirmed === d.contentGate.ageConfirmed) out.contentGate.ageConfirmed = legacy.contentGate.ageConfirmed;
@@ -263,9 +302,13 @@ function overlayLegacyGaps(s: SettingsState): SettingsState {
   if (out.selfHost.upscaler === '') out.selfHost.upscaler = legacy.selfHost.upscaler;
   if (out.selfHost.hiresFix === false) out.selfHost.hiresFix = legacy.selfHost.hiresFix;
   if (out.selfHost.loras.length === 0) out.selfHost.loras = legacy.selfHost.loras;
-  if (out.hermes.url === d.hermes.url) out.hermes.url = legacy.hermes.url;
-  if (out.hermes.model === d.hermes.model) out.hermes.model = legacy.hermes.model;
-  if (out.hermes.enabled === d.hermes.enabled) out.hermes.enabled = legacy.hermes.enabled;
+  if (out.ollama.base === d.ollama.base) out.ollama.base = legacy.ollama.base;
+  if (out.ollama.model === d.ollama.model) out.ollama.model = legacy.ollama.model;
+  if (out.ollama.enabled === d.ollama.enabled) out.ollama.enabled = legacy.ollama.enabled;
+  if (out.ollama.autoStart === d.ollama.autoStart) out.ollama.autoStart = legacy.ollama.autoStart;
+  if (out.sdLocal.base === d.sdLocal.base) out.sdLocal.base = legacy.sdLocal.base;
+  if (out.sdLocal.enabled === d.sdLocal.enabled) out.sdLocal.enabled = legacy.sdLocal.enabled;
+  if (out.sdLocal.autoStart === d.sdLocal.autoStart) out.sdLocal.autoStart = legacy.sdLocal.autoStart;
   for (const p of Object.keys(legacy.connections)) {
     const conn = out.connections[p];
     const lconn = legacy.connections[p];
@@ -283,13 +326,21 @@ function overlayLegacyGaps(s: SettingsState): SettingsState {
 
 let cache: SettingsState | null = null;
 
+function clampNum(v: unknown, lo: number, hi: number, dflt: number): number {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : dflt;
+}
+function clampInt(v: unknown, lo: number, hi: number, dflt: number): number {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : dflt;
+}
+
 /** Deep-default a parsed (possibly partial / older-version) record. */
 function sanitize(raw: Record<string, unknown>): SettingsState {
   const g = (raw.generation ?? {}) as Partial<GenerationSettings>;
   const cg = (raw.contentGate ?? {}) as Partial<ContentGateSettings>;
   const pv = (raw.provider ?? {}) as Partial<ProviderPrefs>;
   const sh = (raw.selfHost ?? {}) as Partial<SelfHostSettings>;
-  const hm = (raw.hermes ?? {}) as Partial<HermesSettings>;
+  const ol = (raw.ollama ?? {}) as Partial<OllamaSettings>;
+  const sd = (raw.sdLocal ?? {}) as Partial<SdLocalSettings>;
   const s: SettingsState = {
     version: 1,
     contentGate: { ...DEFAULT_SETTINGS.contentGate, ...cg },
@@ -297,12 +348,26 @@ function sanitize(raw: Record<string, unknown>): SettingsState {
     provider: { ...DEFAULT_SETTINGS.provider, ...pv },
     connections: { ...((raw.connections ?? {}) as Record<string, ProviderConnection>) },
     selfHost: { ...DEFAULT_SETTINGS.selfHost, ...sh, loras: Array.isArray(sh.loras) ? sh.loras.slice(0, 3) : [] },
-    hermes: {
-      ...DEFAULT_SETTINGS.hermes,
-      ...hm,
-      config: { ...(hm.config ?? {}) },
-      capabilities: { ...DEFAULT_SETTINGS.hermes.capabilities, ...((hm.capabilities ?? {}) as Partial<HermesCapabilities>) },
-      lastTest: hm.lastTest ?? null
+    ollama: {
+      ...DEFAULT_SETTINGS.ollama,
+      ...ol,
+      base: (ol.base ?? DEFAULT_SETTINGS.ollama.base) || DEFAULT_SETTINGS.ollama.base,
+      model: (ol.model ?? DEFAULT_SETTINGS.ollama.model) || DEFAULT_SETTINGS.ollama.model,
+      temperature:
+        typeof ol.temperature === 'number' && Number.isFinite(ol.temperature)
+          ? Math.max(0, Math.min(2, ol.temperature))
+          : DEFAULT_SETTINGS.ollama.temperature,
+      lastTest: ol.lastTest ?? null
+    },
+    sdLocal: {
+      ...DEFAULT_SETTINGS.sdLocal,
+      ...sd,
+      base: (sd.base ?? DEFAULT_SETTINGS.sdLocal.base) || DEFAULT_SETTINGS.sdLocal.base,
+      steps: clampInt(sd.steps, 1, 150, DEFAULT_SETTINGS.sdLocal.steps),
+      cfgScale: clampNum(sd.cfgScale, 1, 30, DEFAULT_SETTINGS.sdLocal.cfgScale),
+      size: clampInt(sd.size, 64, 2048, DEFAULT_SETTINGS.sdLocal.size),
+      negative: typeof sd.negative === 'string' ? sd.negative : DEFAULT_SETTINGS.sdLocal.negative,
+      lastTest: sd.lastTest ?? null
     }
   };
   return overlayLegacyGaps(s);
@@ -355,9 +420,13 @@ export function saveSettings(next: SettingsState): void {
   lsSet(LEGACY.shUpscaler, next.selfHost.upscaler);
   lsSet(LEGACY.shHires, next.selfHost.hiresFix ? '1' : '0');
   lsSet(LEGACY.shLoras, JSON.stringify(next.selfHost.loras.slice(0, 3)));
-  lsSet(LEGACY.hermesUrl, next.hermes.url);
-  lsSet(LEGACY.hermesModel, next.hermes.model);
-  lsSet(LEGACY.hermesEnabled, next.hermes.enabled ? '1' : '0');
+  lsSet(LEGACY.ollamaBase, next.ollama.base);
+  lsSet(LEGACY.ollamaModel, next.ollama.model);
+  lsSet(LEGACY.ollamaEnabled, next.ollama.enabled ? '1' : '0');
+  lsSet(LEGACY.ollamaAutoStart, next.ollama.autoStart ? '1' : '0');
+  lsSet(LEGACY.sdBase, next.sdLocal.base);
+  lsSet(LEGACY.sdEnabled, next.sdLocal.enabled ? '1' : '0');
+  lsSet(LEGACY.sdAutoStart, next.sdLocal.autoStart ? '1' : '0');
 }
 
 /** Mutate + persist in one step (invalidate cache first). */
@@ -426,7 +495,8 @@ export function getConnectionEndpoint(p: string, m?: ApiMode): string {
 export function saveConnectionEndpoint(p: string, url: string, m?: ApiMode): void {
   update(s => {
     const c = connOf(s, p);
-    (m ? (c.endpoints[m] = url.trim()) : (c.endpoints.generic = url.trim()));
+    if (m) c.endpoints[m] = url.trim();
+    else c.endpoints.generic = url.trim();
     return s;
   });
 }
@@ -441,7 +511,8 @@ export function getConnectionModel(p: string, m?: ApiMode): string {
 export function saveConnectionModel(p: string, model: string, m?: ApiMode): void {
   update(s => {
     const c = connOf(s, p);
-    (m ? (c.models[m] = model.trim()) : (c.models.generic = model.trim()));
+    if (m) c.models[m] = model.trim();
+    else c.models.generic = model.trim();
     return s;
   });
 }
@@ -491,15 +562,21 @@ export function saveSelfHostLoras(slots: LoraSlot[]): void {
   update(s => ({ ...s, selfHost: { ...s.selfHost, loras: slots.slice(0, 3) } }));
 }
 
-/* --------------------------------------------------------- hermes */
 
-export function getHermesSettings(): HermesSettings {
-  const h = loadSettings().hermes;
-  return { ...h, config: { ...h.config } };
+/* --------------------------------------------------------- ollama */
+
+export function getOllamaSettings(): OllamaSettings {
+  return { ...loadSettings().ollama };
 }
-export function saveHermesSettings(p: Partial<HermesSettings>): void {
-  update(s => ({
-    ...s,
-    hermes: { ...s.hermes, ...p, config: { ...s.hermes.config, ...(p.config ?? {}) } }
-  }));
+export function saveOllamaSettings(p: Partial<OllamaSettings>): void {
+  update(s => ({ ...s, ollama: { ...s.ollama, ...p } }));
+}
+
+/* ------------------------------------------------- local stable diffusion */
+
+export function getSdLocalSettings(): SdLocalSettings {
+  return { ...loadSettings().sdLocal };
+}
+export function saveSdLocalSettings(p: Partial<SdLocalSettings>): void {
+  update(s => ({ ...s, sdLocal: { ...s.sdLocal, ...p } }));
 }

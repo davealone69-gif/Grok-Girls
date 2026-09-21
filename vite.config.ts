@@ -36,6 +36,18 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     allowedHosts: true,
+    watch: {
+      // Never watch the local Android SDK / JDK or vendored lint toolchain —
+      // they contain tens of thousands of files and exhaust inotify watches.
+      ignored: [
+        '**/.toolchain/**',
+        '**/.gradle/**',
+        '**/tools/lint/node_modules/**',
+        '**/android/**',
+        '**/artifacts/**',
+        '**/dist/**',
+      ],
+    },
   },
   preview: {
     host: '0.0.0.0',

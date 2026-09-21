@@ -1,6 +1,10 @@
 from playwright.sync_api import sync_playwright
 import json
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from mocks.mock_big_a1111 import serve_forever as _serve_big_a1111
 
 results = []
 def chk(name, cond, extra=""):
@@ -17,6 +21,12 @@ def tap_adult(pg, phone):
     else:
         pg.locator("button.crown-btn").first.click()
     pg.wait_for_timeout(240)
+
+# The quota / IndexedDB checks below drive a real ~1.6 MB self-hosted
+# render against a mock A1111 on :7860. Start it here — previously the
+# suite assumed an externally-launched mock and those checks failed with
+# "Failed to fetch".
+_big_a1111 = _serve_big_a1111()
 
 with sync_playwright() as p:
     b = p.chromium.launch()
@@ -526,7 +536,7 @@ with sync_playwright() as p:
         ep: c && c.connections.custom && c.connections.custom.endpoints.chat,
         model: c && c.connections.openrouter && c.connections.openrouter.models.image,
         sh: c && [c.selfHost.base, c.selfHost.type, c.selfHost.hiresFix, (c.selfHost.loras || []).map(l => l.name).join('|')].join(','),
-        hermesDefault: c && c.hermes.url === '' && c.hermes.enabled === false && c.hermes.model === '',
+        ollamaDefault: c && c.ollama.base === 'http://127.0.0.1:11434' && c.ollama.enabled === false && c.ollama.model === 'llama3.2:1b',
         legacyMirrored: localStorage.getItem('grok-girls-steps-v1') === '35'
           && localStorage.getItem('grok-girls-provider-v1') === 'gemini'
           && localStorage.getItem('grok-girls-key-gemini') === 'gk9'
@@ -537,7 +547,7 @@ with sync_playwright() as p:
         s1.get("present") and s1.get("gen") == "35,9,768" and s1.get("prov") == "gemini,custom"
         and s1.get("gate") == "true,true" and s1.get("gemKey") == "gk9"
         and s1.get("ep") == "http://chat9" and s1.get("model") == "model9"
-        and s1.get("sh") == "http://sh9,a1111,true,l9" and s1.get("hermesDefault"),
+        and s1.get("sh") == "http://sh9,a1111,true,l9" and s1.get("ollamaDefault"),
         str(s1))
     chk("settings: migration write-through keeps legacy keys in sync",
         bool(s1) and s1.get("legacyMirrored"), str(s1))

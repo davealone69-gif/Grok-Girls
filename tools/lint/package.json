@@ -1,0 +1,14 @@
+{
+  "name": "grok-girls-lint",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Isolated lint toolchain. typescript-eslint does not support the app's pinned TypeScript 7, so the linter keeps its own TS 5.9 here. This never affects the app build, which still uses the pinned root typescript.",
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "eslint": "9.39.5",
+    "eslint-plugin-react-hooks": "5.2.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.4"
+  }
+}

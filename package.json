@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "android": "npm run build && npx cap sync android && cd android && ./gradlew assembleDebug",
     "android:release": "npm run build && npx cap sync android && cd android && ./gradlew assembleRelease",
-    "pwa:preview": "vite preview"
+    "pwa:preview": "vite preview",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix"
   },
   "dependencies": {
     "@capacitor/android": "8.5.0",

@@ -83,12 +83,12 @@ export function mat4LookAt(eye: [number, number, number], target: [number, numbe
   const zx = eye[0] - target[0];
   const zy = eye[1] - target[1];
   const zz = eye[2] - target[2];
-  let zl = Math.hypot(zx, zy, zz) || 1;
+  const zl = Math.hypot(zx, zy, zz) || 1;
   const z = [zx / zl, zy / zl, zz / zl];
   const xx = up[1] * z[2] - up[2] * z[1];
   const xy = up[2] * z[0] - up[0] * z[2];
   const xz = up[0] * z[1] - up[1] * z[0];
-  let xl = Math.hypot(xx, xy, xz) || 1;
+  const xl = Math.hypot(xx, xy, xz) || 1;
   const x = [xx / xl, xy / xl, xz / xl];
   const y = [z[1] * x[2] - z[2] * x[1], z[2] * x[0] - z[0] * x[2], z[0] * x[1] - z[1] * x[0]];
   const m = new Float32Array(16);

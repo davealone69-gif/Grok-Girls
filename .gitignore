@@ -21,3 +21,21 @@ __pycache__/
 .cache/
 .npm/
 .sudo_as_admin_successful
+
+# local Android SDK / JDK installed for APK builds (not source)
+.toolchain/
+tools/lint/node_modules/
+
+# Local Android build toolchain & artifacts
+.toolchain/
+tools/lint/node_modules/
+android/local.properties
+artifacts/
+.android/
+.gradle/
+.npm/
+.cache/
+.config/
+.java/
+.kotlin/
+.vite/

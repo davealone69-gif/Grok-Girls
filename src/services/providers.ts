@@ -1,6 +1,7 @@
 import { generateSelfHosted, getServerBase } from './selfHosted';
-import { extractHermesSpecBlock, hermesChatCompletion, isHermesChatReady } from './hermes';
-import { HERMES_CHAT_SYSTEM_TAIL } from './hermes';
+import { extractSpecBlock, SPEC_SYSTEM_TAIL } from './specProtocol';
+import { isOllamaChatReady, ollamaChatCompletion, getOllamaModel, getOllamaBase } from './ollama';
+import { isSdEnabled, sdTxt2Img, getSdConfig } from './sdLocal';
 import {
   getConnectionApiKey,
   saveConnectionApiKey,
@@ -10,7 +11,7 @@ import {
   saveConnectionModel
 } from './settingsState';
 
-export type ProviderName = 'local' | 'openrouter' | 'gemini' | 'custom' | 'selfhosted' | 'hermes';
+export type ProviderName = 'local' | 'sdlocal' | 'openrouter' | 'gemini' | 'custom' | 'selfhosted' | 'ollama';
 export type Mode = 'image' | 'video';
 export type ProviderMode = Mode | 'chat';
 
@@ -93,16 +94,6 @@ function hashSeed(str: string): number {
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
-}
-
-function mulberry32(a: number) {
-  return function () {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 interface RenderPalette {
@@ -529,7 +520,7 @@ async function parse(response: Response, p: ProviderName, m: Mode): Promise<Gene
     (typeof d.output?.[0] === 'string' ? d.output[0] : d.output?.[0]?.url) ??
     d.data?.[0]?.url ??
     d.video?.url;
-  let b64: string | undefined = d.data?.[0]?.b64_json;
+  const b64: string | undefined = d.data?.[0]?.b64_json;
 
   // A1111 / SD-WebUI: images: ["base64…"]
   if (!asset && Array.isArray(d.images) && typeof d.images[0] === 'string') {
@@ -726,6 +717,51 @@ class Local {
   }
 }
 
+/**
+ * Phone-local Stable Diffusion (sd-server on 127.0.0.1:1234).
+ *
+ * This is the on-device image engine and the counterpart to Ollama's
+ * on-device text engine. It produces REAL pixels from a real diffusion
+ * model — unlike `Local`, which draws a procedural SVG placeholder.
+ */
+class SdLocalProvider {
+  readonly name = 'sdlocal' as const;
+  available() {
+    return isSdEnabled();
+  }
+  async generate(r: GenerationRequest): Promise<GenerationResult> {
+    if (r.mode !== 'image') {
+      return {
+        provider: 'sdlocal',
+        status: 'error',
+        warning: 'The phone-local Stable Diffusion server renders images only — video needs a cloud provider.',
+        assetUrl: undefined,
+        text: undefined
+      };
+    }
+    const cfg = getSdConfig();
+    const out = await sdTxt2Img({
+      prompt: r.prompt,
+      negativePrompt: r.negative,
+      width: r.width,
+      height: r.height,
+      steps: r.steps,
+      cfgScale: r.cfg,
+      seed: r.seed
+    });
+    const secs = (out.elapsedMs / 1000).toFixed(1);
+    return {
+      provider: 'sdlocal',
+      status: 'ready',
+      assetUrl: out.dataUrl,
+      text:
+        `Rendered on-device by Stable Diffusion at ${cfg.base} ` +
+        `(${out.width}x${out.height}, ${secs}s, ${out.transport} transport` +
+        `${out.seed != null ? `, seed ${out.seed}` : ''}).`
+    };
+  }
+}
+
 class Cloud {
   constructor(public readonly name: Exclude<ProviderName, 'local'>) {}
   available() {
@@ -747,6 +783,7 @@ class Cloud {
 export function providers() {
   return [
     new Local(),
+    new SdLocalProvider(),
     new Cloud('openrouter'),
     new Cloud('gemini'),
     new Cloud('custom'),
@@ -863,23 +900,22 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
     return { provider: 'gemini' as const, text: d.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? 'No response.' };
   }
 
-  if (preferred === 'hermes') {
-    // First-class provider: route straight to the Hermes adapter (the
-    // UI normally streams through chat.ts; this non-streaming branch is
-    // the safety net for direct callers).
-    if (!isHermesChatReady()) {
+  if (preferred === 'ollama') {
+    // Phone-local Ollama (OpenAI-compatible). The UI streams through
+    // chat.ts; this non-streaming branch serves direct callers.
+    if (!isOllamaChatReady()) {
       return {
-        provider: 'hermes' as const,
-        text: 'Hermes is not enabled or its endpoint is unset. Enable it in AI Settings (Settings → Nous Hermes) to chat locally.',
-        warning: 'Hermes disabled or no endpoint.'
+        provider: 'ollama' as const,
+        text: `Ollama is not enabled. Turn it on in ⚙ Settings → Ollama (On-Device) — the default server is ${getOllamaBase()} with model ${getOllamaModel()}.`,
+        warning: 'Ollama disabled or no base URL.'
       };
     }
     const system = messages.find(m => m.role === 'system')?.content ?? '';
     const body = messages.filter(m => m.role !== 'system');
-    const prompt = [...(system ? [{ role: 'system' as const, content: system + HERMES_CHAT_SYSTEM_TAIL }] : []), ...body];
-    const text = await hermesChatCompletion(prompt, { stream: false });
-    const { text: cleaned } = extractHermesSpecBlock(text);
-    return { provider: 'hermes' as const, text: cleaned };
+    const prompt = [...(system ? [{ role: 'system' as const, content: system + SPEC_SYSTEM_TAIL }] : []), ...body];
+    const text = await ollamaChatCompletion(prompt, { stream: false });
+    const { text: cleaned } = extractSpecBlock(text);
+    return { provider: 'ollama' as const, text: cleaned };
   }
 
   const key = getSavedApiKey('custom');

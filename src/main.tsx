@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import './renderer/ResultCanvasCompat';
 import { installRendererDiagnostics } from './renderer/RendererDiagnostics';
-import './hermesSettingsBoot';
 import './nativeAvatarBridge';
 import './styles-phone.css';
 import './styles-phone-final.css';

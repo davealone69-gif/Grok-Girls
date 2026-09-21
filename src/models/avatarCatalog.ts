@@ -136,6 +136,7 @@ const bodyOptions: CanonicalOption[] = [
   { value: 'Slim', rich: 'slim' },
   { value: 'Athletic', rich: 'athletic' },
   { value: 'Average', rich: 'petite' },
+  { value: 'Hourglass', rich: 'hourglass' },
   { value: 'Heavy', rich: 'curvy' },
   { value: 'Custom' } // keep current bodyType
 ];
@@ -273,7 +274,12 @@ function bodyToCanonical(rich: string | undefined): string {
   if (r === 'athletic') return 'Athletic';
   if (r === 'petite') return 'Average'; // rep of Average (was mis-mapped to Slim)
   if (r === 'curvy') return 'Heavy';
-  if (r === 'hourglass') return 'Average';
+  // 'hourglass' is its own canonical value. It used to collapse into
+  // 'Average', which silently rewrote the draft to 'petite' the moment the
+  // user tapped the chip the UI had already highlighted for them — and
+  // 'hourglass' is the default body of the shipped presets, so this hit the
+  // most common case. It also cost the renderer its shape cue.
+  if (r === 'hourglass') return 'Hourglass';
   return 'Average';
 }
 

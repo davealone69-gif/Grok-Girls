@@ -58,10 +58,14 @@ async () => {
   const avg = build({ ...base, body: 'Average' }, 7);
   const slim = build({ ...base, body: 'Slim' }, 7);
   const heavy = build({ ...base, body: 'Heavy' }, 7);
+  const athletic = build({ ...base, body: 'Athletic' }, 7);
+  const hourglass = build({ ...base, body: 'Hourglass' }, 7);
 
   return {
-    counts: [avg.meshes.length, slim.meshes.length, heavy.meshes.length],
-    avg: sig(avg), slim: sig(slim), heavy: sig(heavy)
+    counts: [avg.meshes.length, slim.meshes.length, heavy.meshes.length,
+             athletic.meshes.length, hourglass.meshes.length],
+    avg: sig(avg), slim: sig(slim), heavy: sig(heavy),
+    athletic: sig(athletic), hourglass: sig(hourglass)
   };
 }
 """
@@ -121,6 +125,8 @@ def run_checks() -> int:
     chk("scene module loads", True)
 
     avg, slim, heavy = out["avg"], out["slim"], out["heavy"]
+    athletic, hourglass = out["athletic"], out["hourglass"]
+
     chk("mesh count stable across body types",
         len(set(out["counts"])) == 1, out["counts"])
 
@@ -138,6 +144,19 @@ def run_checks() -> int:
         f"slim={widest(slim)} avg={widest(avg)}")
     chk("Heavy widens the body vs Average", widest(heavy) > widest(avg),
         f"heavy={widest(heavy)} avg={widest(avg)}")
+
+    # Every canonical body value must actually move the mesh. These two used
+    # to render byte-identical to Average: 'Hourglass' did not exist as a
+    # canonical value (it collapsed into Average, which also rewrote the
+    # draft's bodyType to 'petite'), and 'Athletic' had no bodyScale branch
+    # so it fell through to 1.0. 'hourglass' is the shipped-preset default.
+    chk("Hourglass differs from Average", widest(hourglass) != widest(avg),
+        f"hourglass={widest(hourglass)} avg={widest(avg)}")
+    chk("Athletic differs from Average", widest(athletic) != widest(avg),
+        f"athletic={widest(athletic)} avg={widest(avg)}")
+    chk("body radii ordered slim<athletic<avg<hourglass<heavy",
+        widest(slim) < widest(athletic) < widest(avg) < widest(hourglass) < widest(heavy),
+        f"{widest(slim)} {widest(athletic)} {widest(avg)} {widest(hourglass)} {widest(heavy)}")
 
     # the ~1.14 / 0.9 factors should show up proportionally
     ratio_h = widest(heavy) / widest(avg) if widest(avg) else 0

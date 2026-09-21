@@ -325,7 +325,10 @@ with sync_playwright() as p:
         pg.wait_for_timeout(200)
         panel_counts[cat_name] = pg.locator(".category-option").count()
     chk("avatar catalog: panel option counts match the master catalog",
-        panel_counts == {"Head": 4, "Hair": 6, "Body": 5, "Tattoos": 5,
+        # Body is 6: Slim / Athletic / Average / Hourglass / Heavy / Custom.
+        # 'Hourglass' was added deliberately — it is the shipped presets'
+        # default bodyType and previously had no canonical value of its own.
+        panel_counts == {"Head": 4, "Hair": 6, "Body": 6, "Tattoos": 5,
                          "Augmentations": 5, "Age": 3, "Eyes": 4, "Face": 4},
         str(panel_counts))
     pg.evaluate("() => { const bt = [...document.querySelectorAll('.category-btn')].find(x => x.textContent.trim() === 'Gender'); if (bt) bt.click(); }")

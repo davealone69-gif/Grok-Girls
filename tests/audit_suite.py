@@ -4,6 +4,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import socket
 from mocks.mock_big_a1111 import serve_forever as _serve_big_a1111
 
 results = []
@@ -23,10 +24,19 @@ def tap_adult(pg, phone):
     pg.wait_for_timeout(240)
 
 # The quota / IndexedDB checks below drive a real ~1.6 MB self-hosted
-# render against a mock A1111 on :7860. Start it here — previously the
-# suite assumed an externally-launched mock and those checks failed with
-# "Failed to fetch".
-_big_a1111 = _serve_big_a1111()
+# render against a mock A1111 on :7860. Start it here so the suite is
+# self-contained locally — previously it assumed an externally-launched
+# mock and those checks failed with "Failed to fetch".
+#
+# CI's workflow already starts the same mock before invoking the suite, so
+# bind only when :7860 is actually free. Claiming it unconditionally raised
+# "Address already in use" and crashed the whole suite on the runner.
+def _port_free(port, host="127.0.0.1"):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex((host, port)) != 0
+
+_big_a1111 = _serve_big_a1111() if _port_free(7860) else None
 
 with sync_playwright() as p:
     b = p.chromium.launch()

@@ -79,7 +79,7 @@ jobs:
 
       - uses: github/codeql-action/init@v3
         with:
-          languages: javascript-typescript,python,java-kotlin
+          languages: javascript-typescript,python
 
       # ---------------------------------------------------------------
       # Autobuild. The Gradle build runs HERE, under CodeQL's tracer, so

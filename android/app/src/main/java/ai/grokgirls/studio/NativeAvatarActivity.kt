@@ -8,6 +8,7 @@ import android.view.Window
 import android.view.WindowManager
 import com.aura.avatarstudio.renderer.GltfAvatarLoader
 import com.aura.avatarstudio.renderer.HdAvatarRenderer
+import com.aura.avatarstudio.renderer.ProceduralAvatarParts
 
 /** Fullscreen interactive native GLES3 HD avatar viewport. */
 class NativeAvatarActivity : Activity() {
@@ -36,6 +37,8 @@ class NativeAvatarActivity : Activity() {
 
         view.queueEvent {
             val loaded = GltfAvatarLoader(this@NativeAvatarActivity).loadFromAssets(asset)
+            // Apply selections before GPU upload so generated parts participate in framing and rendering.
+            ProceduralAvatarParts.apply(loaded, definition)
             renderer.setAvatar(loaded)
             applyDefinition(definition)
         }

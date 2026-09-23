@@ -44,6 +44,7 @@ export interface AvatarDefinition {
   tattoos: string;
   augmentations: string;
   outfit: string;
+  accessory?: string;
 }
 
 export const AVATAR_DEFINITION_FIELDS: CanonicalCategoryId[] = [
@@ -63,7 +64,8 @@ export const DEFAULT_AVATAR_DEFINITION: AvatarDefinition = {
   body: 'Average',
   tattoos: 'None',
   augmentations: 'None',
-  outfit: 'Casual'
+  outfit: 'Casual',
+  accessory: 'none'
 };
 
 export function defaultDefinitionValue(field: CanonicalCategoryId): string {
@@ -83,7 +85,8 @@ export function toAvatarDefinition(d: AvatarDraft): AvatarDefinition {
     body: canonicalValueOf('body', d),
     tattoos: canonicalValueOf('tattoos', d),
     augmentations: canonicalValueOf('augmentations', d),
-    outfit: canonicalValueOf('outfit', d)
+    outfit: canonicalValueOf('outfit', d),
+    accessory: d.adultSelections?.accessories || 'none'
   };
 }
 

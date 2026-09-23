@@ -14,8 +14,7 @@ data class NativeAvatarDefinition(
     val body: String = "Average",
     val tattoos: String = "None",
     val augmentations: String = "None",
-    val outfit: String = "Casual",
-    val accessory: String = "None"
+    val outfit: String = "Casual"
 ) {
     companion object {
         fun parse(json: String?): NativeAvatarDefinition {
@@ -32,8 +31,7 @@ data class NativeAvatarDefinition(
                 body = o.optString("body", "Average"),
                 tattoos = o.optString("tattoos", "None"),
                 augmentations = o.optString("augmentations", "None"),
-                outfit = o.optString("outfit", "Casual"),
-                accessory = o.optString("accessory", o.optString("accessories", "None"))
+                outfit = o.optString("outfit", "Casual")
             )
         }
     }

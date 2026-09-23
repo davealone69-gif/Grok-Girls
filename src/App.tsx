@@ -528,7 +528,7 @@ export default function App() {
   const avatarVm = avatarVmRef.current;
   const [avatarDef, setAvatarDef] = useState<AvatarDefinition>(() => avatarVm.get());
   const avatarPreviewRef = useRef<AvatarPreviewHandle>(null);
-  const [cubeMode, setCubeMode] = useState(false);
+  const [cubeMode, setCubeMode] = useState(true);
   const avatar3dRef = useRef<HdAvatarRenderer | null>(null);
   const avatarCanvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {

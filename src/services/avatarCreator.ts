@@ -1,7 +1,7 @@
 import { AdultSelections, buildAdultPrompt } from './adultOptions';
 import { GENDER_RICH, BODY_RICH, EYE_RICH, FACE_RICH, HAIR_RICH, SKIN_RICH } from '../models/avatarCatalog';
 
-export type AvatarFamily = 'female' | 'male' | 'cyborg';
+export type AvatarFamily = 'female' | 'male' | 'cyborg' | 'nonbinary' | 'android';
 
 /** Backward-compatible normalization for older saved drafts. */
 export function normalizeAvatarFamily(value: unknown): AvatarFamily {

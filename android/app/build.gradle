@@ -79,6 +79,9 @@ dependencies {
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    androidTestImplementation "androidx.test.uiautomator:uiautomator:$androidxUiAutomatorVersion"
+    androidTestImplementation "androidx.test:runner:$androidxTestRunnerVersion"
+    androidTestImplementation "androidx.test:rules:$androidxTestRulesVersion"
     implementation project(':capacitor-cordova-android-plugins')
 }
 

@@ -12,5 +12,11 @@ ext {
     junitVersion = '4.13.2'
     androidxJunitVersion = '1.2.1'
     androidxEspressoCoreVersion = '3.6.1'
+    // UI Automator drives the real installed APK at the system level. Espresso
+    // view matchers cannot see inside the Capacitor WebView, so the journey
+    // tests use UI Automator instead.
+    androidxUiAutomatorVersion = '2.3.0'
+    androidxTestRunnerVersion = '1.6.2'
+    androidxTestRulesVersion = '1.6.1'
     cordovaAndroidVersion = '10.1.1'
 }

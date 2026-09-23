@@ -167,7 +167,7 @@ export const adultOptions = {
     'glasses',
     'visor',
     'earrings',
-    'velvet choker,
+    'velvet choker',
     'collar and leash',
     'restraints / cuffs',
     'vibrator / toy visible',

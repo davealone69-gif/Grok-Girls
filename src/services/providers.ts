@@ -704,26 +704,17 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
 class Local {
   readonly name = 'local' as const;
   available() {
-    return true;
+    return false;
   }
-  async generate(r: GenerationRequest): Promise<GenerationResult> {
-    const assetUrl = createLocalPlaceholderSvg(r.prompt, r.mode, r.width ?? 768, r.height ?? 768, r.seed);
+  async generate(_r: GenerationRequest): Promise<GenerationResult> {
     return {
       provider: 'local',
-      status: 'ready',
-      assetUrl,
-      text: `Local procedural ${r.mode} rendered with the Noir engine. Connect OpenRouter, Gemini or a Custom endpoint in ⚙ Settings for cloud neural inference.`
+      status: 'error',
+      warning: 'Local procedural rendering is disabled as a generation provider. Connect Ollama for on-device text or Stable Diffusion/self-hosted for real image generation.'
     };
   }
 }
 
-/**
- * Phone-local Stable Diffusion (sd-server on 127.0.0.1:1234).
- *
- * This is the on-device image engine and the counterpart to Ollama's
- * on-device text engine. It produces REAL pixels from a real diffusion
- * model — unlike `Local`, which draws a procedural SVG placeholder.
- */
 class SdLocalProvider {
   readonly name = 'sdlocal' as const;
   available() {

@@ -170,8 +170,8 @@ export async function reply(
       applyAvatarLlmText(cleaned);
       return cleaned.replace(/<avatar_command>[\s\S]*?<\/avatar_command>/gi, '').trim();
     } catch (err) {
-      console.warn('Ollama chat failed, falling back to local companion dialogue', err);
-      return fallback(err instanceof Error ? err.message : 'Ollama unreachable');
+      console.warn('Ollama chat failed', err);
+      throw new Error(err instanceof Error ? err.message : 'Ollama unreachable');
     }
   }
 
@@ -189,7 +189,7 @@ export async function reply(
     applyAvatarLlmText(response.text);
     return response.text.replace(/<avatar_command>[\s\S]*?<\/avatar_command>/gi, '').trim();
   } catch (err) {
-    console.warn('Remote provider failed, falling back to local companion dialogue', err);
-    return fallback(err instanceof Error ? err.message : 'fallback');
+    console.warn('Remote provider failed', err);
+    throw new Error(err instanceof Error ? err.message : 'Provider unreachable');
   }
 }

@@ -3415,16 +3415,16 @@ export default function App() {
                       ♀
                     </button>
                     <button
-                      className={`gender-btn ${draft.gender === 'nonbinary' ? 'active' : ''}`}
-                      onClick={() => setDraft(d => ({ ...d, gender: 'nonbinary' }))}
-                      title="Non-Binary"
+                      className={`gender-btn ${draft.gender === 'male' ? 'active' : ''}`}
+                      onClick={() => setDraft(d => ({ ...d, gender: 'male' }))}
+                      title="Male"
                     >
-                      ⚧
+                      ♂
                     </button>
                     <button
-                      className={`gender-btn ${draft.gender === 'android' ? 'active' : ''}`}
-                      onClick={() => setDraft(d => ({ ...d, gender: 'android' }))}
-                      title="Android / Cyber"
+                      className={`gender-btn ${draft.gender === 'cyborg' ? 'active' : ''}`}
+                      onClick={() => setDraft(d => ({ ...d, gender: 'cyborg' }))}
+                      title="Cyborg"
                     >
                       🤖
                     </button>

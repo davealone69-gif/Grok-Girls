@@ -12,6 +12,7 @@ import android.os.Looper
 import android.util.Base64
 import com.aura.avatarstudio.renderer.GltfAvatarLoader
 import com.aura.avatarstudio.renderer.HdAvatarRenderer
+import com.aura.avatarstudio.renderer.ProceduralAvatarParts
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -111,7 +112,9 @@ class AvatarStudioPlugin : Plugin() {
                 // The callback's config is not consumed by the renderer, so pass null
                 // while EGL14 owns the actual android.opengl.EGLConfig.
                 renderer.onSurfaceCreated(null, null)
-                renderer.setAvatar(GltfAvatarLoader(context).loadFromAssets(asset))
+                val loaded = GltfAvatarLoader(context).loadFromAssets(asset)
+                ProceduralAvatarParts.apply(loaded, definition)
+                renderer.setAvatar(loaded)
                 applyDefinition(renderer, definition)
                 renderer.onSurfaceChanged(null, width, height)
                 renderer.onDrawFrame(null)

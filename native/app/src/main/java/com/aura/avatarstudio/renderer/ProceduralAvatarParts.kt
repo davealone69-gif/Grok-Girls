@@ -1,5 +1,7 @@
 package com.aura.avatarstudio.renderer
 
+import ai.grokgirls.studio.NativeAvatarDefinition
+
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin

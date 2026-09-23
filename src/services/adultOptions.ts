@@ -162,7 +162,12 @@ export const adultOptions = {
 
   accessories: [
     'none',
-    'velvet choker',
+    'crown',
+    'tiara',
+    'glasses',
+    'visor',
+    'earrings',
+    'velvet choker,
     'collar and leash',
     'restraints / cuffs',
     'vibrator / toy visible',

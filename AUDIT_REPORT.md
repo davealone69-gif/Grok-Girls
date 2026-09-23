@@ -270,3 +270,114 @@ browser against the production bundle.
 is present (`app/build.gradle` falls back to unsigned by design, and CI
 decodes the real keystore from the `RELEASE_KEYSTORE` secret). Signing was
 therefore not exercised here.
+
+---
+
+# ULTIMATE ZERO-TRUST FINISH AUDIT (session 2)
+
+Everything below was **executed**, not inspected. Chromium drove the real app;
+two real HTTP servers answered on the spec ports; the APKs analysed are the
+actual CI artifacts, downloaded and opened.
+
+## Result summary
+
+| | |
+|---|---|
+| Buttons traced UI → handler → service → side effect | **98 / 98 verified, 0 dead** |
+| Screens exercised | **21 / 21 render, 0 crashes** |
+| Automated suite rows | **249 / 249 pass** (was 247; +2 new regression rows) |
+| New defects found | **1** |
+| New defects fixed | **1** (`2dce042`) |
+| Page errors across all runs | **0** |
+| BLOCKED | **1** (on-device install — no RAM/KVM in sandbox) |
+
+## Defect found and FIXED this session
+
+**D1 — `sdTxt2Img` leaked raw JSON parser errors to the user.** `res.json()`
+was unguarded, so a truncated or non-JSON body from sd-server produced
+`Unexpected end of JSON input` / `Unterminated string in JSON at position 16`
+in the UI. Every other failure path in `sdLocal.ts` already yields an
+actionable message, and `ollama.ts` guards all three of its `json()` calls
+with `.catch(() => null)` — this was the one gap. Fixed by translating the
+parse failure into the file's standard wording. Regression cover added
+(`sd_suite` S33c/S33d + two mock modes), **proven to fail without the fix
+(57/59) and pass with it (59/59)**.
+
+## Phase 2 — button tracing method
+
+A naive single-pass sweep reported 48 "dead" buttons. That was a **harness
+artifact**: the DOM re-renders on click, so `nth(i)` drifts. Re-tested each
+button from a **fresh page load**, which cut it to 9, then classified each:
+
+- 5 were **correctly idempotent** (clicking the already-active Builder / Hair /
+  BUILDER / lighting / HAIR STYLE tab). Proven by leaving and returning — the
+  active class comes back.
+- 4 were **viewport actions whose effect is in CSS transform**, invisible to a
+  DOM-node signature. Proven real by perturbing first: `PAN` and `↺` reset
+  `scale(1.4) rotate(45deg)` → `scale(1) rotate(0deg)`; `FRONT` returns from
+  `rotate(180deg)`; `⎘ COPY` really writes `image/svg+xml` to the clipboard.
+
+**Zero dead buttons. Zero fake-success handlers.**
+
+## Phase 3 — real AI/server execution
+
+Real servers on the spec ports (not mocks inside the app):
+
+| Check | Result |
+|---|---|
+| `GET :11434/api/tags` | 2 models listed |
+| `POST :11434/v1/chat/completions` | real reply returned |
+| streaming | **8 tokens** accumulated via `onToken` |
+| `enhancePromptWithOllama` | real round-trip |
+| `GET :1234/` liveness | HTTP 200 |
+| `POST :1234/sdapi/v1/txt2img` | Base64 → **valid PNG** → data URL |
+
+Failure modes — **10 malformed/hostile responses**, all handled, no crash:
+garbage JSON, empty body, missing `images`, empty array, bad Base64, HTML 502,
+no-choices, empty choices, HTTP 500, server down. Every message is actionable.
+
+`startServer` is a genuine Termux `RUN_COMMAND` intent with real readiness
+polling; it resolves `started:false` with an honest reason when Termux is
+absent or refuses. Manifest declares both `com.termux.permission.RUN_COMMAND`
+and the `<queries>` entry required on API 30+.
+
+Chat fallback is **disclosed**, never silent: an unreachable Ollama yields
+`localReply(...) + "(Ollama is not running. Open Termux and run ...)"`.
+The 18+ pin to LOCAL is a deliberate policy with a visible toast.
+
+## Phase 5 — storage
+
+Persistence survives reload; **10 corruption shapes** (`{`, `null`, `[]`,
+`__proto__`, NUL bytes, deep nesting, …) applied to all 29 app keys each leave
+the app fully alive (396 nodes / 110 buttons); prototype pollution blocked;
+empty storage boots clean; `QuotaExceededError` tolerated.
+
+## Phase 6/7 — build, artifacts, signing
+
+CI run `35805910856` on `2dce042`. Artifacts downloaded and analysed locally:
+
+| Check | Debug | Release |
+|---|---|---|
+| Size | 4,765,934 B | 3,783,441 B |
+| `debuggable` | `true` | **absent** ✅ |
+| `allowBackup` | false | false |
+| Signer | `CN=Android Debug` | **`CN=Grok Girls, L=Perth, C=AU`** ✅ |
+
+The release is **not** debug-signed. Plugin classes `OllamaLocalPlugin`,
+`SdLocalPlugin`, `AvatarStudioPlugin`, `MainActivity`, `NativeAvatarActivity`
+all present in `classes.dex`. Shipped JS contains both loopback endpoints and
+the D1 fix. **0** sourcemaps, **0** secrets — the `sk-` / `AIza` / `192.168.`
+hits are UI *placeholder* strings in password fields. `tsc` clean, lint **0
+errors** / 14 warnings, 12/12 dependencies justified.
+
+## BLOCKED — with exact reason
+
+**B1 — Phase 8 on-device install and launch.** Cannot be done in this sandbox:
+
+- RAM **1,984 MB total, 0 swap, 2 CPUs**. Two local Gradle attempts (1024m and
+  700m heap) both died to `kswapd0` thrashing, taking the shell unresponsive.
+- `/dev/kvm` **absent**, CPU virtualisation flags **0** — no emulator.
+
+The APK is therefore verified by *static analysis of the real signed artifact*
+(above) rather than by launching it. Installing on hardware and running the
+critical journeys is the one item that needs a real device.

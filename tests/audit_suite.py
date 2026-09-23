@@ -107,7 +107,7 @@ with sync_playwright() as p:
     for _ in range(18):
         pg.wait_for_timeout(300)
         if pg.locator(".toast").count():
-            seen.append(pg.locator(".toast").inner_text())
+            seen.extend(pg.locator(".toast").all_inner_texts())
     toast = " | ".join(seen)
     gal = pg.evaluate("JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]')")
     render_ok = any("complete" in t.lower() for t in seen)
@@ -207,7 +207,7 @@ with sync_playwright() as p:
     for _ in range(6):
         pg.wait_for_timeout(300)
         if pg.locator(".toast").count():
-            seen.append(pg.locator(".toast").inner_text())
+            seen.extend(pg.locator(".toast").all_inner_texts())
     toasts = " | ".join(seen)
     chk("M5 adult chat pinned to LOCAL", "pinned to LOCAL" in toasts or "cloud chat" in toasts, toasts[:100])
     chk("M5 pinned chat still replies", pg.locator(".chat-bubble.assistant").count() >= 2)

@@ -552,7 +552,19 @@ export async function sdTxt2Img(
     throw new Error(sdErrorMessage(res.status, base, snippet));
   }
 
-  const json = (await res.json()) as { images?: unknown; info?: unknown; detail?: unknown };
+  // A1111 normally answers JSON, but a half-written proxy response or a
+  // non-JSON body would otherwise surface the raw parser error
+  // ("Unexpected end of JSON input") straight to the user. Translate it
+  // into the same actionable wording as every other failure here.
+  let json: { images?: unknown; info?: unknown; detail?: unknown };
+  try {
+    json = (await res.json()) as { images?: unknown; info?: unknown; detail?: unknown };
+  } catch {
+    throw new Error(
+      `The image server at ${base} returned a malformed (non-JSON) response. ` +
+        'Check that sd-server is running on port 1234 and not behind a proxy, then press RETRY.'
+    );
+  }
   const images = json.images;
   if (!Array.isArray(images) || typeof images[0] !== 'string' || !images[0]) {
     const detail = typeof json.detail === 'string' ? ` — ${json.detail.slice(0, 160)}` : '';

@@ -249,6 +249,10 @@ def run_checks(pg):
         ("empty", "S32 an empty images array is reported honestly", ["no image"]),
         ("badb64", "S33 invalid Base64 is caught, not rendered", ["base64", "no image", "decode"]),
         ("notanimage", "S33b base64-clean non-image bytes are caught", ["not a png", "not valid", "no image"]),
+        # Regression: a truncated/non-JSON body must NOT leak the raw
+        # JSON.parse error ("Unexpected end of JSON input") to the user.
+        ("malformedjson", "S33c a truncated JSON body yields an actionable message", ["malformed"]),
+        ("emptybody", "S33d an empty body yields an actionable message", ["malformed"]),
     ]
     for mode, label, needles in cases:
         MODE["value"] = mode

@@ -113,6 +113,14 @@ class Handler(BaseHTTPRequestHandler):
         if mode == "notanimage":
             self._send(200, json.dumps({"images": [b64encode(b"plain text").decode()]}).encode())
             return
+        # A truncated / non-JSON body. Before the fix this surfaced the raw
+        # parser error ("Unexpected end of JSON input") straight to the user.
+        if mode == "malformedjson":
+            self._send(200, b'{"images": ["abc')
+            return
+        if mode == "emptybody":
+            self._send(200, b"")
+            return
 
         width = int(body.get("width") or 512)
         height = int(body.get("height") or 512)

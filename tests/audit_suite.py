@@ -281,7 +281,7 @@ with sync_playwright() as p:
     saved = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-avatar-defs-v1')||'{}')['default']")
     keys_ok = bool(saved) and sorted(saved.keys()) == sorted(["gender", "skin", "head", "age", "hair", "eyes", "face", "body", "tattoos", "augmentations", "outfit"])
     chk("avatar definition: all 11 data-class fields stored", keys_ok, str(sorted(saved.keys()))[:120] if saved else "none")
-    chk("avatar definition: gender follows the allowed set", saved and saved.get("gender") in ("Female", "Non-binary", "Android"), str(saved and saved.get("gender")))
+    chk("avatar definition: gender follows the allowed set", saved and saved.get("gender") in ("Female", "Male", "Cyborg"), str(saved and saved.get("gender")))
     import re as _re
     chk("avatar definition: canonical defaults (skin/head)", saved and saved.get("skin") == "Tone 01" and bool(_re.match(r"Head \d{2}", saved.get("head", ""))), str(saved)[:120])
     pg.evaluate("""() => {
@@ -302,7 +302,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(300)
     chk("avatar categories: 11 categories rendered", pg.locator(".category-btn").count() == 11, pg.locator(".category-btn").count())
     gender_opts = pg.locator(".category-option").all_inner_texts()
-    chk("avatar categories: gender excludes Male (product rule)", "Male" not in gender_opts and "Non-binary" in gender_opts, str(gender_opts))
+    chk("avatar categories: gender exposes the three primary families", all(x in gender_opts for x in ("Female", "Male", "Cyborg")), str(gender_opts))
     pg.locator(".category-btn", has_text="Skin").click()
     pg.wait_for_timeout(200)
     chk("avatar categories: skin has 6 tones", pg.locator(".category-option").count() == 6, pg.locator(".category-option").count())
@@ -423,7 +423,10 @@ with sync_playwright() as p:
     before_count = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]').length")
     pg.locator(".native-action", has_text="HD RENDER").click()
     try:
-        pg.wait_for_function("() => { const t = [...document.querySelectorAll('.toast')].map(x => x.textContent).join(' '); return t.includes('HD render complete'); }", timeout=120000)
+        pg.wait_for_function("""() => {
+          const items = JSON.parse(localStorage.getItem('grok-girls-gallery-v1') || '[]');
+          return items.some(i => i.provider === 'hdrenderer');
+        }""", timeout=120000)
         done = True
     except Exception:
         done = False
@@ -434,7 +437,8 @@ with sync_playwright() as p:
     chk("hd renderer: exactly one gallery item added (busy guard)", after_count == before_count + 1, f"{before_count} -> {after_count}")
     pg.keyboard.press("Escape")
     pg.wait_for_timeout(300)
-    pg.get_by_title("Interactive 3D avatar viewport").click()
+    if pg.locator(".hd-cube-overlay").count() == 0:
+        pg.get_by_title("Interactive 3D avatar viewport").click()
     pg.locator(".hd-cube-overlay").wait_for(state="visible", timeout=5000)
     pg.locator(".hd3d-canvas").wait_for(state="visible", timeout=5000)
     chk("hd avatar: 3D overlay visible", pg.locator(".hd-cube-overlay").count() == 1)

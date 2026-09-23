@@ -381,3 +381,60 @@ errors** / 14 warnings, 12/12 dependencies justified.
 The APK is therefore verified by *static analysis of the real signed artifact*
 (above) rather than by launching it. Installing on hardware and running the
 critical journeys is the one item that needs a real device.
+
+---
+
+## Session 3 — gaps closed
+
+I reported "complete" while four things were still open. Closing them:
+
+### G1 — three test files had NEVER been executed
+`tests/smoke_textures.py`, `tests/glb_renderer_gate.py`, `tests/stress_suite.py`
+sat in the repo unrun. A test that has never run is indistinguishable from a
+broken one. All three were executed: **all pass (exit 0)** — they needed the
+playwright headless-shell binary and a server on :8080, not code changes.
+
+`stress_suite` earns its keep — it covers ground the other seven suites do not:
+30 renders with **0.0 MB heap growth**, 100 chat round-trips in 62.65 s, a
+200-item gallery grid in 0.48 s, max rAF gap 17 ms during drag, mid-flight
+engine switch without crash, IndexedDB migration (6 image records, **no data
+URLs and no prompt text left in localStorage**), and axe-core accessibility.
+
+### G2 — FIXED: two real WCAG AA contrast failures
+Surfaced by `stress_suite`'s axe-core pass; no other suite checked contrast.
+
+| Element | Before | After |
+|---|---|---|
+| `.rail-build-label` | `#6a7080` on `#171a21` = **3.51:1** | `#8a90a0` = **5.45:1** |
+| `.identity-strip-title` | `#6a7080` on `#141820` = **3.59:1** | `#8a90a0` = **5.57:1** |
+
+AA requires 4.5:1 at this text size. Verified **0 violations** at 1280x900 and
+390x844. `#8a90a0` was chosen as the closest tone to the original that clears
+the threshold against both backgrounds.
+
+### G3 — FIXED: Capacitor scaffold tests removed
+`ExampleUnitTest` asserted `2 + 2 == 4`. `ExampleInstrumentedTest` asserted the
+package is `com.getcapacitor.app` — **wrong**, ours is `ai.grokgirls.studio`,
+so it would have **failed** if ever run. Both deleted.
+
+### G4 — VERIFIED: hostile input sweep
+Never done before. **41 inputs x 10 payloads = 410 injections** (overflow,
+`1e400`, `NaN`, traversal, NUL, 5000-char strings, SQL, `<script>`,
+`onerror=`, `javascript:`). Zero crashes, zero page errors, and XSS **never
+rendered as live markup** (`rawScript: 0, onerror: 0`).
+
+### Also fixed
+`smoke_textures.py` wrote its screenshot to the hardcoded absolute path
+`/home/user/web_avatar_textured.png`, littering the repo root on every run.
+Now writes to `artifacts/` (gitignored) via a path derived from `__file__`.
+
+### Process note
+The first attempt at the a11y commit **silently staged only the deletions** —
+a stale `git add` pathspec meant the CSS fix never landed, even though the
+push reported success. Caught by diffing the working tree against the file as
+served by GitHub. Re-committed as `752da82` and verified through the API
+(uncached): `#8a90a0` present at L123 and L236.
+
+### Still BLOCKED (unchanged)
+On-device install/launch. 1,984 MB RAM, 0 swap, no `/dev/kvm`. Not a code
+problem — it needs real hardware or a bigger runner.

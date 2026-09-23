@@ -1,11 +1,22 @@
 import { AdultSelections, buildAdultPrompt } from './adultOptions';
 import { GENDER_RICH, BODY_RICH, EYE_RICH, FACE_RICH, HAIR_RICH, SKIN_RICH } from '../models/avatarCatalog';
 
+export type AvatarFamily = 'female' | 'male' | 'cyborg';
+
+/** Backward-compatible normalization for older saved drafts. */
+export function normalizeAvatarFamily(value: unknown): AvatarFamily {
+  if (value === 'male' || value === 'cyborg' || value === 'female') return value;
+  if (value === 'android') return 'cyborg';
+  if (value === 'nonbinary') return 'female';
+  return 'female';
+}
+
 export interface AvatarDraft {
   id: string;
   name: string;
   age: number;
-  gender?: 'female' | 'nonbinary' | 'android';
+  /** Primary avatar family. Legacy values are accepted on import and normalized by normalizeAvatarFamily. */
+  gender?: AvatarFamily;
   ethnicity: string;
   bodyType: string;
   eyeColor: string;
@@ -160,7 +171,8 @@ export function loadDraft(id: string, fallback: AvatarDraft): AvatarDraft {
   try {
     const raw = localStorage.getItem(`${DRAFT_KEY}:${id}`);
     if (!raw) return fallback;
-    return { ...fallback, ...(JSON.parse(raw) as Partial<AvatarDraft>) };
+    const loaded = JSON.parse(raw) as Partial<AvatarDraft>;
+    return { ...fallback, ...loaded, gender: normalizeAvatarFamily(loaded.gender ?? fallback.gender) };
   } catch {
     return fallback;
   }

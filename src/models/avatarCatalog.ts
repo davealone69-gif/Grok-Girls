@@ -21,7 +21,7 @@ import type { AvatarDraft } from '../services/avatarCreator';
  * The rich (AI-prompt) vocabularies for the canonical-tied categories.
  * avatarOptions.* in avatarCreator re-exports these — one home. */
 
-export const GENDER_RICH = ['female', 'nonbinary', 'android'] as const;
+export const GENDER_RICH = ['female', 'male', 'cyborg'] as const;
 
 export const BODY_RICH = [
   'hourglass', 'curvy', 'petite', 'slim', 'athletic'
@@ -89,7 +89,7 @@ export interface CategorySpec {
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
 const genderOptions: CanonicalOption[] = GENDER_RICH.map(g => ({
-  value: g === 'female' ? 'Female' : g === 'nonbinary' ? 'Non-binary' : 'Android',
+  value: g === 'female' ? 'Female' : g === 'male' ? 'Male' : 'Cyborg',
   rich: g
 }));
 
@@ -333,7 +333,7 @@ const ageToCanonical = (age: number | undefined): string => {
 };
 
 const genderToCanonical = (g: AvatarDraft['gender'] | undefined): string =>
-  g === 'nonbinary' ? 'Non-binary' : g === 'android' ? 'Android' : 'Female';
+  g === 'male' ? 'Male' : g === 'cyborg' ? 'Cyborg' : 'Female';
 
 const tattoosToCanonical = (style: string | undefined): string => {
   const t = normaliseToken(style);

@@ -39,3 +39,5 @@ artifacts/
 .java/
 .kotlin/
 .vite/
+
+artifacts/

@@ -144,7 +144,7 @@ export async function reply(
     `${localReply(girl, room, message, adult)}${note ? ` (${note})` : ''}`;
 
   if (provider === 'local') {
-    return localReply(girl, room, message, adult);
+    throw new Error('Local scripted replies are disabled as an AI provider. Enable Ollama or configure another real chat engine.');
   }
 
   if (provider === 'ollama') {

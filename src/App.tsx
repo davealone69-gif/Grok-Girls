@@ -2538,6 +2538,7 @@ export default function App() {
               <button className="render-action" onClick={() => void handleHdRender()} disabled={busy || hdRendering}>HD</button>
               <button className="render-action" onClick={handleRandomize} disabled={busy}>RANDOM</button>
               <button className="render-action" onClick={() => setCubeMode(v => !v)}>{cubeMode ? '2D' : '3D'}</button>
+              <button className="render-action" onClick={handleSaveAvatar}>SAVE</button>
             </div>
             <div className="phone-camera-actions" aria-label="Camera controls">
               <button onClick={() => setRotationAngle(r => (r + 45) % 360)} title="Rotate view">↻ Rotate</button>

@@ -24,7 +24,19 @@ import type { AvatarDraft } from '../services/avatarCreator';
 export const GENDER_RICH = ['female', 'male', 'cyborg'] as const;
 
 export const BODY_RICH = [
-  'hourglass', 'curvy', 'petite', 'slim', 'athletic'
+  'hourglass',
+  'curvy',
+  'petite',
+  'slim',
+  'athletic',
+  // more detailed body / breast emphasis (prompt-facing)
+  'hourglass with full heavy breasts',
+  'curvy with large soft breasts',
+  'slim with perky high breasts',
+  'athletic with firm round breasts',
+  'petite with small delicate breasts',
+  'voluptuous with wide hips and full bust',
+  'lean with subtle curves'
 ];
 
 export const EYE_RICH = [
@@ -42,9 +54,6 @@ export const HAIR_RICH = [
   'messy bun with wisps',
   'asymmetric pixie crop',
   'wet-look waves',
-  // Remaining styles the canonical Hair category can apply (Braids / Mohawk /
-  // Bald): they must be selectable from the same rich list, so the accordion
-  // select and randomizer can always display a category-applied hair style.
   'twin braids with ribbon ties',
   'shaved sides with mohawk crest',
   'bald, shaved head'
@@ -162,7 +171,9 @@ const outfitOptions: CanonicalOption[] = [
   { value: 'Street', rich: 'leather crop biker jacket with lace bralette and high-waist leather pants' },
   { value: 'Tech', rich: 'cyberpunk high-collar leather jacket with neon purple piping over techwear top' },
   { value: 'Formal', rich: 'plunging crimson velvet evening gown' },
-  { value: 'Armoured', rich: 'black tactical armoured bodysuit with carbon fibre plating' }
+  { value: 'Armoured', rich: 'black tactical armoured bodysuit with carbon fibre plating' },
+  { value: 'Lingerie', rich: 'red and black lace corset lingerie with matching satin panties, sheer fishnet stockings, and ruby velvet choker' },
+  { value: 'Nude', rich: 'fully nude, detailed adult anatomy' }
 ];
 
 export const AVATAR_CATEGORY_SPECS: CategorySpec[] = [
@@ -256,7 +267,6 @@ function normaliseToken(value: unknown): string {
 function hairToCanonical(rich: string | undefined): string {
   const r = normaliseToken(rich);
   if (!r) return 'Short';
-  // exact rich vocabulary + canonical representatives
   const exact: Record<string, string> = {
     'layered waves bob': 'Short',
     'cyber undercut with side sweep': 'Mohawk',
@@ -282,17 +292,11 @@ function hairToCanonical(rich: string | undefined): string {
 
 function bodyToCanonical(rich: string | undefined): string {
   const r = normaliseToken(rich);
-  // representative-first so canonical reps round-trip
-  if (r === 'slim') return 'Slim';
-  if (r === 'athletic') return 'Athletic';
-  if (r === 'petite') return 'Average'; // rep of Average (was mis-mapped to Slim)
-  if (r === 'curvy') return 'Heavy';
-  // 'hourglass' is its own canonical value. It used to collapse into
-  // 'Average', which silently rewrote the draft to 'petite' the moment the
-  // user tapped the chip the UI had already highlighted for them — and
-  // 'hourglass' is the default body of the shipped presets, so this hit the
-  // most common case. It also cost the renderer its shape cue.
-  if (r === 'hourglass') return 'Hourglass';
+  if (r === 'slim' || r.includes('slim')) return 'Slim';
+  if (r === 'athletic' || r.includes('athletic') || r.includes('lean')) return 'Athletic';
+  if (r === 'petite') return 'Average';
+  if (r === 'curvy' || r.includes('curvy') || r.includes('voluptuous') || r.includes('heavy')) return 'Heavy';
+  if (r === 'hourglass' || r.includes('hourglass')) return 'Hourglass';
   return 'Average';
 }
 
@@ -306,7 +310,6 @@ function faceToCanonical(rich: string | undefined): string {
 
 function eyesToCanonical(rich: string | undefined): string {
   const r = normaliseToken(rich);
-  // representative-first
   if (r === 'hazel') return 'Natural';
   if (r === 'violet neon' || r === 'cybernetic pale') return 'Cyber';
   if (r === 'ice blue') return 'Glowing';
@@ -317,8 +320,8 @@ function eyesToCanonical(rich: string | undefined): string {
 }
 
 const skinToCanonical = (rich: string | undefined): string => {
-  const idx = SKIN_RICH.indexOf(normaliseToken(rich));
-  return `Tone ${pad2(Math.max(0, idx) + 1)}`; // unknown -> Tone 01
+  const idx = SKIN_RICH.indexOf(normaliseToken(rich) as typeof SKIN_RICH[number]);
+  return `Tone ${pad2(Math.max(0, idx) + 1)}`;
 };
 
 const headToCanonical = (idx: number | undefined): string => {
@@ -338,8 +341,6 @@ const genderToCanonical = (g: AvatarDraft['gender'] | undefined): string =>
 const tattoosToCanonical = (style: string | undefined): string => {
   const t = normaliseToken(style);
   if (!t || t === 'none') return 'None';
-  // representative-first so canonical applies round-trip (Full's rep string
-  // contains "torso" and must not be re-read as Torso)
   const reps: Record<string, string> = {
     'delicate face tattoo, fine line art': 'Face',
     'cyber-line geometric arm tattoo': 'Arms',
@@ -378,10 +379,14 @@ const outfitToCanonical = (outfit: string | undefined): string => {
     'leather crop biker jacket with lace bralette and high-waist leather pants': 'Street',
     'cyberpunk high-collar leather jacket with neon purple piping over techwear top': 'Tech',
     'plunging crimson velvet evening gown': 'Formal',
-    'black tactical armoured bodysuit with carbon fibre plating': 'Armoured'
+    'black tactical armoured bodysuit with carbon fibre plating': 'Armoured',
+    'red and black lace corset lingerie with matching satin panties, sheer fishnet stockings, and ruby velvet choker': 'Lingerie',
+    'fully nude, detailed adult anatomy': 'Nude'
   };
   const hit = reps[o];
   if (hit) return hit;
+  if (o.includes('nude') || o.includes('naked')) return 'Nude';
+  if (o.includes('lingerie') || o.includes('corset') || o.includes('lace')) return 'Lingerie';
   if (o.includes('armoured') || o.includes('armored')) return 'Armoured';
   if (o.includes('gown') || o.includes('dress')) return 'Formal';
   if (o.includes('cyberpunk') || o.includes('techwear')) return 'Tech';

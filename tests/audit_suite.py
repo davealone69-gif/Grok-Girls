@@ -224,7 +224,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(1200)
     status = pg.locator(".status-line").inner_text().lower() if pg.locator(".status-line").count() else ""
     chk("M6 unavailable Ollama chat is rejected honestly",
-        pg.locator(".chat-bubble.assistant").count() == 0 and "scripted replies are disabled" in status,
+        pg.locator(".chat-bubble.assistant").count() == 0 and "Ollama is not ready" in status,
         status[:120])
 
     pg.close()

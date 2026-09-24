@@ -3747,3 +3747,5 @@ a.btn-generate-media:hover {
   .toast{bottom:70px}
   .inspector-panel{bottom:58px;width:min(92vw,400px)}
 }
+
+@media (max-width:900px){.phone-camera-actions{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none}.phone-camera-actions::-webkit-scrollbar{display:none}.phone-camera-actions button{flex:1 0 auto;min-height:34px;padding:0 10px;border-radius:9px;border:1px solid #292d39;background:#11141d;color:#aeb4c2;font-size:9px;font-weight:800;white-space:nowrap}}

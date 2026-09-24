@@ -1,6 +1,6 @@
 import { Girl, Room, ADULT_OVERLAY, SAFE_OVERLAY } from '../models/studio';
 import { chatWithProvider, ProviderName } from './providers';
-import { matchAct, randomActReply, ADULT_ACTS, QUICK_ACT_CHIPS } from './adultActs';
+import { ADULT_ACTS, QUICK_ACT_CHIPS } from './adultActs';
 import { applyAvatarLlmText, AVATAR_LLM_INSTRUCTIONS } from './llmAvatarBridge';
 import { extractSpecBlock, SPEC_MARKER, SPEC_SYSTEM_TAIL } from './specProtocol';
 import { normalizeAvatarSpec, parseAvatarSpecJson } from './avatarSpec';

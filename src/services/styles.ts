@@ -133,6 +133,84 @@ export const stylePresets: StylePreset[] = [
     prompt: 'bondage restraints, collar, explicit adult power exchange, detailed, 18+',
     filter: 'contrast(1.2) brightness(0.95) drop-shadow(0 0 35px rgba(155, 89, 182, 0.4))',
     description: 'Restrained explicit power-play scene.'
+  },
+  // New — derived from Drive room concepts (no image copies)
+  {
+    id: 'neongarage',
+    name: 'Neon Garage',
+    icon: '🔧',
+    accent: '#FF6A00',
+    lighting: 'studio',
+    chair: 'neon-lit garage workshop, orange sodium lights, chrome tools, wet concrete floor',
+    prompt: 'neon garage, sodium orange and cyan rim light, chrome reflections, industrial grit, wet floor shine',
+    filter: 'contrast(1.2) saturate(1.3) brightness(1.0) drop-shadow(0 0 30px rgba(255, 106, 0, 0.4))',
+    description: 'Industrial neon workshop with orange sodium glow.'
+  },
+  {
+    id: 'hauntedgothic',
+    name: 'Haunted Gothic',
+    icon: '👻',
+    accent: '#8B5CF6',
+    lighting: 'noir',
+    chair: 'haunted gothic bedroom, torn velvet drapes, dusty chandelier, moonlight through broken window',
+    prompt: 'haunted gothic interior, moonlight, torn velvet, dust motes, cold blue and purple shadows',
+    filter: 'contrast(1.15) brightness(0.92) hue-rotate(10deg) drop-shadow(0 0 40px rgba(139, 92, 246, 0.35))',
+    description: 'Cold haunted gothic bedroom atmosphere.'
+  },
+  {
+    id: 'silkshadows',
+    name: 'Silk & Shadows',
+    icon: '🖤',
+    accent: '#C0C0C0',
+    lighting: 'noir',
+    chair: 'silk and shadow boudoir, cascading black silk sheets, single warm spotlight',
+    prompt: 'cascading black silk, single warm spotlight, deep soft shadows, intimate fabric texture',
+    filter: 'contrast(1.18) brightness(0.98) drop-shadow(0 20px 40px rgba(0, 0, 0, 0.7))',
+    description: 'Intimate silk sheets under a single warm light.'
+  },
+  {
+    id: 'dockstation',
+    name: 'Docking Bay',
+    icon: '🔌',
+    accent: '#00D4FF',
+    lighting: 'studio',
+    chair: 'cyber docking station bay, metal bench, glowing interface panels, blue status lights',
+    prompt: 'cyber docking bay, blue status lights, metal surfaces, interface glow, clinical sci-fi',
+    filter: 'contrast(1.15) saturate(1.2) drop-shadow(0 0 28px rgba(0, 212, 255, 0.4))',
+    description: 'Clinical cyber docking station with blue interfaces.'
+  },
+  {
+    id: 'sexspa',
+    name: 'Sex Spa',
+    icon: '🛁',
+    accent: '#E8D5B7',
+    lighting: 'studio',
+    chair: 'luxury sex spa suite, steam, white marble, soft ambient lighting',
+    prompt: 'steam-filled spa suite, white marble, soft ambient light, water droplets, intimate luxury',
+    filter: 'brightness(1.08) saturate(0.95) drop-shadow(0 15px 35px rgba(232, 213, 183, 0.3))',
+    description: 'Steamy marble spa suite atmosphere.'
+  },
+  {
+    id: 'neonstair',
+    name: 'Neon Stairwell',
+    icon: '🪜',
+    accent: '#FF00AA',
+    lighting: 'noir',
+    chair: 'neon stairwell, fluorescent flicker, concrete walls, urban night',
+    prompt: 'urban neon stairwell, fluorescent flicker, concrete, magenta and cyan spill, gritty',
+    filter: 'contrast(1.25) saturate(1.3) brightness(0.95) drop-shadow(0 0 30px rgba(255, 0, 170, 0.4))',
+    description: 'Gritty urban neon stairwell.'
+  },
+  {
+    id: 'moonbalcony',
+    name: 'Moonlit Balcony',
+    icon: '🌕',
+    accent: '#A5B4FC',
+    lighting: 'studio',
+    chair: 'moonlit gothic balcony, stone rail, fog, distant cathedral silhouette',
+    prompt: 'moonlit gothic balcony, fog, stone architecture, cool silver light, distant spires',
+    filter: 'contrast(1.1) brightness(1.0) hue-rotate(-5deg) drop-shadow(0 18px 36px rgba(165, 180, 252, 0.3))',
+    description: 'Foggy moonlit gothic balcony.'
   }
 ];
 

@@ -592,6 +592,7 @@ export default function App() {
     return avatarVm.subscribe((def, change) => {
       setAvatarDef(def);
       if (change) {
+        if (!adult && change.category === 'outfit' && change.value === 'Nude') return;
         // VM-initiated edit -> apply exactly that category onto the draft
         setDraft(d => applyCategoryOption(d, change.category, change.value));
       }

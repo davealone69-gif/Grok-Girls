@@ -154,7 +154,7 @@ with sync_playwright() as p:
         pg = b.new_page(viewport={"width": vp[0], "height": vp[1]})
         pg.goto("http://localhost:8080/", wait_until="networkidle")
         pg.wait_for_timeout(500)
-        cb = pg.locator(".btn-cancel").first
+        cb = pg.locator(".btn-cancel:visible").first
         bb = cb.bounding_box()
         chk(f"H4 cancel visible ({label})", bool(bb) and bb["width"] > 20 and bb["height"] > 10, str(bb)[:60])
         cb.click(timeout=5000)
@@ -172,9 +172,9 @@ with sync_playwright() as p:
     seedin.fill("777")
     pg.keyboard.press("Escape")
     pg.wait_for_timeout(300)
-    pg.locator(".btn-cancel").first.click()
+    pg.locator(".btn-cancel:visible").first.click()
     pg.wait_for_timeout(400)
-    pg.locator(".btn-cancel").first.evaluate("el => el.blur()")
+    pg.locator(".btn-cancel:visible").first.evaluate("el => el.blur()")
     pg.keyboard.press("p")
     pg.wait_for_timeout(400)
     neg_after = pg.locator("label", has_text="NEGATIVE PROMPT").locator("input").first.input_value()

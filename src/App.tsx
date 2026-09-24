@@ -1283,24 +1283,14 @@ export default function App() {
     setResult('Synthesizing high-detail avatar render…');
     try {
       const r = await generateWithFallback(genRequest(compiledPrompt), provider);
-      const isRealRenderer = r.provider !== 'local';
       if (r.assetUrl) {
-        if (isRealRenderer) {
-          // Real AI render (cloud / self-hosted) -> show it in the viewport
-          setLivePreview(false);
-          setViewportOverride(null);
-          await applyPreviewPatch({ previewUrl: r.assetUrl });
-          showToast(`Render complete · ${r.provider.toUpperCase()} engine · ${renderSize}px`);
-          if (storageWarnRef.current) {
-            showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
-          }
-        } else {
-          // Local procedural preview -> gallery only, keep the HD photo in the viewport
-          showToast(
-            provider !== 'local'
-              ? `LOCAL engine used (${provider.toUpperCase()} is not configured) — render saved to gallery`
-              : 'Local preview render added to gallery — tap 🖥 on a gallery card to set it as the viewport image'
-          );
+        // Every generation result reaching this handler is from a real configured provider.
+        setLivePreview(false);
+        setViewportOverride(null);
+        await applyPreviewPatch({ previewUrl: r.assetUrl });
+        showToast(`Render complete · ${r.provider.toUpperCase()} engine · ${renderSize}px`);
+        if (storageWarnRef.current) {
+          showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
         }
         const added = await addGalleryItem({
           avatarId: girl.id,
@@ -1363,11 +1353,7 @@ export default function App() {
       setVariations(results);
       bumpAndCelebrate('generations', results.filter(r => r.url).length);
       setResult('');
-      showToast(
-        results.some(r => r.url && r.provider !== 'local')
-          ? '4 variations rendered — pick your favorite'
-          : '4 local preview variations ready — USE THIS to apply one'
-      );
+      showToast('4 real-provider variations rendered — pick your favorite');
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Batch failed');
     } finally {

@@ -550,8 +550,10 @@ export default function App() {
       // canonical lanes travel through __grokGirlsVm.setOption instead.
       let count = 0;
       if (patch.draft && Object.keys(patch.draft).length) {
-        setDraft(d => ({ ...d, ...patch.draft }));
-        count += Object.keys(patch.draft).length;
+        const safeDraft = { ...patch.draft };
+        if (!adult && safeDraft.outfit === 'Nude') delete safeDraft.outfit;
+        setDraft(d => ({ ...d, ...safeDraft }));
+        count += Object.keys(safeDraft).length;
       }
       if (patch.lighting) {
         setLightingMode(patch.lighting as Parameters<typeof setLightingMode>[0]);
@@ -594,7 +596,7 @@ export default function App() {
         setDraft(d => applyCategoryOption(d, change.category, change.value));
       }
     });
-  }, [avatarVm]);
+  }, [avatarVm, adult]);
   useEffect(() => {
     // rich-UI edits flow one-way into the VM (no emission back)
     avatarVm.syncFromDraft(draft);
@@ -1263,10 +1265,6 @@ export default function App() {
   const handleGenerate = async () => {
     if (busyRef.current) return;
     if (!generationAllowed()) return;
-    if (!adult && ['Nude'].includes(toAvatarDefinition(draft).outfit)) {
-      showToast('18+ mode is required for the Nude outfit.');
-      return;
-    }
     if (provider === 'selfhosted' && !getServerBase()) {
       showToast('Configure your self-hosted server in ⚙ Settings → Self-Hosted first');
       setResult(

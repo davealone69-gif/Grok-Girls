@@ -829,30 +829,7 @@ export async function generateWithFallback(
 export async function chatWithProvider(messages: ChatMessage[], preferred: ProviderName = 'openrouter') {
   const e = env();
   if (preferred === 'selfhosted') {
-    const chatEndpoint = getSavedEndpoint('custom', 'chat') || e.VITE_CUSTOM_CHAT_ENDPOINT || '';
-    if (!chatEndpoint) {
-      return {
-        provider: 'selfhosted' as const,
-        text: 'The self-hosted server is for image generation only. Switch the chat engine to Local, OpenRouter, Gemini or Custom to talk.',
-        warning: 'No chat endpoint configured for self-hosted mode.'
-      };
-    }
-    // Route self-hosted chat through an OpenAI-compatible endpoint if one is configured.
-    const key = getSavedApiKey('custom');
-    const r = await fetchWithTimeout(chatEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },
-      body: JSON.stringify({
-        model: e.VITE_CUSTOM_CHAT_MODEL ?? getSavedModel('custom', 'chat') ?? getSavedModel('custom'),
-        messages
-      })
-    }, 45000);
-    if (!r.ok) throw new Error(`Self-hosted chat HTTP ${r.status}`);
-    const d = await r.json();
-    return {
-      provider: 'selfhosted' as const,
-      text: d.choices?.[0]?.message?.content ?? d.text ?? 'No response.'
-    };
+    throw new Error('Self-hosted image servers do not provide chat. Use Ollama for on-device chat or explicitly select a chat provider.');
   }
 
   if (preferred === 'openrouter') {

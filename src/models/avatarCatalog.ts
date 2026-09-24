@@ -74,7 +74,7 @@ export const SKIN_RICH = [
 
 export type CanonicalCategoryId =
   | 'gender' | 'skin' | 'head' | 'age' | 'hair' | 'eyes'
-  | 'face' | 'body' | 'tattoos' | 'augmentations' | 'outfit';
+  | 'face' | 'body' | 'tattoos' | 'augmentations' | 'outfit' | 'accessory';
 
 export interface CanonicalOption {
   value: string;
@@ -166,6 +166,15 @@ const augmentOptions: CanonicalOption[] = [
   { value: 'Full', rich: 'full cybernetic integration' }
 ];
 
+const accessoryOptions: CanonicalOption[] = [
+  { value: 'None', rich: 'none' },
+  { value: 'Crown', rich: 'crown' },
+  { value: 'Tiara', rich: 'tiara' },
+  { value: 'Glasses', rich: 'glasses' },
+  { value: 'Visor', rich: 'visor' },
+  { value: 'Earrings', rich: 'earrings' }
+];
+
 const outfitOptions: CanonicalOption[] = [
   { value: 'Casual', rich: 'luxury silk robe with delicate lace bralette' },
   { value: 'Street', rich: 'leather crop biker jacket with lace bralette and high-waist leather pants' },
@@ -193,7 +202,8 @@ export const AVATAR_CATEGORY_SPECS: CategorySpec[] = [
   { id: 'body', title: 'Body', options: bodyOptions, defaultValue: 'Average' },
   { id: 'tattoos', title: 'Tattoos', options: tattoosOptions, defaultValue: 'None' },
   { id: 'augmentations', title: 'Augmentations', options: augmentOptions, defaultValue: 'None' },
-  { id: 'outfit', title: 'Outfit', options: outfitOptions, defaultValue: 'Casual' }
+  { id: 'outfit', title: 'Outfit', options: outfitOptions, defaultValue: 'Casual' },
+  { id: 'accessory', title: 'Accessory', options: accessoryOptions, defaultValue: 'None' }
 ];
 
 export interface AvatarCategory {
@@ -242,6 +252,7 @@ export function applyCategoryOption(d: AvatarDraft, categoryId: string, option: 
     }
     case 'augmentations': out.augmentStyle = opt.rich as string | undefined; break;
     case 'outfit': out.outfit = opt.rich as string; break;
+    case 'accessory': out.accessory = opt.rich as string; break;
   }
   return out;
 }
@@ -372,6 +383,17 @@ const augmentToCanonical = (style: string | undefined): string => {
   return 'Full';
 };
 
+const accessoryToCanonical = (value: string | undefined): string => {
+  const a = normaliseToken(value);
+  if (!a || a === 'none') return 'None';
+  if (a.includes('crown')) return 'Crown';
+  if (a.includes('tiara')) return 'Tiara';
+  if (a.includes('visor')) return 'Visor';
+  if (a.includes('glass')) return 'Glasses';
+  if (a.includes('earring')) return 'Earrings';
+  return 'None';
+};
+
 const outfitToCanonical = (outfit: string | undefined): string => {
   const o = normaliseToken(outfit);
   const reps: Record<string, string> = {
@@ -408,6 +430,7 @@ export function canonicalValueOf(categoryId: string, d: AvatarDraft): string {
     case 'tattoos': return tattoosToCanonical(d.tattooStyle);
     case 'augmentations': return augmentToCanonical(d.augmentStyle);
     case 'outfit': return outfitToCanonical(d.outfit);
+    case 'accessory': return accessoryToCanonical((d as AvatarDraft & { accessory?: string }).accessory);
     default: return '';
   }
 }

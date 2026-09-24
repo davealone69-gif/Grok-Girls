@@ -1252,8 +1252,17 @@ export default function App() {
     negative: combinedNegative() || undefined
   });
 
+  const generationAllowed = () => {
+    if (!adult && toAvatarDefinition(draft).outfit === 'Nude') {
+      showToast('18+ mode is required for the Nude outfit.');
+      return false;
+    }
+    return true;
+  };
+
   const handleGenerate = async () => {
     if (busyRef.current) return;
+    if (!generationAllowed()) return;
     if (!adult && ['Nude'].includes(toAvatarDefinition(draft).outfit)) {
       showToast('18+ mode is required for the Nude outfit.');
       return;
@@ -1328,7 +1337,7 @@ export default function App() {
   };
 
   const handleBatchRender = async () => {
-    if (busyRef.current) return;
+    if (busyRef.current || !generationAllowed()) return;
     enterBusy();
     setVariationsOpen(true);
     setVariations([
@@ -1363,6 +1372,7 @@ export default function App() {
   };
 
   const rerollVariation = async (i: number) => {
+    if (!generationAllowed()) return;
     try {
       const r = await generateWithFallback(
         genRequest(variationPrompt(i), (Date.now() % 100000) + i * 13),

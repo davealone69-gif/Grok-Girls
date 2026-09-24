@@ -4332,21 +4332,6 @@ export default function App() {
                   <span className="more-item-icon">📊</span>
                   <span>Stats</span>
                 </button>
-                <button
-                  className={`more-item more-adult ${adult ? 'active' : ''}`}
-                  onClick={() => {
-                    setMoreOpen(false);
-                    if (!adult && !isAgeConfirmed()) {
-                      setAgeGateOpen(true);
-                    } else {
-                      setAdult(v => !v);
-                    }
-                  }}
-                  title={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}
-                >
-                  <span className="more-item-icon">👑</span>
-                  <span>{adult ? '18+ ON' : 'Adult 18+'}</span>
-                </button>
               </div>
             </div>
           </aside>

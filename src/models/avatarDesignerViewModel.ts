@@ -51,7 +51,8 @@ const FIELD_KEYS: Record<string, keyof AvatarDefinition> = {
   body: 'body',
   tattoos: 'tattoos',
   augmentations: 'augmentations',
-  outfit: 'outfit'
+  outfit: 'outfit',
+  accessory: 'accessory'
 };
 
 export function createAvatarDesignerViewModel(): AvatarDesignerViewModel {

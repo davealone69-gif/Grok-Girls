@@ -26,6 +26,7 @@ export interface AvatarDraft {
   hairStyle: string;
   skinTone: string;
   outfit: string;
+  accessory?: string;
   pose: string;
   expression: string;
   extra: string;

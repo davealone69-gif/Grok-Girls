@@ -1567,7 +1567,7 @@ export default function App() {
 
   /* ------------------------------------------------------------ story */
   const renderStoryScene = async (interactionId: string) => {
-    if (busyRef.current) return;
+    if (busyRef.current || !generationAllowed()) return;
     enterBusy();
     setResult('Rendering story scene…');
     const prompt = buildGenerationPrompt(
@@ -1584,16 +1584,12 @@ export default function App() {
     try {
       const r = await generateWithFallback({ prompt, mode: 'image', width: 1024, height: 1024 }, provider);
       if (r.assetUrl) {
-        if (r.provider !== 'local') {
-          setLivePreview(false);
-          setViewportOverride(null);
-          await applyPreviewPatch({ previewUrl: r.assetUrl });
-          showToast(`Story scene rendered · ${r.provider.toUpperCase()}`);
-          if (storageWarnRef.current) {
-            showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
-          }
-        } else {
-          showToast('Story scene preview added to gallery');
+        setLivePreview(false);
+        setViewportOverride(null);
+        await applyPreviewPatch({ previewUrl: r.assetUrl });
+        showToast(`Story scene rendered · ${r.provider.toUpperCase()}`);
+        if (storageWarnRef.current) {
+          showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
         }
         const added = await addGalleryItem({ avatarId: girl.id, mode: 'image', prompt, assetUrl: r.assetUrl, provider: r.provider });
         void refreshGallery();

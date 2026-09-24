@@ -187,13 +187,13 @@ with sync_playwright() as p:
     pg.locator(".rail-btn[title='Interactive Dialogue']").click()
     pg.wait_for_timeout(300)
     chatval = pg.locator(".mini-provider-select").first.input_value()
-    chk("H1 chat engine independent of render engine", chatval == "local", chatval)
+    chk("H1 chat engine independent of render engine", chatval == "ollama", chatval)
     pg.locator(".companion-input").fill("hello there")
     pg.locator(".btn-send-chat").click()
     pg.wait_for_timeout(900)
     status = pg.locator(".status-line").inner_text().lower() if pg.locator(".status-line").count() else ""
     chk("H1 disabled scripted chat does not fabricate a reply",
-        pg.locator(".chat-bubble.assistant").count() == 0 and "scripted replies are disabled" in status,
+        pg.locator(".chat-bubble.assistant").count() == 0 and "Ollama is not ready" in status,
         status[:120])
 
 
@@ -218,12 +218,12 @@ with sync_playwright() as p:
     chk("M5 unavailable adult engine does not fabricate a reply",
         pg.locator(".chat-bubble.assistant").count() < 2)
 
-    pg.locator(".mini-provider-select").first.select_option("local")
+    pg.locator(".mini-provider-select").first.select_option("ollama")
     pg.locator(".companion-input").fill("this puzzle is hard but fun")
     pg.locator(".btn-send-chat").click()
     pg.wait_for_timeout(1200)
     status = pg.locator(".status-line").inner_text().lower() if pg.locator(".status-line").count() else ""
-    chk("M6 scripted local chat is rejected honestly",
+    chk("M6 unavailable Ollama chat is rejected honestly",
         pg.locator(".chat-bubble.assistant").count() == 0 and "scripted replies are disabled" in status,
         status[:120])
 

@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "purpose": "Adult avatar reference wiring source for Grok-Girls/DD³. Source material remains outside the APK.",
+  "source": "Dropbox /avatar",
+  "source_shared_folder": "https://www.dropbox.com/scl/fo/afdvory7rcimovlp0epob/AFf6jgQI_b0CJCCN73C3sqE?rlkey=dg9huibq74piz8spuozofb34p&st=8ftyetpd&dl=0",
+  "route": "adult",
+  "notes": [
+    "Treat these as adult/reference assets, not normal premade avatars.",
+    "Do not silently promote reference-only material into generated output.",
+    "18+ UI must remain gated.",
+    "Use local/self-hosted adult chat/render engines where configured."
+  ],
+  "assets": [
+    "/avatar/avatar2/Avatar/Random/Artistic nude woman posing _ Free Photo.mht",
+    "/avatar/avatar2/Avatar/Random/Young woman nude portrait side view _ Free Photo.mht",
+    "/avatar/avatar2/Avatar/Random/Top view nude woman laying in bed _ Free Photo.mht",
+    "/avatar/avatar2/Avatar/Random/Front view nude woman posing on floor _ Free Photo.mht",
+    "/avatar/avatar2/Avatar/Random/Beautiful young slender sexy naked brunette woman over white background. young nude attractive body. female in and without underwear. concept of flirting, sexuality, and shyness. copy space _ Premium Photo.mht",
+    "/avatar/avatar2/Avatar/Random/Beautiful body woman on the beach back of sexy girl in bikini _ Premium Photo.mht",
+    "/avatar/avatar2/Avatar/Random/Sexy slender girl with beautiful legs in pantyhose mesh and black lacy panties over white background _ Premium Photo.mht",
+    "/avatar/avatar2/Avatar/Random/Summertime recreation concept. beautiful young sexy woman with fit trained slim body wearing black swimwear bikini walks on a beach by the sea _ Free Photo.mht",
+    "/avatar/guides/body/model-3d-character-for-nsfw-vrm-vrchat-avatar-sfm-vtuber-mmd-model-live2d.jpg",
+    "/avatar/avatar2/Avatar/Random/Bodys/model-3d-character-for-nsfw-vrm-vrchat-avatar-sfm-vtuber-mmd-model-live2d.jpg",
+    "/avatar/female/beautiful-young-woman-sexy-lingerie-dark_382934-4129.webp",
+    "/avatar/female/Females/beautiful-young-woman-sexy-lingerie-dark_382934-4129.webp",
+    "/avatar/avatar2/Avatar/Females/beautiful-young-woman-sexy-lingerie-dark_382934-4129.webp",
+    "/avatar/cyborgs/pngtree-cyborg-woman-with-blue-eyes-and-futuristic-robotic-body-png-image_18546490.webp",
+    "/avatar/avatar2/Avatar/Cyborgs/pngtree-cyborg-woman-with-blue-eyes-and-futuristic-robotic-body-png-image_18546490.webp",
+    "/avatar/new/malkavian_clan_majestic_beauty_by_wandererofbaator_dmtlf18-375w-2x.jpg"
+  ]
+}

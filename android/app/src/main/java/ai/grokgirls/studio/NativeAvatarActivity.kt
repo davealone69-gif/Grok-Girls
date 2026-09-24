@@ -24,7 +24,7 @@ class NativeAvatarActivity : Activity() {
 
         renderer = HdAvatarRenderer(this)
         val asset = intent.getStringExtra(EXTRA_AVATAR) ?: DEFAULT_AVATAR
-        val definition = NativeAvatarDefinition.parse(intent.getStringExtra(EXTRA_DEFINITION))
+        val definition = NativeAvatarDefinition.fromJson(intent.getStringExtra(EXTRA_DEFINITION))
 
         val view = GLSurfaceView(this).apply {
             setEGLContextClientVersion(3)

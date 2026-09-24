@@ -64,7 +64,8 @@ export const DEFAULT_AVATAR_DEFINITION: AvatarDefinition = {
   body: 'Average',
   tattoos: 'None',
   augmentations: 'None',
-  outfit: 'Casual'
+  outfit: 'Casual',
+  accessory: 'None'
 };
 
 export function defaultDefinitionValue(field: CanonicalCategoryId): string {

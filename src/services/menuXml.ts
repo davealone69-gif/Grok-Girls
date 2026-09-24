@@ -1,36 +1,58 @@
-/* Canonical navigation model with a native XML override. */
+/* Canonical navigation model with a native XML override.
+ *
+ * Ultimate menu design (phone-first, one system):
+ * - Primary (always visible): Builder, Presets, Gallery, Chat, Settings
+ * - Secondary (More / overflow only): Import, Story, Video, Premium, Help
+ * - Builder categories are grouped inside the Builder view, not dumped on the rail
+ * - Adult crown is a distinct gated control outside the main list
+ * - Female / Male / Cyborg family selection lives at the top of Builder
+ */
 
 export interface MenuItem {
   id: string;
   kind: 'Button' | 'CheckBox' | 'EditText' | 'TextView';
-  section: 'rail' | 'header' | 'angles' | 'dock' | 'options';
+  section: 'rail' | 'header' | 'angles' | 'dock' | 'options' | 'primary' | 'secondary';
   label?: string;
   title?: string;
   hint?: string;
+  group?: string;
 }
 
+/** Primary destinations — always immediately reachable on phone + desktop. */
+export const PRIMARY_IDS: string[] = ['appearance', 'presets', 'gallery', 'chat', 'settings'];
+
+/** Secondary destinations — live only in the More sheet / overflow. */
+export const SECONDARY_IDS: string[] = ['import', 'story', 'animations', 'premium', 'help'];
+
 export const DEFAULT_MENU: MenuItem[] = [
-  { id: 'rail_header', kind: 'TextView', section: 'rail', label: 'BUILD' },
-  { id: 'appearance', kind: 'Button', section: 'rail', label: 'Builder', title: 'Appearance Studio' },
-  { id: 'presets', kind: 'Button', section: 'rail', label: 'Presets', title: 'Preset Identities' },
-  { id: 'import', kind: 'Button', section: 'rail', label: 'Import', title: 'Import & Data' },
+  // ---- PRIMARY (top-level, always visible) ----
+  { id: 'appearance', kind: 'Button', section: 'primary', label: 'Builder', title: 'Avatar Builder', group: 'main' },
+  { id: 'presets', kind: 'Button', section: 'primary', label: 'Presets', title: 'Preset Identities', group: 'main' },
+  { id: 'gallery', kind: 'Button', section: 'primary', label: 'Gallery', title: 'Generation Archive', group: 'main' },
+  { id: 'chat', kind: 'Button', section: 'primary', label: 'Chat', title: 'Interactive Dialogue', group: 'main' },
+  { id: 'settings', kind: 'Button', section: 'primary', label: 'Settings', title: 'AI Provider Settings', group: 'main' },
+
+  // ---- SECONDARY (More sheet only) ----
+  { id: 'import', kind: 'Button', section: 'secondary', label: 'Import', title: 'Import & Data', group: 'studio' },
+  { id: 'story', kind: 'Button', section: 'secondary', label: 'Story', title: 'Story Campaign', group: 'studio' },
+  { id: 'animations', kind: 'Button', section: 'secondary', label: 'Video', title: 'Video & Animation Studio', group: 'studio' },
+  { id: 'premium', kind: 'Button', section: 'secondary', label: 'Premium', title: 'Premium & Upgrades', group: 'studio' },
+  { id: 'help', kind: 'Button', section: 'secondary', label: 'Help', title: 'Help & Shortcuts', group: 'studio' },
+
+  // ---- Legacy rail aliases (kept for XML / old handlers; not shown in primary) ----
+  { id: 'rail_header', kind: 'TextView', section: 'rail', label: 'DD³' },
   { id: 'body', kind: 'Button', section: 'rail', label: 'Body', title: 'Body & Build' },
-  { id: 'clothing', kind: 'Button', section: 'rail', label: 'Clothing', title: 'Lingerie & Corsetry' },
+  { id: 'clothing', kind: 'Button', section: 'rail', label: 'Outfit', title: 'Clothing & Accessories' },
   { id: 'hair', kind: 'Button', section: 'rail', label: 'Hair', title: 'Hair Styling' },
   { id: 'face', kind: 'Button', section: 'rail', label: 'Face', title: 'Face & Makeup' },
   { id: 'eyes', kind: 'Button', section: 'rail', label: 'Eyes', title: 'Eyes & Eyeliner' },
   { id: 'accessories', kind: 'Button', section: 'rail', label: 'Accessories', title: 'Accessories' },
   { id: 'augments', kind: 'Button', section: 'rail', label: 'Augments', title: 'Augments' },
   { id: 'tattoos', kind: 'Button', section: 'rail', label: 'Tattoos', title: 'Tattoos & Lace' },
-  { id: 'animations', kind: 'Button', section: 'rail', label: 'Animations', title: 'Video & Animation Studio' },
-  { id: 'story', kind: 'Button', section: 'rail', label: 'Story', title: 'Story Campaign' },
-  { id: 'gallery', kind: 'Button', section: 'rail', label: 'Gallery', title: 'Generation Archive' },
-  { id: 'chat', kind: 'Button', section: 'rail', label: 'Chat', title: 'Interactive Dialogue' },
-  { id: 'premium', kind: 'Button', section: 'rail', label: 'Premium', title: 'Premium & Upgrades' },
-  { id: 'help', kind: 'Button', section: 'rail', label: '?', title: 'Help & Shortcuts' },
-  { id: 'settings', kind: 'Button', section: 'rail', label: '⚙', title: 'AI Provider Settings' },
+
+  // ---- Header / angles / dock / options (unchanged behaviour) ----
   { id: 'header_title', kind: 'TextView', section: 'header', label: 'AVATAR DESIGNER' },
-  { id: 'generate', kind: 'Button', section: 'header', label: 'GENERATE RENDER', title: 'Generate high-detail render' },
+  { id: 'generate', kind: 'Button', section: 'header', label: 'GENERATE', title: 'Generate high-detail render' },
   { id: 'hd_render', kind: 'Button', section: 'header', label: 'HD RENDER', title: 'On-device HD renderer' },
   { id: 'random', kind: 'Button', section: 'header', label: 'Random', title: 'Randomize Persona Traits' },
   { id: 'rotate', kind: 'Button', section: 'header', label: 'Rotate', title: 'Rotate view' },
@@ -99,8 +121,6 @@ function parseMenuXml(xml: string): MenuItem[] {
     const id = canonicalMenuId(rawId);
     const section = sectionFor(el);
     if (!section) continue;
-    // XML is an override, not a second copy of the same control. Canonical
-    // IDs keep old cat* aliases from producing duplicate dock tabs.
     if (seen.has(id)) continue;
     seen.add(id);
     const kind = el.tagName as MenuItem['kind'];

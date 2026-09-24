@@ -2528,6 +2528,12 @@ export default function App() {
               <button className="render-action" onClick={handleRandomize} disabled={busy}>RANDOM</button>
               <button className="render-action" onClick={() => setCubeMode(v => !v)}>{cubeMode ? '2D' : '3D'}</button>
             </div>
+            <div className="phone-camera-actions" aria-label="Camera controls">
+              <button onClick={() => setRotationAngle(r => (r + 45) % 360)} title="Rotate view">↻ Rotate</button>
+              <button onClick={() => setZoomLevel(z => (z > 1.2 ? 1 : 1.4))} title="Zoom view">⌕ Zoom</button>
+              <button onClick={resetCamera} title="Center view">⊙ Center</button>
+              <button onClick={handleSavePng} title="Save current image as PNG">⇩ PNG</button>
+            </div>
           </section>
         )}
 
@@ -4329,30 +4335,17 @@ export default function App() {
                 })}</div>
               <div className="more-group-label">QUICK ACTIONS</div>
               <div className="more-sheet-grid">
-                <button
-                  className="more-item"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    handleRandomize();
-                  }}
-                  title={menuTitle('random')}
-                >
-                  <span className="more-item-icon">🎲</span>
-                  <span>Randomize</span>
+                <button className="more-item" onClick={() => { setMoreOpen(false); handleRandomize(); }} title={menuTitle('random')}>
+                  <span className="more-item-icon">🎲</span><span>Randomize</span>
                 </button>
-                <button
-                  className="more-item"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    setStatsOpen(true);
-                  }}
-                  title={menuTitle('stats')}
-                >
-                  <span className="more-item-icon">📊</span>
-                  <span>Stats</span>
+                <button className="more-item" onClick={() => { setMoreOpen(false); setStatsOpen(true); }} title={menuTitle('stats')}>
+                  <span className="more-item-icon">📊</span><span>Stats</span>
+                </button>
+                <button className="more-item" onClick={() => { setMoreOpen(false); void copyPreviewToClipboard(); }} title="Copy current image">
+                  <span className="more-item-icon">⎘</span><span>Copy</span>
                 </button>
               </div>
-            </div>
+            </div>           </div>
           </aside>
         </>
       )}

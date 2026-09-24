@@ -2034,6 +2034,7 @@ export default function App() {
                     setAdult(v => !v);
                   }
                 }}
+                aria-label={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}
                 title={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}
               >
                 <span className="rail-icon">👑</span>
@@ -4287,6 +4288,25 @@ export default function App() {
                       <span>{menuLabel(b.id)}</span>
                     </button>
                   ))}
+              </div>
+              <div className="more-group-label">ADULT</div>
+              <div className="more-sheet-grid">
+                <button
+                  className={`more-item crown-btn ${adult ? 'adult-active' : ''}`}
+                  aria-label={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}
+                  onClick={() => {
+                    if (!adult && !isAgeConfirmed()) {
+                      setAgeGateOpen(true);
+                    } else {
+                      setAdult(v => !v);
+                    }
+                    setMoreOpen(false);
+                  }}
+                  title={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}
+                >
+                  <span className="more-item-icon">👑</span>
+                  <span>{adult ? '18+ ON' : '18+'}</span>
+                </button>
               </div>
               <div className="more-group-label">QUICK ACTIONS</div>
               <div className="more-sheet-grid">

@@ -12,6 +12,7 @@ import android.os.Looper
 import android.util.Base64
 import com.aura.avatarstudio.renderer.GltfAvatarLoader
 import com.aura.avatarstudio.renderer.HdAvatarRenderer
+import com.aura.avatarstudio.renderer.NativeAvatarDefinition
 import com.aura.avatarstudio.renderer.ProceduralAvatarParts
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin

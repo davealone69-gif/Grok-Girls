@@ -1992,13 +1992,13 @@ export default function App() {
       {/* 1. LEFT VERTICAL NAVIGATION RAIL */}
       <aside className="nav-rail">
         <div className="brand-logo" title="DD³ Studio">
-          M
+          DD³
         </div>
 
         <div className="rail-build-label">{menuLabel('rail_header')}</div>
 
         <div className={`rail-menu ${isMobile ? 'rail-nowrap' : ''}`}>
-          {menuSection(menuItems, 'rail')
+          {(isMobile ? menuSection(menuItems, 'primary') : menuSection(menuItems, 'rail'))
             .filter(i => i.kind === 'Button')
             .filter(b => !isMobile || MOBILE_PRIMARY.includes(b.id))
             .map(b => (

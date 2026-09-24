@@ -127,7 +127,7 @@ jobs:
         with:
           packages: ''
       - name: Install Android SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        run: sdkmanager "platform-tools" "platforms;android-35" "platforms;android-34" "build-tools;35.0.0"
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
       - name: Build web app
@@ -191,9 +191,9 @@ jobs:
 
   phase8-device-tests:
     name: Phase 8 UI Automator device tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: web
-    timeout-minutes: 45
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -224,15 +224,20 @@ jobs:
         run: npx cap sync android
       - name: Make Gradle executable
         run: chmod +x android/gradlew
-      - name: Run Phase 8 tests on Android 35 emulator
+      - name: Run Phase 8 tests on Android 34 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 34
           target: google_apis
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -no-snapshot-save
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -no-snapshot-save -no-boot-anim
           disable-animations: true
+          force-avd-creation: true
+          cores: 2
+          ram-size: 2048M
+          heap-size: 512M
+          disk-size: 4096M
           script: cd android && ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
       - name: Upload Phase 8 reports
         if: always()

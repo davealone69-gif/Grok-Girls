@@ -2107,6 +2107,15 @@ export default function App() {
 
       {/* 3. CENTER VIEWPORT & LOWER DOCK */}
       <section className="center-workspace">
+        <div className="phone-topbar">
+          <div className="phone-brand">DD³</div>
+          <div className="phone-topbar-actions">
+            <button className={`phone-icon-btn crown-btn ${adult ? 'adult-active' : ''}`} onClick={() => {
+              if (!adult && !isAgeConfirmed()) setAgeGateOpen(true); else setAdult(v => !v);
+            }} aria-label={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'} title={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}>👑</button>
+            <button className="phone-icon-btn" onClick={() => setIsSettingsOpen(true)} title="Settings" aria-label="Settings">⚙️</button>
+          </div>
+        </div>
         {/* Viewport Header Bar */}
         <header className="viewport-header">
           <div className="avatar-design-title">

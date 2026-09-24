@@ -4341,7 +4341,8 @@ export default function App() {
                       <span>{menuLabel(b.id)}</span>
                     </button>
                   );
-                })}</div>
+                })}
+              </div>
               <div className="more-group-label">QUICK ACTIONS</div>
               <div className="more-sheet-grid">
                 <button className="more-item" onClick={() => { setMoreOpen(false); handleRandomize(); }} title={menuTitle('random')}>
@@ -4354,7 +4355,8 @@ export default function App() {
                   <span className="more-item-icon">⎘</span><span>Copy</span>
                 </button>
               </div>
-            </div>           </div>
+            </div>
+          </div>
           </aside>
         </>
       )}

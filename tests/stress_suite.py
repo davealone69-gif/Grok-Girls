@@ -141,7 +141,7 @@ with sync_playwright() as p:
     pg.close()
 
     # ---------- B2: provider switch mid-flight (slow mock on 7861) ----------
-    pg = b.new_page(viewport={"width": 393, "height": 851})
+    pg = b.new_page(viewport={"width": 1280, "height": 900})
     pg.goto("http://localhost:8080/", wait_until="networkidle")
     pg.wait_for_timeout(400)
     pg.evaluate("""

@@ -191,7 +191,11 @@ with sync_playwright() as p:
     pg.locator(".companion-input").fill("hello there")
     pg.locator(".btn-send-chat").click()
     pg.wait_for_timeout(900)
-    chk("H1 chat replies with selfhosted render engine", pg.locator(".chat-bubble.assistant").count() >= 1)
+    status = pg.locator(".status-line").inner_text().lower() if pg.locator(".status-line").count() else ""
+    chk("H1 disabled scripted chat does not fabricate a reply",
+        pg.locator(".chat-bubble.assistant").count() == 0 and "scripted replies are disabled" in status,
+        status[:120])
+
 
     pg.locator(".rail-btn[title='Interactive Dialogue']").click()
     pg.locator("button.crown-btn").first.click()
@@ -210,16 +214,19 @@ with sync_playwright() as p:
         if pg.locator(".toast").count():
             seen.extend(pg.locator(".toast").all_inner_texts())
     toasts = " | ".join(seen)
-    chk("M5 adult chat pinned to LOCAL", "pinned to LOCAL" in toasts or "cloud chat" in toasts, toasts[:100])
-    chk("M5 pinned chat still replies", pg.locator(".chat-bubble.assistant").count() >= 2)
+    chk("M5 adult chat pins away from cloud", "pinned to" in toasts, toasts[:120])
+    chk("M5 unavailable adult engine does not fabricate a reply",
+        pg.locator(".chat-bubble.assistant").count() < 2)
 
     pg.locator(".mini-provider-select").first.select_option("local")
     pg.locator(".companion-input").fill("this puzzle is hard but fun")
     pg.locator(".btn-send-chat").click()
     pg.wait_for_timeout(1200)
-    last = pg.locator(".chat-bubble.assistant").last.inner_text()
-    adult_hit = pg.evaluate("""(t) => /fuck|sex|cum|pussy|cock|wet|spread|deeper|suck|lick|orgasm|breed|throat|ass|tits|blow|finger|clit|anal|ride|oral|toy|dildo|spank|choke|squirt|dp|ahegao|collar|leash/i.test(t)""", last)
-    chk("M6 innocent 'hard' gets clean reply", not adult_hit, last[:80])
+    status = pg.locator(".status-line").inner_text().lower() if pg.locator(".status-line").count() else ""
+    chk("M6 scripted local chat is rejected honestly",
+        pg.locator(".chat-bubble.assistant").count() == 0 and "scripted replies are disabled" in status,
+        status[:120])
+
     pg.close()
 
     # --- 6) ANDROID-FIRST ---

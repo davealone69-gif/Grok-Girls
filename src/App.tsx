@@ -1998,7 +1998,7 @@ export default function App() {
         <div className="rail-build-label">{menuLabel('rail_header')}</div>
 
         <div className={`rail-menu ${isMobile ? 'rail-nowrap' : ''}`}>
-          {(isMobile ? menuSection(menuItems, 'primary') : menuSection(menuItems, 'rail'))
+          {menuSection(menuItems, 'primary')
             .filter(i => i.kind === 'Button')
             .filter(b => !isMobile || MOBILE_PRIMARY.includes(b.id))
             .map(b => (

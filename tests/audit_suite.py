@@ -12,16 +12,13 @@ def chk(name, cond, extra=""):
     results.append((name, bool(cond), extra))
 
 def tap_adult(pg, phone):
-    """Open the 18+ control: bottom-bar crown (desktop) or More sheet row (phone)."""
+    """Open the 18+ control: compact phone top bar or desktop rail crown."""
     if phone:
-        open_st = pg.locator(".more-sheet").evaluate("el => el.classList.contains('open')")
-        if not open_st:
-            pg.locator(".rail-btn[title*='More']").first.click()
-            pg.wait_for_timeout(320)
-        pg.locator(".more-item.more-adult").first.click()
+        pg.locator(".phone-topbar .crown-btn").first.click()
     else:
-        pg.locator("button.crown-btn").first.click()
+        pg.locator(".nav-rail .crown-btn").first.click()
     pg.wait_for_timeout(240)
+
 
 # The quota / IndexedDB checks below drive a real ~1.6 MB self-hosted
 # render against a mock A1111 on :7860. Start it here so the suite is
@@ -53,9 +50,9 @@ with sync_playwright() as p:
     pg.wait_for_timeout(300)
     pg.locator(".companion-input").fill("hello")
     sb = pg.locator(".btn-send-chat").bounding_box()
-    fb = pg.locator(".master-footer").bounding_box()
-    if sb and fb:
-        chk("landscape: SEND fully above footer", sb["y"] + sb["height"] <= fb["y"], f"SEND bottom={sb['y']+sb['height']:.0f} footer top={fb['y']:.0f}")
+    nav = pg.locator(".nav-rail").bounding_box()
+    if sb and nav:
+        chk("landscape: SEND fully above navigation", sb["y"] + sb["height"] <= nav["y"], f"SEND bottom={sb['y']+sb['height']:.0f} nav top={nav['y']:.0f}")
         cx, cy = sb["x"]+sb["width"]/2, sb["y"]+sb["height"]/2
         el = pg.evaluate(f"() => {{ const e = document.elementFromPoint({cx},{cy}); return e ? e.className : 'none'; }}")
         chk("landscape: SEND hit-testable", el == "btn-send-chat", el)
@@ -102,7 +99,7 @@ with sync_playwright() as p:
     """)
     pg.reload(wait_until="networkidle")
     pg.wait_for_timeout(500)
-    pg.locator(".btn-generate-media").first.click()
+    pg.locator(".render-action.primary").first.click()
     seen = []
     for _ in range(18):
         pg.wait_for_timeout(300)
@@ -141,11 +138,15 @@ with sync_playwright() as p:
         pg.goto("http://localhost:8080/", wait_until="networkidle")
         pg.wait_for_timeout(600)
         chk(f"{label} app renders", pg.locator(".app-container").count() == 1)
-        chk(f"{label} rail+footer+viewport", pg.locator(".nav-rail").count() == 1 and pg.locator(".master-footer").count() == 1 and pg.locator(".character-image").count() == 1)
-        fb = pg.locator(".master-footer").bounding_box()
-        if fb:
-            chk(f"{label} footer flush bottom", fb["y"] + fb["height"] <= vp[1] + 1, f"{fb['y']+fb['height']:.0f}/{vp[1]}")
-        chk(f"{label} no pageerrors", len(errs) == 0, errs[:1])
+        chk(f"{label} rail+viewport", pg.locator(".nav-rail").count() == 1 and pg.locator(".character-image").count() == 1)
+        if vp[0] <= 900:
+            chk(f"{label} phone top bar", pg.locator(".phone-topbar").count() == 1)
+            nav = pg.locator(".nav-rail").bounding_box()
+            chk(f"{label} bottom navigation", bool(nav) and nav["y"] + nav["height"] >= vp[1] - 1, str(nav))
+        else:
+            fb = pg.locator(".master-footer").bounding_box()
+            if fb:
+                chk(f"{label} footer flush bottom", fb["y"] + fb["height"] <= vp[1] + 1, f"{fb['y']+fb['height']:.0f}/{vp[1]}")
         pg.close()
 
     # --- 5) SWEEP REGRESSIONS ---

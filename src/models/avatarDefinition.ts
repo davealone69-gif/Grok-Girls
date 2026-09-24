@@ -49,7 +49,7 @@ export interface AvatarDefinition {
 
 export const AVATAR_DEFINITION_FIELDS: CanonicalCategoryId[] = [
   'gender', 'skin', 'head', 'age', 'hair', 'eyes',
-  'face', 'body', 'tattoos', 'augmentations', 'outfit'
+  'face', 'body', 'tattoos', 'augmentations', 'outfit', 'accessory'
 ];
 
 /** Exactly the Kotlin data-class defaults (from the master catalog). */

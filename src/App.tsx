@@ -1119,12 +1119,12 @@ export default function App() {
     const next = randomizeAvatar(draft);
     setDraft(next);
     updateGirl(draftToGirlPatch(next));
-    // Render the new identity into the viewport immediately (no debounce).
-    setLivePreview(true);
-    setViewportOverride(
-      createLocalPlaceholderSvg(buildDraftPrompt(next, adult), 'image', 1024, 1024, seedInput ? Number(seedInput) : undefined)
-    );
-    showToast('Identity randomized — save to keep it');
+    // Randomize changes identity state only. It never pretends a procedural
+    // SVG is a generated render. The user can then use the selected real
+    // render engine or the native 3D viewport.
+    setViewportOverride(null);
+    setLivePreview(false);
+    showToast('Identity randomized. Generate with the selected engine to render it.');
   };
 
   const handleSaveAvatar = () => {

@@ -8,6 +8,7 @@ import android.view.Window
 import android.view.WindowManager
 import com.aura.avatarstudio.renderer.GltfAvatarLoader
 import com.aura.avatarstudio.renderer.HdAvatarRenderer
+import com.aura.avatarstudio.renderer.NativeAvatarDefinition
 import com.aura.avatarstudio.renderer.ProceduralAvatarParts
 
 /** Fullscreen interactive native GLES3 HD avatar viewport. */

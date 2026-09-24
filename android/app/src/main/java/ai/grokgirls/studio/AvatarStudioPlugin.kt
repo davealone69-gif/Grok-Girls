@@ -49,7 +49,7 @@ class AvatarStudioPlugin : Plugin() {
         val width = (call.getInt("width") ?: 1920).coerceIn(256, 3840)
         val height = (call.getInt("height") ?: 1080).coerceIn(256, 2160)
         val asset = call.getString("avatar") ?: NativeAvatarActivity.DEFAULT_AVATAR
-        val definition = NativeAvatarDefinition.parse(call.getString("definition"))
+        val definition = NativeAvatarDefinition.fromJson(call.getString("definition"))
 
         Thread {
             try {

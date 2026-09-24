@@ -2638,7 +2638,7 @@ export default function App() {
                     ))}
                   </div>
                   <div className="categories-options">
-                    {AVATAR_CATEGORIES.find(c => c.id === catId)?.options.map(o => {
+                    {AVATAR_CATEGORIES.find(c => c.id === catId)?.options.filter(o => adult || !(catId === 'outfit' && o === 'Nude')).map(o => {
                       const active = activeCategoryOption(draft, catId) === o;
                       return (
                         <button
@@ -3797,7 +3797,7 @@ export default function App() {
                     value={draft.outfit}
                     onChange={e => setDraft(d => ({ ...d, outfit: e.target.value }))}
                   >
-                    {avatarOptions.outfit.map(o => (
+                    {avatarOptions.outfit.filter(o => adult || !/nude|naked|genitals|breasts exposed|fully nude/i.test(o)).map(o => (
                       <option key={o} value={o}>
                         {o.slice(0, 42)}…
                       </option>

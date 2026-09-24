@@ -828,8 +828,6 @@ export async function generateWithFallback(
 
 export async function chatWithProvider(messages: ChatMessage[], preferred: ProviderName = 'openrouter') {
   const e = env();
-  if (preferred === 'local') return { provider: 'local' as const, text: 'Local companion mode is active.' };
-
   if (preferred === 'selfhosted') {
     const chatEndpoint = getSavedEndpoint('custom', 'chat') || e.VITE_CUSTOM_CHAT_ENDPOINT || '';
     if (!chatEndpoint) {

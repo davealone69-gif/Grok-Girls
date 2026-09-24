@@ -786,14 +786,24 @@ export async function generateWithFallback(
   r: GenerationRequest,
   preferred: ProviderName = 'local'
 ): Promise<GenerationResult> {
-  const all = providers();
-  for (const p of [...all.filter(x => x.name === preferred), ...all.filter(x => x.name !== preferred)]) {
-    if (!p.available() && p.name !== 'local') continue;
+  // "Fallback" means provider selection, never fake media. A local
+  // procedural preview is deliberately NOT a generation provider.
+  const all = providers().filter(p => p.name !== 'local');
+  const ordered = [
+    ...all.filter(p => p.name === preferred),
+    ...all.filter(p => p.name !== preferred)
+  ];
+  const attempted: string[] = [];
+
+  for (const p of ordered) {
+    if (!p.available()) continue;
+    attempted.push(p.name);
     try {
       const out = await p.generate(r);
-      if (out.status === 'ready' || out.status === 'queued' || p.name === 'local') return out;
+      if (out.status === 'ready' || out.status === 'queued') return out;
+      if (p.name === preferred) return out;
     } catch (e) {
-      if (p.name === preferred && preferred !== 'local') {
+      if (p.name === preferred) {
         return {
           provider: p.name,
           status: 'error',
@@ -804,10 +814,13 @@ export async function generateWithFallback(
       }
     }
   }
+
   return {
-    provider: 'local',
-    status: 'fallback',
-    warning: 'No configured generation provider.',
+    provider: preferred,
+    status: 'error',
+    warning: attempted.length
+      ? `Configured generation provider(s) failed: ${attempted.join(', ')}.`
+      : 'No real generation provider is configured. Local preview is not presented as generated media.',
     assetUrl: undefined,
     text: undefined
   };

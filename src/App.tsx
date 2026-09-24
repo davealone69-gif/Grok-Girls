@@ -219,6 +219,7 @@ function defaultDraft(g: Girl): AvatarDraft {
     hairStyle: g.hairStyle,
     skinTone: g.skinTone,
     outfit: g.outfit,
+    accessory: 'None',
     pose: g.pose,
     expression: g.expression,
     extra: g.extra,
@@ -1253,6 +1254,10 @@ export default function App() {
 
   const handleGenerate = async () => {
     if (busyRef.current) return;
+    if (!adult && ['Nude'].includes(toAvatarDefinition(draft).outfit)) {
+      showToast('18+ mode is required for the Nude outfit.');
+      return;
+    }
     if (provider === 'selfhosted' && !getServerBase()) {
       showToast('Configure your self-hosted server in ⚙ Settings → Self-Hosted first');
       setResult(
@@ -1510,19 +1515,14 @@ export default function App() {
         chatProvider !== 'local' &&
         chatProvider !== 'selfhosted' &&
         chatProvider !== 'ollama';
-      const adultLocalEngine: ProviderName = isOllamaChatReady()
-        ? 'ollama'
-        : getServerBase()
-        ? 'selfhosted'
-        : 'local';
-      const chatEngine = adultPinned ? adultLocalEngine : chatProvider;
+      if (adult && chatProvider !== 'ollama' && !isOllamaChatReady()) {
+        throw new Error('18+ chat requires the local Ollama engine. Start Ollama and try again.');
+      }
+      const adultLocalEngine: ProviderName = 'ollama';
+      const chatEngine = adult ? adultLocalEngine : chatProvider;
       if (adultPinned && !adultChatPinWarnRef.current) {
         adultChatPinWarnRef.current = true;
-        const label = adultLocalEngine === 'ollama'
-          ? 'OLLAMA'
-          : adultLocalEngine === 'selfhosted'
-          ? 'SELF-HOSTED'
-          : 'LOCAL AI';
+        const label = 'OLLAMA';
         showToast(`18+ mode: chat pinned to ${label} — cloud chat engines are not used for adult conversations`);
       }
       const aid = String(now + 1);

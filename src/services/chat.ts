@@ -140,16 +140,13 @@ export async function reply(
   const specTail = provider === 'ollama' ? SPEC_SYSTEM_TAIL : '';
   const system = `You are ${girl.name}, an adult fictional companion (18+). Personality: ${girl.traits.join(', ')}. Bio: ${girl.bio}. Current room: ${room.name}. Mood: ${girl.emotion}. Affinity: ${Math.round(girl.affinity)}%. Trust: ${Math.round(girl.trust)}%. Be warm, conversational and consistent with the character. Content policy: ${policy}. ${AVATAR_LLM_INSTRUCTIONS}${specTail}`;
 
-  const fallback = (note: string) =>
-    `${localReply(girl, room, message, adult)}${note ? ` (${note})` : ''}`;
-
   if (provider === 'local') {
     throw new Error('Local scripted replies are disabled as an AI provider. Enable Ollama or configure another real chat engine.');
   }
 
   if (provider === 'ollama') {
     if (!isOllamaChatReady()) {
-      return fallback('Ollama is off — enable it in ⚙ Settings → Ollama (On-Device) to chat fully offline');
+      throw new Error('Ollama is not ready. Enable Ollama in Settings and start the local server before chatting.');
     }
     const cfg = getOllamaConfig();
     const historyMsgs = history

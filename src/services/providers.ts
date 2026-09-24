@@ -82,9 +82,9 @@ export function saveModel(p: string, model: string, m?: ProviderMode) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Local procedural "NOIR RENDER" engine                               */
-/* Draws a stylized boudoir portrait SVG that reflects the prompt:     */
-/* hair colour, outfit hints, accent colour, cyber/neon scene cues.    */
+/* Session-only procedural preview                                     */
+/* This is never a generation provider and must never be presented as */
+/* generated media. It exists only for immediate local UI preview.     */
 /* ------------------------------------------------------------------ */
 
 function hashSeed(str: string): number {

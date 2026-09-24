@@ -7,6 +7,7 @@ import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, Gallery
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
 import { setSdEnabled } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
+import { isOllamaChatReady } from './services/ollama';
 import { DEFAULT_MENU, loadMenuXml, MenuItem, menuSection } from './services/menuXml';
 import {
   DEFAULT_AVATAR_DEFINITION,
@@ -1509,10 +1510,20 @@ export default function App() {
         chatProvider !== 'local' &&
         chatProvider !== 'selfhosted' &&
         chatProvider !== 'ollama';
-      const chatEngine = adultPinned ? 'local' : chatProvider;
+      const adultLocalEngine: ProviderName = isOllamaChatReady()
+        ? 'ollama'
+        : getServerBase()
+        ? 'selfhosted'
+        : 'local';
+      const chatEngine = adultPinned ? adultLocalEngine : chatProvider;
       if (adultPinned && !adultChatPinWarnRef.current) {
         adultChatPinWarnRef.current = true;
-        showToast('18+ mode: chat pinned to LOCAL — cloud chat engines are not used for adult conversations');
+        const label = adultLocalEngine === 'ollama'
+          ? 'OLLAMA'
+          : adultLocalEngine === 'selfhosted'
+          ? 'SELF-HOSTED'
+          : 'LOCAL AI';
+        showToast(`18+ mode: chat pinned to ${label} — cloud chat engines are not used for adult conversations`);
       }
       const aid = String(now + 1);
       const streamingEngine = chatEngine === 'ollama';

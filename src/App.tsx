@@ -1438,7 +1438,7 @@ export default function App() {
       ctx.fillStyle = '#fff';
       ctx.font = '700 34px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('GROK GIRLS · CONTACT SHEET', canvas.width / 2, 58);
+      ctx.fillText('DD³ · CONTACT SHEET', canvas.width / 2, 58);
       const imgs = await Promise.all(
         items.map(
           item =>
@@ -1991,7 +1991,7 @@ export default function App() {
     >
       {/* 1. LEFT VERTICAL NAVIGATION RAIL */}
       <aside className="nav-rail">
-        <div className="brand-logo" title="Grok Girls Studio">
+        <div className="brand-logo" title="DD³ Studio">
           M
         </div>
 
@@ -4041,7 +4041,7 @@ export default function App() {
         <div className="modal-backdrop" onClick={() => setPremiumOpen(false)}>
           <div className="modal-card premium-card" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>⭐ Grok Girls Premium</h3>
+              <h3>⭐ DD³ Premium</h3>
               <button className="modal-close" onClick={() => setPremiumOpen(false)}>
                 ✕
               </button>

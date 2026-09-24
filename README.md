@@ -81,7 +81,7 @@ The app is a **PWA** (installable) and ships with a ready **Capacitor Android pr
 ### Option A — PWA install (no build tools needed)
 1. Host the built app anywhere (Netlify, Vercel, GitHub Pages) or run `npm run build && npm run preview`.
 2. Open the URL in **Chrome on Android** → ⋮ menu → **Add to Home screen / Install app**.
-3. It installs as a standalone full-screen app with the Grok Girls icon, splash color, and offline shell support (service worker).
+3. It installs as a standalone full-screen app with the DD³ icon, splash color, and offline shell support (service worker).
 
 ### Option B — Real APK via Capacitor (Android Studio)
 ```bash

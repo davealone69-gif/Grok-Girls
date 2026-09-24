@@ -3713,3 +3713,37 @@ a.btn-generate-media:hover {
   .hide-mobile-inline {
     display: none;
   }
+
+/* DD³ PHONE-FIRST CLEANUP */
+.phone-topbar,.builder-control-strip{display:none}
+.phone-brand{font-size:18px;font-weight:950;letter-spacing:.08em;color:#fff}
+.phone-topbar-actions{display:flex;gap:6px}
+.phone-icon-btn{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;border:1px solid #2a2e3a;background:#171a21;color:#fff}
+.builder-control-strip{flex-direction:column;gap:7px;padding:8px 10px;background:#0d0d17;border-bottom:1px solid #222236}
+.family-switcher{display:flex;align-items:center;gap:6px;overflow-x:auto;scrollbar-width:none}
+.family-switcher::-webkit-scrollbar,.builder-category-strip::-webkit-scrollbar{display:none}
+.family-label{color:#8a90a0;font-size:9px;font-weight:900;letter-spacing:.18em}
+.family-btn{min-height:35px;padding:0 12px;border-radius:10px;border:1px solid #2a2e3a;background:#171a21;color:#cfd3dd;font-size:11px;font-weight:800;white-space:nowrap}
+.family-btn.active{color:#fff;border-color:var(--neon-purple);background:rgba(144,78,221,.2);box-shadow:0 0 12px rgba(144,78,221,.2)}
+.builder-category-strip{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.builder-category-btn{flex:0 0 auto;min-height:33px;padding:0 9px;border-radius:9px;border:1px solid #292d39;background:#141722;color:#aeb4c2;font-size:10px;font-weight:800;display:inline-flex;align-items:center;gap:5px}
+.builder-category-btn.active{color:#fff;border-color:var(--neon-purple);background:rgba(144,78,221,.16)}
+.phone-render-actions{display:flex;gap:6px}
+.render-action{flex:1;min-height:35px;border-radius:9px;border:1px solid #2b2f3d;background:#171a21;color:#d8dbe4;font-size:10px;font-weight:900;letter-spacing:.06em}
+.render-action.primary{background:linear-gradient(135deg,#e62040,#904edd);border-color:transparent;color:#fff}
+@media (max-width:900px){
+  .phone-topbar{display:flex;height:46px;align-items:center;justify-content:space-between;padding:5px 10px;background:rgba(9,9,18,.98);border-bottom:1px solid #242438;z-index:40;flex-shrink:0}
+  .builder-control-strip{display:flex}
+  .nav-rail .brand-logo{display:none}
+  .nav-rail .rail-menu{min-width:0}
+  .nav-rail .rail-btn{min-width:20%;flex:1 1 0}
+  .nav-rail .rail-footer{min-width:20%;flex:1 1 0}
+  .nav-rail .rail-footer .rail-btn{width:100%;min-width:100%}
+  .center-workspace{bottom:58px}
+  .native-action-row,.mode-pills,.viewport-tools-top,.angle-strip,.viewport-hud{display:none!important}
+  .lower-dock,.master-footer{display:none!important}
+  .viewport-lighting-bar{bottom:8px;left:8px;transform:none}
+  .status-line{bottom:68px}
+  .toast{bottom:70px}
+  .inspector-panel{bottom:58px;width:min(92vw,400px)}
+}

@@ -2915,7 +2915,6 @@ export default function App() {
                 setProvider(v);
               }}
             >
-              <option value="local">LOCAL</option>
               <option value="sdlocal">SD LOCAL (ON-DEVICE)</option>
               <option value="openrouter">OPENROUTER</option>
               <option value="gemini">GEMINI</option>
@@ -3137,7 +3136,6 @@ export default function App() {
                   }}
                   title="Chat AI engine"
                 >
-                  <option value="local">LOCAL</option>
                   <option value="ollama">OLLAMA (ON-DEVICE)</option>
                   <option value="openrouter">OPENROUTER</option>
                   <option value="gemini">GEMINI</option>

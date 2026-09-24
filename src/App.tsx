@@ -609,7 +609,12 @@ export default function App() {
   };
   const loadOutfit = () => {
     const def = loadAvatarDefinition(identityId()) ?? DEFAULT_AVATAR_DEFINITION;
-    setDraft(d => ({ ...d, outfit: applyAvatarDefinition(d, def).outfit }));
+    const loaded = applyAvatarDefinition(draft, def);
+    if (!adult && loaded.outfit === 'Nude') {
+      showToast('Saved identity contains an 18+ outfit. Enable 18+ mode before loading it.');
+      return;
+    }
+    setDraft(d => ({ ...d, outfit: loaded.outfit, accessory: loaded.accessory }));
     showToast(def === DEFAULT_AVATAR_DEFINITION ? 'No saved identity — applied Casual outfit' : `Outfit loaded from "${identityId()}"`);
   };
   const toggleTattoos = () => {

@@ -543,7 +543,7 @@ export default function App() {
   const avatarVm = avatarVmRef.current;
   const [avatarDef, setAvatarDef] = useState<AvatarDefinition>(() => avatarVm.get());
   const avatarPreviewRef = useRef<AvatarPreviewHandle>(null);
-  const [cubeMode, setCubeMode] = useState(false);
+  const [cubeMode, setCubeMode] = useState(true);
   const avatar3dRef = useRef<HdAvatarRenderer | null>(null);
   const avatarCanvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
@@ -649,14 +649,28 @@ export default function App() {
     const canvas = avatarCanvasRef.current;
     if (!canvas) return;
     let renderer: HdAvatarRenderer | null = null;
+    let cancelled = false;
     try {
       renderer = new HdAvatarRenderer(canvas, { skeleton: defaultAvatarSkeleton() });
       avatar3dRef.current = renderer;
       renderer.start();
+      void fetch('/avatars/my_avatar.glb')
+        .then(r => {
+          if (!r.ok) throw new Error(`avatar asset HTTP ${r.status}`);
+          return r.arrayBuffer();
+        })
+        .then(data => renderer?.loadGlb(data))
+        .then(() => {
+          if (!cancelled) renderer?.setAvatarVisible(false);
+        })
+        .catch(() => {
+          if (!cancelled) renderer?.setAvatarVisible(true);
+        });
     } catch (e) {
       console.warn('[avatar3d] renderer failed to start', e);
     }
     return () => {
+      cancelled = true;
       renderer?.release();
       avatar3dRef.current = null;
     };
@@ -664,7 +678,8 @@ export default function App() {
 
   // ---- avatar definition drives the 3D parameters (native morph layer) ----
   useEffect(() => {
-    if (!avatar3dRef.current) return;
+    const renderer = avatar3dRef.current;
+    if (!renderer) return;
     const b = avatarDef.body;
     const bodyW = b === 'Heavy' ? 1.12 : b === 'Slim' ? 0.86 : 1;
     const chest = b === 'Heavy' ? 1.14 : b === 'Athletic' ? 1.05 : b === 'Slim' ? 0.88 : 1;
@@ -672,11 +687,31 @@ export default function App() {
     const hips = b === 'Heavy' ? 1.14 : b === 'Slim' ? 0.88 : 1;
     const headScale = avatarDef.head === 'Head 03' || avatarDef.head === 'Head 04' ? 1.06 : 1;
     const height = avatarDef.age === 'Mature' ? 1 : avatarDef.age === 'Young Adult' ? 0.97 : 1;
-    avatar3dRef.current.setParameters({
+    renderer.setParameters({
       height, bodyWidth: bodyW, shoulderWidth: 1, chest, waist, hipWidth: hips,
       armLength: 1, legLength: 1, headScale, eyeSize: 1, noseWidth: 1, jawWidth: 1, cheekWidth: 1
     });
-  }, [avatarDef, cubeMode]);
+    const color = (value: string, fallback: string) => {
+      const v = value.toLowerCase();
+      if (v.includes('ruby') || v.includes('crimson') || v.includes('red')) return '#9d2630';
+      if (v.includes('purple') || v.includes('plum') || v.includes('violet')) return '#7a3fb4';
+      if (v.includes('black') || v.includes('jet')) return '#15151b';
+      if (v.includes('silver') || v.includes('platinum')) return '#c8cbd4';
+      if (v.includes('burgundy')) return '#541d2b';
+      if (v.includes('blonde') || v.includes('champagne')) return '#d6ad69';
+      if (v.includes('auburn')) return '#7b3524';
+      if (v.includes('cyan') || v.includes('blue')) return '#2da7c5';
+      return fallback;
+    };
+    const rgb = (hex: string) => {
+      const n = parseInt(hex.slice(1), 16);
+      return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255] as [number, number, number];
+    };
+    renderer.setSkinColor(...rgb(color(avatarDef.skin, '#d99b82')));
+    renderer.setHairColor(...rgb(color(avatarDef.hair, '#4b2730')));
+    renderer.setEyeColor(...rgb(color(draft.eyeColor || avatarDef.eyes, '#4f77a8')));
+    renderer.setGlbBodyScale(bodyW, height, bodyW);
+  }, [avatarDef, draft, cubeMode]);
 
   // ---- category catalog state (AvatarCategories mirror) ----
   const [catId, setCatId] = useState('gender');
@@ -2515,6 +2550,7 @@ export default function App() {
           )}
         {cubeMode && (
           <div className="hd-cube-overlay">
+            <div className="live-editor-badge">● LIVE AVATAR EDITOR · MENU CHANGES APPLY NOW</div>
             <canvas ref={avatarCanvasRef} className="hd3d-canvas" aria-label="HD avatar 3D viewport" />
             <button className="hd-cube-close" onClick={() => setCubeMode(false)} title="Exit 3D viewport">
               ✕ EXIT 3D

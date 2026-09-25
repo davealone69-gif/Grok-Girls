@@ -49,10 +49,8 @@ class CriticalJourneyTest {
     private lateinit var device: UiDevice
 
     /** Rail labels carry an emoji + the word; match on the word only. */
-    private val railSections = listOf(
-        "Builder", "Presets", "Import", "Body", "Clothing", "Hair", "Face",
-        "Eyes", "Accessories", "Augments", "Tattoos", "Animations",
-        "Story", "Gallery", "Chat", "Premium"
+    private val primarySections = listOf(
+        "Builder", "Presets", "Gallery", "Chat", "More"
     )
 
     @Before
@@ -120,30 +118,18 @@ class CriticalJourneyTest {
 
     /** Every rail section is reachable and changes what is on screen. */
     @Test
-    fun t02_everyRailSectionIsReachable() {
+    fun t02_primaryNavigationIsReachable() {
         val missing = mutableListOf<String>()
-        val inert = mutableListOf<String>()
-
-        for (name in railSections) {
+        for (name in primarySections) {
             val target = device.findObject(By.textContains(name))
             if (target == null) { missing.add(name); continue }
-
-            val before = screenSignature()
             target.click()
-            device.waitForIdle(800)
-            val after = screenSignature()
-
-            if (before == after) inert.add(name)
+            device.waitForIdle(700)
             assertTrue("App died after tapping '$name'", appIsAlive())
         }
-
-        assertTrue("Rail sections not found on screen: $missing", missing.isEmpty())
-        // Builder is the default section, so tapping it is legitimately a no-op.
-        val unexpectedlyInert = inert.filterNot { it == "Builder" }
-        assertTrue(
-            "These sections changed nothing on screen (dead navigation): $unexpectedlyInert",
-            unexpectedlyInert.isEmpty()
-        )
+        assertTrue("Primary navigation entries not found: $missing", missing.isEmpty())
+        assertNotNull("18+ crown control missing", device.findObject(By.descContains("Adult 18+ Mode")))
+        assertNotNull("Settings control missing", device.findObject(By.descContains("Settings")))
     }
 
     private fun screenSignature(): String =

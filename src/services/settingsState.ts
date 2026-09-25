@@ -165,7 +165,7 @@ export const DEFAULT_SETTINGS: SettingsState = {
   version: 1,
   contentGate: { ageConfirmed: false, adult: false },
   generation: { negative: '', seed: '', steps: 28, cfg: 7, size: 1024 },
-  provider: { image: 'local', chat: 'local' },
+  provider: { image: 'sdlocal', chat: 'ollama' },
   connections: {},
   selfHost: {
     base: '', type: 'unknown', checkpoint: '', sampler: '', upscaler: '',
@@ -463,8 +463,12 @@ export function saveGenerationSettings(p: Partial<GenerationSettings>): void {
 /* ------------------------------------------------- provider prefs */
 
 export function getProviderPref(kind: 'image' | 'chat'): ProviderName {
-  return kind === 'image' ? loadSettings().provider.image : loadSettings().provider.chat;
+  const saved = kind === 'image' ? loadSettings().provider.image : loadSettings().provider.chat;
+  // Migrate the obsolete scripted local route to a real local engine.
+  if (saved === 'local') return kind === 'image' ? 'sdlocal' : 'ollama';
+  return saved;
 }
+
 export function saveProviderPref(kind: 'image' | 'chat', p: ProviderName): void {
   update(s => ({ ...s, provider: { ...s.provider, [kind]: p } }));
 }

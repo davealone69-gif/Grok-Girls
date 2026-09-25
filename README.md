@@ -1,13 +1,13 @@
-# Grok Girls Studio
+# DD³ / DoubleD³ Studio
 
-AAA-style cyberpunk / gothic-glamour **character creator & companion studio** — a fully client-side React + Vite app. Design a persona (the flagship preset is **Ruby Noir**: crimson hair, lace corset, fishnets, red velvet choker, reclining in a dark leather armchair under moody noir lighting), chat with her, run story chapters, and render images/video. Installable as a **PWA** and packaged for **Android** via Capacitor.
+08REDRUM Studio presents a cyberpunk / gothic-glamour **character creator & companion studio** — a fully client-side React + Vite app. Design a persona (the flagship preset is **Ruby Noir**: crimson hair, lace corset, fishnets, red velvet choker, reclining in a dark leather armchair under moody noir lighting), chat with her, run story chapters, and render images/video. Installable as a **PWA** and packaged for **Android** via Capacitor.
 
 > All personas are fictional adults (18+). The app includes a built-in 18+ toggle in the left rail. Keep interactions respectful.
 
 ## Features
 
 ### Avatar Studio (Builder)
-- **Left nav rail** — Appearance, Body, Clothing, Hair, Face, Eyes, Accessories, Augments, Tattoos, Animations, Premium, Help + Randomize, Stats & Achievements, Settings, 18+ toggle, Chat.
+- **Phone navigation** — Builder, Presets, Gallery, Chat and More stay in one compact bottom bar. Settings and the gated 18+ crown live in the phone top bar. Detailed Builder categories stay inside Builder.
 - **Persona management** — rename any persona (Appearance → Persona Name), duplicate (⧉), delete with double-click confirm, export/import personas as JSON files from the PRESETS browser.
 - **Scene Style presets** — one-click mood library (Noir Boudoir, Cyber Neon, Golden Hour, Candlelight, Pastel Dream, B&W Noir, Blue Hour, Red Room): each sets the viewport filter, backdrop, accent color, and prompt style together.
 - **⧉ x4 Variations** — batch-render four alternate poses/angles at once, re-roll any single card, and apply the winner to the viewport + gallery.
@@ -21,9 +21,9 @@ AAA-style cyberpunk / gothic-glamour **character creator & companion studio** �
 - **Scene prompt editor** (✎ in header) — the prompt compiles live from your builder choices; edit, copy, or rebuild it.
 - **Lower dock** — HAIR STYLE grid, HAIR COLOR wheel (canvas HSV wheel + sliders + hex + swatches + named color chips), MAKEUP presets (eye looks + lipstick chips), EYEBROWS shapes + thickness.
 - **Details & add-ons** — click to cycle: Choker, Corset, Fishnets, Piercings, Scars, Makeup, Face Paint, Cyberware.
-- **Right inspector** — Appearance (gender: female / non-binary / android, 8 skin tones, head shape slider, age slider, skin details, color accent), Hair, Eyes, Face, Body, Clothing & Lingerie (corset, choker, hosiery, scene backdrop, room), Tattoos, Augments.
-- **Footer** — Avatar ID + copy, LOAD OUTFIT wardrobe drawer, generation ENGINE selector (Local / OpenRouter / Gemini / Custom / **Self-Hosted**), CANCEL, GENERATE RENDER, ⧉ x4 variations, SAVE AVATAR.
-- **Local Noir render engine** — zero-config procedural SVG renderer that draws a stylized boudoir portrait reflecting your actual choices (hair colour, corset, fishnets, choker, accent light, cyber scene). Cloud providers render via their APIs when configured.
+- **Right inspector** — Appearance (gender: Female / Male / Cyborg, 8 skin tones, head shape slider, age slider, skin details, color accent), Hair, Eyes, Face, Body, Clothing & Lingerie (corset, choker, hosiery, scene backdrop, room), Tattoos, Augments.
+- **Footer** — Avatar ID + copy, LOAD OUTFIT wardrobe drawer, generation ENGINE selector (SD Local / OpenRouter / Gemini / Custom / **Self-Hosted**), CANCEL, GENERATE RENDER, ⧉ x4 variations, SAVE AVATAR.
+- **Procedural preview** — a session-only SVG preview reflects selected traits while editing. It is never reported as generated media. Real generation uses configured SD Local, OpenRouter, Gemini, Custom or Self-Hosted providers.
 - **HD-model prompt engine** — all compiled prompts target ultra-HD photorealistic 3D character renders (DAZ Studio Genesis 8 HD style, Iray GI, 8K pore-level skin, SSS), so cloud generations match the HD model look.
 
 ### Companion features
@@ -81,7 +81,7 @@ The app is a **PWA** (installable) and ships with a ready **Capacitor Android pr
 ### Option A — PWA install (no build tools needed)
 1. Host the built app anywhere (Netlify, Vercel, GitHub Pages) or run `npm run build && npm run preview`.
 2. Open the URL in **Chrome on Android** → ⋮ menu → **Add to Home screen / Install app**.
-3. It installs as a standalone full-screen app with the Grok Girls icon, splash color, and offline shell support (service worker).
+3. It installs as a standalone full-screen app with the DD³ icon, splash color, and offline shell support (service worker).
 
 ### Option B — Real APK via Capacitor (Android Studio)
 ```bash

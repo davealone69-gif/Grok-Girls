@@ -12,16 +12,13 @@ def chk(name, cond, extra=""):
     results.append((name, bool(cond), extra))
 
 def tap_adult(pg, phone):
-    """Open the 18+ control: bottom-bar crown (desktop) or More sheet row (phone)."""
+    """Open the 18+ control: compact phone top bar or desktop rail crown."""
     if phone:
-        open_st = pg.locator(".more-sheet").evaluate("el => el.classList.contains('open')")
-        if not open_st:
-            pg.locator(".rail-btn[title*='More']").first.click()
-            pg.wait_for_timeout(320)
-        pg.locator(".more-item.more-adult").first.click()
+        pg.locator(".phone-topbar .crown-btn").first.click()
     else:
-        pg.locator("button.crown-btn").first.click()
+        pg.locator(".nav-rail .crown-btn").first.click()
     pg.wait_for_timeout(240)
+
 
 # The quota / IndexedDB checks below drive a real ~1.6 MB self-hosted
 # render against a mock A1111 on :7860. Start it here so the suite is
@@ -53,9 +50,9 @@ with sync_playwright() as p:
     pg.wait_for_timeout(300)
     pg.locator(".companion-input").fill("hello")
     sb = pg.locator(".btn-send-chat").bounding_box()
-    fb = pg.locator(".master-footer").bounding_box()
-    if sb and fb:
-        chk("landscape: SEND fully above footer", sb["y"] + sb["height"] <= fb["y"], f"SEND bottom={sb['y']+sb['height']:.0f} footer top={fb['y']:.0f}")
+    nav = pg.locator(".nav-rail").bounding_box()
+    if sb and nav:
+        chk("landscape: SEND fully above navigation", sb["y"] + sb["height"] <= nav["y"], f"SEND bottom={sb['y']+sb['height']:.0f} nav top={nav['y']:.0f}")
         cx, cy = sb["x"]+sb["width"]/2, sb["y"]+sb["height"]/2
         el = pg.evaluate(f"() => {{ const e = document.elementFromPoint({cx},{cy}); return e ? e.className : 'none'; }}")
         chk("landscape: SEND hit-testable", el == "btn-send-chat", el)
@@ -102,12 +99,12 @@ with sync_playwright() as p:
     """)
     pg.reload(wait_until="networkidle")
     pg.wait_for_timeout(500)
-    pg.locator(".btn-generate-media").first.click()
+    pg.locator(".render-action.primary").first.click()
     seen = []
     for _ in range(18):
         pg.wait_for_timeout(300)
         if pg.locator(".toast").count():
-            seen.append(pg.locator(".toast").inner_text())
+            seen.extend(pg.locator(".toast").all_inner_texts())
     toast = " | ".join(seen)
     gal = pg.evaluate("JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]')")
     render_ok = any("complete" in t.lower() for t in seen)
@@ -141,11 +138,15 @@ with sync_playwright() as p:
         pg.goto("http://localhost:8080/", wait_until="networkidle")
         pg.wait_for_timeout(600)
         chk(f"{label} app renders", pg.locator(".app-container").count() == 1)
-        chk(f"{label} rail+footer+viewport", pg.locator(".nav-rail").count() == 1 and pg.locator(".master-footer").count() == 1 and pg.locator(".character-image").count() == 1)
-        fb = pg.locator(".master-footer").bounding_box()
-        if fb:
-            chk(f"{label} footer flush bottom", fb["y"] + fb["height"] <= vp[1] + 1, f"{fb['y']+fb['height']:.0f}/{vp[1]}")
-        chk(f"{label} no pageerrors", len(errs) == 0, errs[:1])
+        chk(f"{label} rail+viewport", pg.locator(".nav-rail").count() == 1 and pg.locator(".character-image").count() == 1)
+        if vp[0] <= 900:
+            chk(f"{label} phone top bar", pg.locator(".phone-topbar").count() == 1)
+            nav = pg.locator(".nav-rail").bounding_box()
+            chk(f"{label} bottom navigation", bool(nav) and nav["y"] + nav["height"] >= vp[1] - 1, str(nav))
+        else:
+            fb = pg.locator(".master-footer").bounding_box()
+            if fb:
+                chk(f"{label} footer flush bottom", fb["y"] + fb["height"] <= vp[1] + 1, f"{fb['y']+fb['height']:.0f}/{vp[1]}")
         pg.close()
 
     # --- 5) SWEEP REGRESSIONS ---
@@ -153,7 +154,7 @@ with sync_playwright() as p:
         pg = b.new_page(viewport={"width": vp[0], "height": vp[1]})
         pg.goto("http://localhost:8080/", wait_until="networkidle")
         pg.wait_for_timeout(500)
-        cb = pg.locator(".btn-cancel").first
+        cb = pg.locator(".btn-cancel:visible").first
         bb = cb.bounding_box()
         chk(f"H4 cancel visible ({label})", bool(bb) and bb["width"] > 20 and bb["height"] > 10, str(bb)[:60])
         cb.click(timeout=5000)
@@ -171,9 +172,9 @@ with sync_playwright() as p:
     seedin.fill("777")
     pg.keyboard.press("Escape")
     pg.wait_for_timeout(300)
-    pg.locator(".btn-cancel").first.click()
+    pg.locator(".btn-cancel:visible").first.click()
     pg.wait_for_timeout(400)
-    pg.locator(".btn-cancel").first.evaluate("el => el.blur()")
+    pg.locator(".btn-cancel:visible").first.evaluate("el => el.blur()")
     pg.keyboard.press("p")
     pg.wait_for_timeout(400)
     neg_after = pg.locator("label", has_text="NEGATIVE PROMPT").locator("input").first.input_value()
@@ -186,11 +187,15 @@ with sync_playwright() as p:
     pg.locator(".rail-btn[title='Interactive Dialogue']").click()
     pg.wait_for_timeout(300)
     chatval = pg.locator(".mini-provider-select").first.input_value()
-    chk("H1 chat engine independent of render engine", chatval == "local", chatval)
+    chk("H1 chat engine independent of render engine", chatval == "ollama", chatval)
     pg.locator(".companion-input").fill("hello there")
     pg.locator(".btn-send-chat").click()
     pg.wait_for_timeout(900)
-    chk("H1 chat replies with selfhosted render engine", pg.locator(".chat-bubble.assistant").count() >= 1)
+    status = pg.locator(".status-line").inner_text().lower() if pg.locator(".status-line").count() else ""
+    chk("H1 disabled scripted chat does not fabricate a reply",
+        pg.locator(".chat-bubble.assistant").count() == 0 and "Ollama is not ready" in status,
+        status[:120])
+
 
     pg.locator(".rail-btn[title='Interactive Dialogue']").click()
     pg.locator("button.crown-btn").first.click()
@@ -207,18 +212,21 @@ with sync_playwright() as p:
     for _ in range(6):
         pg.wait_for_timeout(300)
         if pg.locator(".toast").count():
-            seen.append(pg.locator(".toast").inner_text())
+            seen.extend(pg.locator(".toast").all_inner_texts())
     toasts = " | ".join(seen)
-    chk("M5 adult chat pinned to LOCAL", "pinned to LOCAL" in toasts or "cloud chat" in toasts, toasts[:100])
-    chk("M5 pinned chat still replies", pg.locator(".chat-bubble.assistant").count() >= 2)
+    chk("M5 adult chat pins away from cloud", "pinned to" in toasts, toasts[:120])
+    chk("M5 unavailable adult engine does not fabricate a reply",
+        pg.locator(".chat-bubble.assistant").count() < 2)
 
-    pg.locator(".mini-provider-select").first.select_option("local")
+    pg.locator(".mini-provider-select").first.select_option("ollama")
     pg.locator(".companion-input").fill("this puzzle is hard but fun")
     pg.locator(".btn-send-chat").click()
     pg.wait_for_timeout(1200)
-    last = pg.locator(".chat-bubble.assistant").last.inner_text()
-    adult_hit = pg.evaluate("""(t) => /fuck|sex|cum|pussy|cock|wet|spread|deeper|suck|lick|orgasm|breed|throat|ass|tits|blow|finger|clit|anal|ride|oral|toy|dildo|spank|choke|squirt|dp|ahegao|collar|leash/i.test(t)""", last)
-    chk("M6 innocent 'hard' gets clean reply", not adult_hit, last[:80])
+    status = pg.locator(".status-line").inner_text().lower() if pg.locator(".status-line").count() else ""
+    chk("M6 unavailable Ollama chat is rejected honestly",
+        pg.locator(".chat-bubble.assistant").count() == 0 and "Ollama is not ready" in status,
+        status[:120])
+
     pg.close()
 
     # --- 6) ANDROID-FIRST ---
@@ -281,7 +289,7 @@ with sync_playwright() as p:
     saved = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-avatar-defs-v1')||'{}')['default']")
     keys_ok = bool(saved) and sorted(saved.keys()) == sorted(["gender", "skin", "head", "age", "hair", "eyes", "face", "body", "tattoos", "augmentations", "outfit"])
     chk("avatar definition: all 11 data-class fields stored", keys_ok, str(sorted(saved.keys()))[:120] if saved else "none")
-    chk("avatar definition: gender follows the allowed set", saved and saved.get("gender") in ("Female", "Non-binary", "Android"), str(saved and saved.get("gender")))
+    chk("avatar definition: gender follows the allowed set", saved and saved.get("gender") in ("Female", "Male", "Cyborg"), str(saved and saved.get("gender")))
     import re as _re
     chk("avatar definition: canonical defaults (skin/head)", saved and saved.get("skin") == "Tone 01" and bool(_re.match(r"Head \d{2}", saved.get("head", ""))), str(saved)[:120])
     pg.evaluate("""() => {
@@ -302,7 +310,7 @@ with sync_playwright() as p:
     pg.wait_for_timeout(300)
     chk("avatar categories: 11 categories rendered", pg.locator(".category-btn").count() == 11, pg.locator(".category-btn").count())
     gender_opts = pg.locator(".category-option").all_inner_texts()
-    chk("avatar categories: gender excludes Male (product rule)", "Male" not in gender_opts and "Non-binary" in gender_opts, str(gender_opts))
+    chk("avatar categories: gender exposes the three primary families", all(x in gender_opts for x in ("Female", "Male", "Cyborg")), str(gender_opts))
     pg.locator(".category-btn", has_text="Skin").click()
     pg.wait_for_timeout(200)
     chk("avatar categories: skin has 6 tones", pg.locator(".category-option").count() == 6, pg.locator(".category-option").count())
@@ -423,7 +431,10 @@ with sync_playwright() as p:
     before_count = pg.evaluate("() => JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]').length")
     pg.locator(".native-action", has_text="HD RENDER").click()
     try:
-        pg.wait_for_function("() => { const t = [...document.querySelectorAll('.toast')].map(x => x.textContent).join(' '); return t.includes('HD render complete'); }", timeout=120000)
+        pg.wait_for_function("""() => {
+          const items = JSON.parse(localStorage.getItem('grok-girls-gallery-v1') || '[]');
+          return items.some(i => i.provider === 'hdrenderer');
+        }""", timeout=120000)
         done = True
     except Exception:
         done = False
@@ -434,8 +445,10 @@ with sync_playwright() as p:
     chk("hd renderer: exactly one gallery item added (busy guard)", after_count == before_count + 1, f"{before_count} -> {after_count}")
     pg.keyboard.press("Escape")
     pg.wait_for_timeout(300)
-    pg.evaluate("() => { const b = [...document.querySelectorAll('.hud-btn')].find(x => x.textContent.includes('3D')); if (b) b.click(); }")
-    pg.wait_for_timeout(1500)
+    if pg.locator(".hd-cube-overlay").count() == 0:
+        pg.get_by_title("Interactive 3D avatar viewport").click()
+    pg.locator(".hd-cube-overlay").wait_for(state="visible", timeout=5000)
+    pg.locator(".hd3d-canvas").wait_for(state="visible", timeout=5000)
     chk("hd avatar: 3D overlay visible", pg.locator(".hd-cube-overlay").count() == 1)
     a1 = pg.evaluate("() => window.__hdAvatar.getAngle()")
     pg.wait_for_timeout(500)

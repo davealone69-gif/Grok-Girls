@@ -34,7 +34,15 @@ export const adultOptions = {
     'fishnet bodystocking',
     'leather harness only',
     'wet shirt clinging',
-    'just a choker'
+    'just a choker',
+    'corset and garter, no panties',
+    'open velvet robe, bare underneath',
+    'neon biker jacket only',
+    'gothic bridal lace open front',
+    'latex dress unzipped',
+    'silk slip dress sheer',
+    'crop top and micro skirt',
+    'nothing but thigh-highs and heels'
   ],
 
   coverage: [
@@ -49,7 +57,28 @@ export const adultOptions = {
     'cum on skin, post-sex',
     'ass spread, detailed hole',
     'pussy spread, wet detailed',
-    'breasts out, nipples erect'
+    'breasts out, nipples erect',
+    // breast-focused coverage
+    'large full breasts free, soft natural hang',
+    'perky high breasts, tight firm',
+    'heavy pendulous breasts, deep cleavage',
+    'breasts pressed together, cleavage focus',
+    'one breast freed from clothing',
+    'breasts with visible veins and realistic weight',
+    'small petite breasts, delicate',
+    'augmented round breasts, high projection',
+    // pussy-focused coverage
+    'pussy lips soft closed, neat',
+    'pussy lips slightly parted, pink inner',
+    'puffy outer lips, full mound',
+    'pussy spread open, detailed inner folds',
+    'shaved smooth pussy',
+    'trimmed landing strip',
+    'full natural bush',
+    'pussy glistening wet, arousal visible',
+    'pussy with visible clit detail',
+    'pussy stretched around penetration',
+    'pussy creampie leaking'
   ],
 
   pose: [
@@ -93,7 +122,32 @@ export const adultOptions = {
     'anal stretched, detailed',
     'body with bite marks and hickeys',
     'sweaty glistening skin',
-    'makeup smeared from sex'
+    'makeup smeared from sex',
+    // detailed breast design
+    'large heavy breasts, natural soft shape, realistic hang',
+    'full round breasts, firm high projection',
+    'petite small breasts, delicate nipples',
+    'wide-set breasts with deep natural cleavage',
+    'close-set breasts pressed together',
+    'teardrop breast shape, soft underside',
+    'breasts with visible soft movement and weight',
+    'dark puffy areolas, large nipples',
+    'small tight areolas, perky nipples',
+    'breasts with faint stretch marks, realistic',
+    'breasts glistening with oil or sweat',
+    // detailed pussy design
+    'neat closed pussy lips, smooth',
+    'puffy outer labia, full soft mound',
+    'inner lips slightly protruding, pink',
+    'pussy with detailed folds and texture',
+    'swollen aroused pussy, engorged clit',
+    'shaved bare pussy, clean detail',
+    'lightly trimmed pubic hair',
+    'full natural pubic hair',
+    'pussy wet and shiny with arousal',
+    'pussy lips parted, visible entrance',
+    'pussy gripping penetration, stretched',
+    'pussy after orgasm, twitching, wet'
   ],
 
   scene: [
@@ -115,7 +169,13 @@ export const adultOptions = {
     'bathtub water play',
     'balcony at night',
     'dungeon restraint room',
-    'photostudio seamless backdrop'
+    'photostudio seamless backdrop',
+    'neon garage workshop',
+    'haunted gothic bedroom',
+    'silk and shadow boudoir',
+    'cyber docking bay',
+    'luxury sex spa suite',
+    'neon stairwell'
   ],
 
   lighting: [
@@ -145,7 +205,9 @@ export const adultOptions = {
     'side profile penetration',
     'top-down looking down',
     'low angle power shot',
-    'intimate face + body crop'
+    'intimate face + body crop',
+    'breast close-up detail',
+    'pussy close-up macro detail'
   ],
 
   styling: [
@@ -162,6 +224,11 @@ export const adultOptions = {
 
   accessories: [
     'none',
+    'crown',
+    'tiara',
+    'glasses',
+    'visor',
+    'earrings',
     'velvet choker',
     'collar and leash',
     'restraints / cuffs',

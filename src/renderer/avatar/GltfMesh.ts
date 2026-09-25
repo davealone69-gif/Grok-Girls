@@ -25,6 +25,8 @@ export interface GpuPrimitive {
   vertexCount: number;
   skinned: boolean;
   morphs: MorphBuffers | null;
+  positionBuffer: WebGLBuffer | null;
+  basePositions: Float32Array;
 }
 
 const ATTRIBUTES: Array<{
@@ -53,6 +55,9 @@ export function uploadPrimitive(
   }
   gl.bindVertexArray(vao);
 
+  let positionBuffer: WebGLBuffer | null = null;
+  let basePositions = new Float32Array();
+
   for (const attribute of ATTRIBUTES) {
     const accessorIndex = primitive.attributes[attribute.name];
     if (accessorIndex === undefined) {
@@ -67,6 +72,10 @@ export function uploadPrimitive(
 
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    if (attribute.name === 'POSITION') {
+      positionBuffer = buffer;
+      basePositions = new Float32Array(data as Float32Array);
+    }
 
     const accessor = asset.json.accessors![accessorIndex];
     gl.enableVertexAttribArray(attribute.location);
@@ -151,6 +160,8 @@ export function uploadPrimitive(
     meshIndex,
     vertexCount: posAccessor?.count ?? 0,
     skinned: primitive.attributes.JOINTS_0 !== undefined,
-    morphs: buildMorphBuffers(asset, primitive)
+    morphs: buildMorphBuffers(asset, primitive),
+    positionBuffer,
+    basePositions
   };
 }

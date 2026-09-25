@@ -44,11 +44,12 @@ export interface AvatarDefinition {
   tattoos: string;
   augmentations: string;
   outfit: string;
+  accessory: string;
 }
 
 export const AVATAR_DEFINITION_FIELDS: CanonicalCategoryId[] = [
   'gender', 'skin', 'head', 'age', 'hair', 'eyes',
-  'face', 'body', 'tattoos', 'augmentations', 'outfit'
+  'face', 'body', 'tattoos', 'augmentations', 'outfit', 'accessory'
 ];
 
 /** Exactly the Kotlin data-class defaults (from the master catalog). */
@@ -63,7 +64,8 @@ export const DEFAULT_AVATAR_DEFINITION: AvatarDefinition = {
   body: 'Average',
   tattoos: 'None',
   augmentations: 'None',
-  outfit: 'Casual'
+  outfit: 'Casual',
+  accessory: 'None'
 };
 
 export function defaultDefinitionValue(field: CanonicalCategoryId): string {
@@ -83,7 +85,8 @@ export function toAvatarDefinition(d: AvatarDraft): AvatarDefinition {
     body: canonicalValueOf('body', d),
     tattoos: canonicalValueOf('tattoos', d),
     augmentations: canonicalValueOf('augmentations', d),
-    outfit: canonicalValueOf('outfit', d)
+    outfit: canonicalValueOf('outfit', d),
+    accessory: canonicalValueOf('accessory', d)
   };
 }
 

@@ -1,11 +1,23 @@
 import { AdultSelections, buildAdultPrompt } from './adultOptions';
 import { GENDER_RICH, BODY_RICH, EYE_RICH, FACE_RICH, HAIR_RICH, SKIN_RICH } from '../models/avatarCatalog';
 
+export type AvatarFamily = 'female' | 'male' | 'cyborg';
+
+/** Backward-compatible normalization for older saved drafts. */
+export function normalizeAvatarFamily(value: unknown): AvatarFamily {
+  if (value === 'male' || value === 'cyborg' || value === 'female') return value;
+  if (value === 'android') return 'cyborg';
+  if (value === 'nonbinary') return 'female';
+  return 'female';
+}
+
 export interface AvatarDraft {
   id: string;
   name: string;
+  personaId?: string;
   age: number;
-  gender?: 'female' | 'nonbinary' | 'android';
+  /** Primary avatar family. Legacy values are accepted on import and normalized by normalizeAvatarFamily. */
+  gender?: AvatarFamily;
   ethnicity: string;
   bodyType: string;
   eyeColor: string;
@@ -15,6 +27,7 @@ export interface AvatarDraft {
   hairStyle: string;
   skinTone: string;
   outfit: string;
+  accessory?: string;
   pose: string;
   expression: string;
   extra: string;
@@ -65,9 +78,14 @@ export const avatarOptions = {
     'open robe, nothing underneath',
     'stockings and garter only, no panties',
     'latex catsuit unzipped to the navel',
-    'wet see-through white shirt, no bra'
+    'wet see-through white shirt, no bra',
+    'velvet cocktail dress slit high, no underwear',
+    'neon biker leathers half-unzipped',
+    'gothic bridal lace with sheer panels',
+    'silk kimono falling off one shoulder'
   ],
   pose: [
+    // existing core
     'sensually reclining back in dark leather armchair, delicate hand on chest',
     'perched on edge of dark leather armchair, leaning forward with seductive eye contact',
     'centered three-quarter confident portrait',
@@ -83,7 +101,28 @@ export const avatarOptions = {
     'missionary, legs wrapped high',
     'facesitting, grinding down',
     'standing against wall, one leg lifted around partner',
-    'on back, knees to chest, presenting'
+    'on back, knees to chest, presenting',
+    // new — derived from Drive pose/room concepts (no image copy)
+    'standing power pose, one hand on hip, looking over shoulder',
+    'seated legs crossed high, chin tilted down, intense eye contact',
+    'leaning against neon-lit wall, one knee bent, leather jacket open',
+    'reclining on silk sheets, arms above head, body arched',
+    'kneeling on velvet, hands bound behind back, looking up',
+    'straddling chair backwards, arms resting on backrest',
+    'lying on side, hip cocked, looking back over shoulder',
+    'pressed against rain-streaked glass, hands splayed',
+    'sitting edge of bed, legs apart, leaning forward',
+    'standing in doorway silhouette, one hand on frame',
+    'bent over spa massage table, head turned',
+    'on knees in neon garage, looking up under orange light',
+    'lounging on gothic throne, one leg over armrest',
+    'pinned against brick wall, leg wrapped high',
+    'on back on docking bench, legs elevated',
+    'spooning from behind, head turned for kiss',
+    'riding reverse cowgirl, looking back',
+    'standing full nelson hold, legs spread',
+    'on all fours on silk, face down ass up',
+    'sitting astride partner, hands on chest, grinding'
   ],
   expression: [
     'alluring parted lips and seductive gaze',
@@ -97,7 +136,10 @@ export const avatarOptions = {
     'submissive pleasure, tears of intensity',
     'dominant smirk while riding',
     'ahegao-style extreme pleasure',
-    'gasping mid-thrust'
+    'gasping mid-thrust',
+    'cold gothic stare, slightly parted lips',
+    'hungry predatory smile',
+    'soft afterglow half-lidded eyes'
   ],
   lipstickShade: ['bold ruby red satin', 'deep crimson velvet', 'dark plum gothic', 'blood red gloss', 'nude velvet matte', 'electric neon magenta', 'smeared after oral'],
   makeupStyle: ['dark smokey eyeshadow with winged eyeliner', 'glitter cut-crease glam eyes', 'natural soft glam', 'cyberpunk graphic liner with neon accents', 'gothic heavy kohl liner', 'bronzed editorial glow', 'ruined makeup after sex, tears and smeared lipstick'],
@@ -109,6 +151,7 @@ export const avatarOptions = {
   facePaintStyle: ['none', 'tribal cheek mark', 'neon accent line across eyes', 'gothic tear mark'],
   browShape: ['arched', 'straight', 'soft rounded', 'bold angled', 'thin feathered', 'natural full'],
   chairSetting: [
+    // existing
     'vintage tufted dark leather armchair, moody boudoir with crimson edge lighting',
     'black velvet chaise lounge, candlelit gothic boudoir',
     'dark leather wingback by a rain-streaked window, cold blue moonlight with red neon rim',
@@ -116,7 +159,23 @@ export const avatarOptions = {
     'high-fashion studio with dark seamless backdrop and colored gels',
     'leather sofa mid-sex, city lights through window',
     'glass table edge, bent over',
-    'rooftop railing at night'
+    'rooftop railing at night',
+    // new rooms — derived from Drive scene concepts (no image copy)
+    'neon-lit garage workshop, orange sodium lights, chrome tools, wet concrete floor',
+    'haunted gothic bedroom, torn velvet drapes, dusty chandelier, moonlight through broken window',
+    'silk and shadow boudoir, cascading black silk sheets, single warm spotlight',
+    'cyber docking station bay, metal bench, glowing interface panels, blue status lights',
+    'luxury sex spa suite, steam, white marble, soft ambient lighting',
+    'neon stairwell, fluorescent flicker, concrete walls, urban night',
+    'dark restaurant booth, low candle, red leather seats, intimate corner',
+    'moonlit gothic balcony, stone rail, fog, distant cathedral silhouette',
+    'rumpled hotel bed, city neon bleeding through sheer curtains',
+    'industrial loft with exposed brick, hanging Edison bulbs, leather couch',
+    'black marble bathroom, steam on mirror, gold fixtures',
+    'underground club VIP couch, purple and red laser haze',
+    'rain-soaked alley doorway, neon sign reflection on wet pavement',
+    'velvet throne room, deep crimson drapes, single theatrical spotlight',
+    'futuristic observation deck, stars and city grid through floor-to-ceiling glass'
   ]
 };
 
@@ -160,7 +219,8 @@ export function loadDraft(id: string, fallback: AvatarDraft): AvatarDraft {
   try {
     const raw = localStorage.getItem(`${DRAFT_KEY}:${id}`);
     if (!raw) return fallback;
-    return { ...fallback, ...(JSON.parse(raw) as Partial<AvatarDraft>) };
+    const loaded = JSON.parse(raw) as Partial<AvatarDraft>;
+    return { ...fallback, ...loaded, gender: normalizeAvatarFamily(loaded.gender ?? fallback.gender) };
   } catch {
     return fallback;
   }

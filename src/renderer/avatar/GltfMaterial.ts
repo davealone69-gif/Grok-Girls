@@ -8,6 +8,7 @@
 import { GltfMaterial } from './GltfTypes';
 
 export interface WebPbrMaterial {
+  name?: string;
   baseColor: [number, number, number, number];
 
   metallic: number;
@@ -26,6 +27,7 @@ export function createPbrMaterial(material: GltfMaterial): WebPbrMaterial {
   const pbr = material.pbrMetallicRoughness;
 
   return {
+    name: material.name,
     baseColor: (pbr?.baseColorFactor ?? [1, 1, 1, 1]) as [number, number, number, number],
     metallic: pbr?.metallicFactor ?? 1,
     roughness: pbr?.roughnessFactor ?? 1,

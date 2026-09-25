@@ -31,7 +31,7 @@ with sync_playwright() as p:
     heap0 = pg.evaluate("performance.memory ? performance.memory.usedJSHeapSize : 0")
     t0 = time.time()
     for i in range(30):
-        pg.locator(".btn-generate-media").first.click()
+        pg.locator(".render-action.primary").first.click()
         pg.wait_for_timeout(420)
     t30 = time.time() - t0
     heap1 = pg.evaluate("performance.memory ? performance.memory.usedJSHeapSize : 0")
@@ -47,7 +47,7 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={"width": 393, "height": 851})
     pg.goto("http://localhost:8080/", wait_until="networkidle")
     pg.wait_for_timeout(400)
-    pg.locator(".rail-btn[title='Interactive Dialogue']").click()
+    pg.locator("button[title='Interactive Dialogue']:visible").first.click()
     pg.wait_for_timeout(300)
     t0 = time.time()
     for i in range(100):
@@ -76,7 +76,7 @@ with sync_playwright() as p:
     """)
     pg.reload(wait_until="networkidle")
     t0 = time.time()
-    pg.locator(".rail-btn[title='Generation Archive']").click()
+    pg.locator("button[title='Generation Archive']:visible").first.click()
     pg.wait_for_selector(".gallery-card", timeout=10000)
     t_grid = time.time() - t0
     cards = pg.locator(".gallery-card").count()
@@ -134,14 +134,14 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
     # synchronous double-dispatch: both handlers run in the same task — the
     # exact race the busyRef guard must close (button also disables on busy)
-    pg.locator(".btn-generate-media").first.evaluate("el => { el.click(); el.click(); }")
+    pg.locator(".render-action.primary").first.evaluate("el => { el.click(); el.click(); }")
     pg.wait_for_timeout(1200)
     g = pg.evaluate("JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]').length")
     rec("concurrency", "double-click -> gallery items", g, "expect 1")
     pg.close()
 
     # ---------- B2: provider switch mid-flight (slow mock on 7861) ----------
-    pg = b.new_page(viewport={"width": 393, "height": 851})
+    pg = b.new_page(viewport={"width": 1280, "height": 900})
     pg.goto("http://localhost:8080/", wait_until="networkidle")
     pg.wait_for_timeout(400)
     pg.evaluate("""
@@ -153,13 +153,13 @@ with sync_playwright() as p:
     """)
     pg.reload(wait_until="networkidle")
     pg.wait_for_timeout(400)
-    pg.locator(".btn-generate-media").first.click()
+    pg.locator(".render-action.primary").first.click()
     pg.wait_for_timeout(700)  # render in flight (5s mock)
-    pg.locator(".footer-provider-select").select_option("local")
+    pg.locator(".footer-provider-select").select_option("sdlocal")
     pg.wait_for_timeout(1200)
     crashed = pg.locator(".app-container").count() == 0
     g = pg.evaluate("JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]').length")
-    busy = pg.locator(".btn-generate-media").inner_text()
+    busy = pg.locator(".render-action.primary").inner_text()
     rec("concurrency", "mid-flight engine switch: no crash", not crashed)
     rec("concurrency", "mid-flight gallery items", g)
     rec("concurrency", "mid-flight button state", busy)
@@ -185,15 +185,17 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={"width": 393, "height": 851})
     pg.goto("http://localhost:8080/", wait_until="networkidle")
     pg.wait_for_timeout(400)
-    pg.locator(".rail-btn[title='Interactive Dialogue']").click()
+    # Phone layout keeps Chat behind the More sheet. Open the actual visible
+    # navigation control before targeting the secondary destination.
+    pg.get_by_role("button", name="Chat", exact=False).first.click()
     pg.wait_for_timeout(200)
     pg.locator(".companion-input").fill("persist me")
     pg.locator(".btn-send-chat").click()
     pg.wait_for_timeout(400)
-    pg.locator(".rail-btn[title='Preset Identities']").click()
+    pg.locator("button[title='Preset Identities']:visible").first.click()
     pg.wait_for_timeout(300)
     pg.locator(".persona-name-input, .name-input").first.fill("Persist Test")
-    pg.locator("button", has_text="SAVE AVATAR").first.click()
+    pg.locator("button:has-text('SAVE'):visible").first.click()
     pg.wait_for_timeout(300)
     pg.reload(wait_until="networkidle")
     pg.wait_for_timeout(500)

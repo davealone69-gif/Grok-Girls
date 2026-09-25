@@ -82,9 +82,9 @@ export function saveModel(p: string, model: string, m?: ProviderMode) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Local procedural "NOIR RENDER" engine                               */
-/* Draws a stylized boudoir portrait SVG that reflects the prompt:     */
-/* hair colour, outfit hints, accent colour, cyber/neon scene cues.    */
+/* Session-only procedural preview                                     */
+/* This is never a generation provider and must never be presented as */
+/* generated media. It exists only for immediate local UI preview.     */
 /* ------------------------------------------------------------------ */
 
 function hashSeed(str: string): number {
@@ -704,26 +704,17 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
 class Local {
   readonly name = 'local' as const;
   available() {
-    return true;
+    return false;
   }
-  async generate(r: GenerationRequest): Promise<GenerationResult> {
-    const assetUrl = createLocalPlaceholderSvg(r.prompt, r.mode, r.width ?? 768, r.height ?? 768, r.seed);
+  async generate(_r: GenerationRequest): Promise<GenerationResult> {
     return {
       provider: 'local',
-      status: 'ready',
-      assetUrl,
-      text: `Local procedural ${r.mode} rendered with the Noir engine. Connect OpenRouter, Gemini or a Custom endpoint in ⚙ Settings for cloud neural inference.`
+      status: 'error',
+      warning: 'Local procedural rendering is disabled as a generation provider. Connect Ollama for on-device text or Stable Diffusion/self-hosted for real image generation.'
     };
   }
 }
 
-/**
- * Phone-local Stable Diffusion (sd-server on 127.0.0.1:1234).
- *
- * This is the on-device image engine and the counterpart to Ollama's
- * on-device text engine. It produces REAL pixels from a real diffusion
- * model — unlike `Local`, which draws a procedural SVG placeholder.
- */
 class SdLocalProvider {
   readonly name = 'sdlocal' as const;
   available() {
@@ -795,14 +786,24 @@ export async function generateWithFallback(
   r: GenerationRequest,
   preferred: ProviderName = 'local'
 ): Promise<GenerationResult> {
-  const all = providers();
-  for (const p of [...all.filter(x => x.name === preferred), ...all.filter(x => x.name !== preferred)]) {
-    if (!p.available() && p.name !== 'local') continue;
+  // "Fallback" means provider selection, never fake media. A local
+  // procedural preview is deliberately NOT a generation provider.
+  const all = providers().filter(p => p.name !== 'local');
+  const ordered = [
+    ...all.filter(p => p.name === preferred),
+    ...all.filter(p => p.name !== preferred)
+  ];
+  const attempted: string[] = [];
+
+  for (const p of ordered) {
+    if (!p.available()) continue;
+    attempted.push(p.name);
     try {
       const out = await p.generate(r);
-      if (out.status === 'ready' || out.status === 'queued' || p.name === 'local') return out;
+      if (out.status === 'ready' || out.status === 'queued') return out;
+      if (p.name === preferred) return out;
     } catch (e) {
-      if (p.name === preferred && preferred !== 'local') {
+      if (p.name === preferred) {
         return {
           provider: p.name,
           status: 'error',
@@ -813,10 +814,13 @@ export async function generateWithFallback(
       }
     }
   }
+
   return {
-    provider: 'local',
-    status: 'fallback',
-    warning: 'No configured generation provider.',
+    provider: preferred,
+    status: 'error',
+    warning: attempted.length
+      ? `Configured generation provider(s) failed: ${attempted.join(', ')}.`
+      : 'No real generation provider is configured. Local preview is not presented as generated media.',
     assetUrl: undefined,
     text: undefined
   };
@@ -824,33 +828,8 @@ export async function generateWithFallback(
 
 export async function chatWithProvider(messages: ChatMessage[], preferred: ProviderName = 'openrouter') {
   const e = env();
-  if (preferred === 'local') return { provider: 'local' as const, text: 'Local companion mode is active.' };
-
   if (preferred === 'selfhosted') {
-    const chatEndpoint = getSavedEndpoint('custom', 'chat') || e.VITE_CUSTOM_CHAT_ENDPOINT || '';
-    if (!chatEndpoint) {
-      return {
-        provider: 'selfhosted' as const,
-        text: 'The self-hosted server is for image generation only. Switch the chat engine to Local, OpenRouter, Gemini or Custom to talk.',
-        warning: 'No chat endpoint configured for self-hosted mode.'
-      };
-    }
-    // Route self-hosted chat through an OpenAI-compatible endpoint if one is configured.
-    const key = getSavedApiKey('custom');
-    const r = await fetchWithTimeout(chatEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },
-      body: JSON.stringify({
-        model: e.VITE_CUSTOM_CHAT_MODEL ?? getSavedModel('custom', 'chat') ?? getSavedModel('custom'),
-        messages
-      })
-    }, 45000);
-    if (!r.ok) throw new Error(`Self-hosted chat HTTP ${r.status}`);
-    const d = await r.json();
-    return {
-      provider: 'selfhosted' as const,
-      text: d.choices?.[0]?.message?.content ?? d.text ?? 'No response.'
-    };
+    throw new Error('Self-hosted image servers do not provide chat. Use Ollama for on-device chat or explicitly select a chat provider.');
   }
 
   if (preferred === 'openrouter') {

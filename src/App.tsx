@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { Girl, rooms, seedGirls, Room } from './models/studio';
+import { PERSONA_PROFILES, personaIdForCharacter, getPersonaProfile } from './models/personas';
 import { advanceStory, initialStory, StoryState, storyChapters, storyPrompt } from './models/story';
 import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDeleted, addActMemory } from './services/memory';
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
@@ -7,6 +8,7 @@ import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, Gallery
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
 import { setSdEnabled } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
+import { isOllamaChatReady } from './services/ollama';
 import { DEFAULT_MENU, loadMenuXml, MenuItem, menuSection } from './services/menuXml';
 import {
   DEFAULT_AVATAR_DEFINITION,
@@ -183,6 +185,13 @@ type DockTab = 'style' | 'color' | 'makeup' | 'eyebrows' | 'scene' | 'categories
 /** Phone top-level destinations pinned in the bottom bar (5th slot = More).
  *  Every other rail action stays reachable through the More sheet. */
 const MOBILE_PRIMARY: string[] = ['appearance', 'presets', 'gallery', 'chat'];
+const MOBILE_MORE: string[] = ['import', 'story', 'animations', 'premium', 'help'];
+const BUILDER_SECTIONS: Array<{ id: InspectorSection; label: string; icon: string }> = [
+  { id: 'appearance', label: 'Appearance', icon: '✦' }, { id: 'body', label: 'Body', icon: '◉' },
+  { id: 'hair', label: 'Hair', icon: '⌁' }, { id: 'face', label: 'Face', icon: '◌' },
+  { id: 'eyes', label: 'Eyes', icon: '◉' }, { id: 'clothing', label: 'Outfit', icon: '◇' },
+  { id: 'tattoos', label: 'Tattoos', icon: '✦' }, { id: 'augments', label: 'Cyber', icon: '⚡' },
+];
 
 /** Rail ids that open a builder edit section (accordion) on the phone. */
 const MOBILE_SECTION: Record<string, InspectorSection> = {
@@ -200,6 +209,7 @@ function defaultDraft(g: Girl): AvatarDraft {
   return {
     id: g.id,
     name: g.name,
+    personaId: g.personaId || personaIdForCharacter(g.id, g.traits),
     age: g.age,
     gender: 'female',
     ethnicity: g.ethnicity,
@@ -211,6 +221,7 @@ function defaultDraft(g: Girl): AvatarDraft {
     hairStyle: g.hairStyle,
     skinTone: g.skinTone,
     outfit: g.outfit,
+    accessory: 'None',
     pose: g.pose,
     expression: g.expression,
     extra: g.extra,
@@ -238,6 +249,7 @@ function defaultDraft(g: Girl): AvatarDraft {
 
 const draftToGirlPatch = (d: AvatarDraft): Partial<Girl> => ({
   name: d.name,
+  personaId: d.personaId,
   age: d.age,
   ethnicity: d.ethnicity,
   bodyType: d.bodyType,
@@ -252,6 +264,12 @@ const draftToGirlPatch = (d: AvatarDraft): Partial<Girl> => ({
   expression: d.expression,
   extra: d.extra
 });
+
+const ADULT_ONLY_OUTFIT_RE = /nude|naked|genitals|breasts exposed|fully nude|no panties|nothing underneath|garter only|micro bikini|open robe|see-through|sheer.*no (bra|panties)/i;
+
+function outfitRequiresAdult(value: string | undefined): boolean {
+  return !!value && ADULT_ONLY_OUTFIT_RE.test(value);
+}
 
 function cycleOption<T>(list: readonly T[], current: T | undefined): T {
   const idx = list.indexOf(current as T);
@@ -284,6 +302,13 @@ export default function App() {
   useEffect(() => {
     saveDraft(draft);
   }, [draft]);
+
+  // Persona is an identity contract, not just an editor label. Keep the
+  // selected archetype on the active Girl immediately so Chat and Video use
+  // the same personality even before the user presses SAVE.
+  useEffect(() => {
+    if (draft.personaId) updateGirl({ personaId: draft.personaId });
+  }, [draft.personaId]);
 
   // Undo / redo history for the draft
   const historyRef = useRef<AvatarDraft[]>([]);
@@ -386,7 +411,13 @@ export default function App() {
 
   const openSection = (sec: InspectorSection) => {
     setView('builder');
-    setOpenSections(prev => ({ ...prev, [sec]: true }));
+    setOpenSections(prev => {
+      const next = { ...prev };
+      (Object.keys(next) as InspectorSection[]).forEach(key => {
+        next[key] = key === sec;
+      });
+      return next;
+    });
     if (isMobile) {
       setMobileSheet('inspector');
       setMoreOpen(false);
@@ -529,6 +560,7 @@ export default function App() {
   const [avatarDef, setAvatarDef] = useState<AvatarDefinition>(() => avatarVm.get());
   const avatarPreviewRef = useRef<AvatarPreviewHandle>(null);
   const [cubeMode, setCubeMode] = useState(true);
+  const [avatar3dLoaded, setAvatar3dLoaded] = useState(false);
   const avatar3dRef = useRef<HdAvatarRenderer | null>(null);
   const avatarCanvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
@@ -541,8 +573,10 @@ export default function App() {
       // canonical lanes travel through __grokGirlsVm.setOption instead.
       let count = 0;
       if (patch.draft && Object.keys(patch.draft).length) {
-        setDraft(d => ({ ...d, ...patch.draft }));
-        count += Object.keys(patch.draft).length;
+        const safeDraft = { ...patch.draft };
+        if (!adult && outfitRequiresAdult(safeDraft.outfit)) delete safeDraft.outfit;
+        setDraft(d => ({ ...d, ...safeDraft }));
+        count += Object.keys(safeDraft).length;
       }
       if (patch.lighting) {
         setLightingMode(patch.lighting as Parameters<typeof setLightingMode>[0]);
@@ -581,11 +615,12 @@ export default function App() {
     return avatarVm.subscribe((def, change) => {
       setAvatarDef(def);
       if (change) {
+        if (!adult && change.category === 'outfit' && change.value === 'Nude') return;
         // VM-initiated edit -> apply exactly that category onto the draft
         setDraft(d => applyCategoryOption(d, change.category, change.value));
       }
     });
-  }, [avatarVm]);
+  }, [avatarVm, adult]);
   useEffect(() => {
     // rich-UI edits flow one-way into the VM (no emission back)
     avatarVm.syncFromDraft(draft);
@@ -597,7 +632,12 @@ export default function App() {
   };
   const loadOutfit = () => {
     const def = loadAvatarDefinition(identityId()) ?? DEFAULT_AVATAR_DEFINITION;
-    setDraft(d => ({ ...d, outfit: applyAvatarDefinition(d, def).outfit }));
+    const loaded = applyAvatarDefinition(draft, def);
+    if (!adult && outfitRequiresAdult(loaded.outfit)) {
+      showToast('Saved identity contains an 18+ outfit. Enable 18+ mode before loading it.');
+      return;
+    }
+    setDraft(d => ({ ...d, outfit: loaded.outfit, accessory: loaded.accessory }));
     showToast(def === DEFAULT_AVATAR_DEFINITION ? 'No saved identity — applied Casual outfit' : `Outfit loaded from "${identityId()}"`);
   };
   const toggleTattoos = () => {
@@ -626,22 +666,53 @@ export default function App() {
     const canvas = avatarCanvasRef.current;
     if (!canvas) return;
     let renderer: HdAvatarRenderer | null = null;
+    let cancelled = false;
+    setAvatar3dLoaded(false);
     try {
       renderer = new HdAvatarRenderer(canvas, { skeleton: defaultAvatarSkeleton() });
       avatar3dRef.current = renderer;
       renderer.start();
+      const gender = (draft.gender || 'female').toLowerCase();
+      const rig = gender === 'male'
+        ? 'male'
+        : gender === 'cyborg'
+        ? 'cyborg'
+        : gender === 'androgynous'
+        ? 'androgynous'
+        : 'female';
+      void fetch(`/vendor/3DDD/app/src/main/assets/models/${rig}.glb`)
+        .then(r => {
+          if (!r.ok) throw new Error(`avatar asset HTTP ${r.status}`);
+          return r.arrayBuffer();
+        })
+        .then(data => renderer?.loadGlb(data))
+        .then(() => {
+          if (!cancelled) {
+            renderer?.setAvatarVisible(false);
+            setAvatar3dLoaded(true);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            renderer?.setAvatarVisible(true);
+            setAvatar3dLoaded(false);
+          }
+        });
     } catch (e) {
       console.warn('[avatar3d] renderer failed to start', e);
     }
     return () => {
+      cancelled = true;
       renderer?.release();
       avatar3dRef.current = null;
+      setAvatar3dLoaded(false);
     };
-  }, [cubeMode]);
+  }, [cubeMode, draft.gender]);
 
   // ---- avatar definition drives the 3D parameters (native morph layer) ----
   useEffect(() => {
-    if (!avatar3dRef.current) return;
+    const renderer = avatar3dRef.current;
+    if (!renderer) return;
     const b = avatarDef.body;
     const bodyW = b === 'Heavy' ? 1.12 : b === 'Slim' ? 0.86 : 1;
     const chest = b === 'Heavy' ? 1.14 : b === 'Athletic' ? 1.05 : b === 'Slim' ? 0.88 : 1;
@@ -649,11 +720,43 @@ export default function App() {
     const hips = b === 'Heavy' ? 1.14 : b === 'Slim' ? 0.88 : 1;
     const headScale = avatarDef.head === 'Head 03' || avatarDef.head === 'Head 04' ? 1.06 : 1;
     const height = avatarDef.age === 'Mature' ? 1 : avatarDef.age === 'Young Adult' ? 0.97 : 1;
-    avatar3dRef.current.setParameters({
+    renderer.setParameters({
       height, bodyWidth: bodyW, shoulderWidth: 1, chest, waist, hipWidth: hips,
       armLength: 1, legLength: 1, headScale, eyeSize: 1, noseWidth: 1, jawWidth: 1, cheekWidth: 1
     });
-  }, [avatarDef, cubeMode]);
+    const color = (value: string, fallback: string) => {
+      const v = value.toLowerCase();
+      if (v.includes('ruby') || v.includes('crimson') || v.includes('red')) return '#9d2630';
+      if (v.includes('purple') || v.includes('plum') || v.includes('violet')) return '#7a3fb4';
+      if (v.includes('black') || v.includes('jet')) return '#15151b';
+      if (v.includes('silver') || v.includes('platinum')) return '#c8cbd4';
+      if (v.includes('burgundy')) return '#541d2b';
+      if (v.includes('blonde') || v.includes('champagne')) return '#d6ad69';
+      if (v.includes('auburn')) return '#7b3524';
+      if (v.includes('cyan') || v.includes('blue')) return '#2da7c5';
+      return fallback;
+    };
+    const rgb = (hex: string) => {
+      const n = parseInt(hex.slice(1), 16);
+      return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255] as [number, number, number];
+    };
+    renderer.setSkinColor(...rgb(color(avatarDef.skin, '#d99b82')));
+    renderer.setHairColor(...rgb(color(avatarDef.hair, '#4b2730')));
+    renderer.setEyeColor(...rgb(color(draft.eyeColor || avatarDef.eyes, '#4f77a8')));
+    renderer.setGlbBodyScale(bodyW, height, bodyW);
+
+    // 3DDD's proven humanoid rigs expose seven full-vertex morph targets.
+    // Apply the body editor to those targets immediately, with no image-generation
+    // round trip. Values stay normalized 0..1 and are deliberately conservative.
+    const bodyMorphs = b === 'Heavy'
+      ? { muscle: 0.30, weight: 0.86, height: 0.52, shoulder_width: 0.58, hip_width: 0.82, bust: 0.76, limb_length: 0.50 }
+      : b === 'Athletic'
+      ? { muscle: 0.78, weight: 0.22, height: 0.56, shoulder_width: 0.78, hip_width: 0.46, bust: 0.48, limb_length: 0.62 }
+      : b === 'Slim'
+      ? { muscle: 0.22, weight: 0.16, height: 0.62, shoulder_width: 0.34, hip_width: 0.30, bust: 0.34, limb_length: 0.68 }
+      : { muscle: 0.38, weight: 0.46, height: 0.52, shoulder_width: 0.50, hip_width: 0.52, bust: 0.46, limb_length: 0.52 };
+    renderer.setGlbMorphWeightsByName(bodyMorphs);
+  }, [avatarDef, draft, cubeMode, avatar3dLoaded]);
 
   // ---- category catalog state (AvatarCategories mirror) ----
   const [catId, setCatId] = useState('gender');
@@ -1119,12 +1222,12 @@ export default function App() {
     const next = randomizeAvatar(draft);
     setDraft(next);
     updateGirl(draftToGirlPatch(next));
-    // Render the new identity into the viewport immediately (no debounce).
-    setLivePreview(true);
-    setViewportOverride(
-      createLocalPlaceholderSvg(buildDraftPrompt(next, adult), 'image', 1024, 1024, seedInput ? Number(seedInput) : undefined)
-    );
-    showToast('Identity randomized — save to keep it');
+    // Randomize changes identity state only. It never pretends a procedural
+    // SVG is a generated render. The user can then use the selected real
+    // render engine or the native 3D viewport.
+    setViewportOverride(null);
+    setLivePreview(false);
+    showToast('Identity randomized. Generate with the selected engine to render it.');
   };
 
   const handleSaveAvatar = () => {
@@ -1243,8 +1346,17 @@ export default function App() {
     negative: combinedNegative() || undefined
   });
 
+  const generationAllowed = () => {
+    if (!adult && outfitRequiresAdult(draft.outfit)) {
+      showToast('18+ mode is required for this outfit.');
+      return false;
+    }
+    return true;
+  };
+
   const handleGenerate = async () => {
     if (busyRef.current) return;
+    if (!generationAllowed()) return;
     if (provider === 'selfhosted' && !getServerBase()) {
       showToast('Configure your self-hosted server in ⚙ Settings → Self-Hosted first');
       setResult(
@@ -1257,24 +1369,14 @@ export default function App() {
     setResult('Synthesizing high-detail avatar render…');
     try {
       const r = await generateWithFallback(genRequest(compiledPrompt), provider);
-      const isRealRenderer = r.provider !== 'local';
       if (r.assetUrl) {
-        if (isRealRenderer) {
-          // Real AI render (cloud / self-hosted) -> show it in the viewport
-          setLivePreview(false);
-          setViewportOverride(null);
-          await applyPreviewPatch({ previewUrl: r.assetUrl });
-          showToast(`Render complete · ${r.provider.toUpperCase()} engine · ${renderSize}px`);
-          if (storageWarnRef.current) {
-            showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
-          }
-        } else {
-          // Local procedural preview -> gallery only, keep the HD photo in the viewport
-          showToast(
-            provider !== 'local'
-              ? `LOCAL engine used (${provider.toUpperCase()} is not configured) — render saved to gallery`
-              : 'Local preview render added to gallery — tap 🖥 on a gallery card to set it as the viewport image'
-          );
+        // Every generation result reaching this handler is from a real configured provider.
+        setLivePreview(false);
+        setViewportOverride(null);
+        await applyPreviewPatch({ previewUrl: r.assetUrl });
+        showToast(`Render complete · ${r.provider.toUpperCase()} engine · ${renderSize}px`);
+        if (storageWarnRef.current) {
+          showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
         }
         const added = await addGalleryItem({
           avatarId: girl.id,
@@ -1315,7 +1417,7 @@ export default function App() {
   };
 
   const handleBatchRender = async () => {
-    if (busyRef.current) return;
+    if (busyRef.current || !generationAllowed()) return;
     enterBusy();
     setVariationsOpen(true);
     setVariations([
@@ -1337,11 +1439,7 @@ export default function App() {
       setVariations(results);
       bumpAndCelebrate('generations', results.filter(r => r.url).length);
       setResult('');
-      showToast(
-        results.some(r => r.url && r.provider !== 'local')
-          ? '4 variations rendered — pick your favorite'
-          : '4 local preview variations ready — USE THIS to apply one'
-      );
+      showToast('4 real-provider variations rendered — pick your favorite');
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Batch failed');
     } finally {
@@ -1350,6 +1448,7 @@ export default function App() {
   };
 
   const rerollVariation = async (i: number) => {
+    if (!generationAllowed()) return;
     try {
       const r = await generateWithFallback(
         genRequest(variationPrompt(i), (Date.now() % 100000) + i * 13),
@@ -1430,7 +1529,7 @@ export default function App() {
       ctx.fillStyle = '#fff';
       ctx.font = '700 34px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('GROK GIRLS · CONTACT SHEET', canvas.width / 2, 58);
+      ctx.fillText('DD³ · CONTACT SHEET', canvas.width / 2, 58);
       const imgs = await Promise.all(
         items.map(
           item =>
@@ -1502,10 +1601,15 @@ export default function App() {
         chatProvider !== 'local' &&
         chatProvider !== 'selfhosted' &&
         chatProvider !== 'ollama';
-      const chatEngine = adultPinned ? 'local' : chatProvider;
+      if (adult && chatProvider !== 'ollama' && !isOllamaChatReady()) {
+        throw new Error('18+ chat requires the local Ollama engine. Start Ollama and try again.');
+      }
+      const adultLocalEngine: ProviderName = 'ollama';
+      const chatEngine = adult ? adultLocalEngine : chatProvider;
       if (adultPinned && !adultChatPinWarnRef.current) {
         adultChatPinWarnRef.current = true;
-        showToast('18+ mode: chat pinned to LOCAL — cloud chat engines are not used for adult conversations');
+        const label = 'OLLAMA';
+        showToast(`18+ mode: chat pinned to ${label} — cloud chat engines are not used for adult conversations`);
       }
       const aid = String(now + 1);
       const streamingEngine = chatEngine === 'ollama';
@@ -1549,7 +1653,7 @@ export default function App() {
 
   /* ------------------------------------------------------------ story */
   const renderStoryScene = async (interactionId: string) => {
-    if (busyRef.current) return;
+    if (busyRef.current || !generationAllowed()) return;
     enterBusy();
     setResult('Rendering story scene…');
     const prompt = buildGenerationPrompt(
@@ -1566,16 +1670,12 @@ export default function App() {
     try {
       const r = await generateWithFallback({ prompt, mode: 'image', width: 1024, height: 1024 }, provider);
       if (r.assetUrl) {
-        if (r.provider !== 'local') {
-          setLivePreview(false);
-          setViewportOverride(null);
-          await applyPreviewPatch({ previewUrl: r.assetUrl });
-          showToast(`Story scene rendered · ${r.provider.toUpperCase()}`);
-          if (storageWarnRef.current) {
-            showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
-          }
-        } else {
-          showToast('Story scene preview added to gallery');
+        setLivePreview(false);
+        setViewportOverride(null);
+        await applyPreviewPatch({ previewUrl: r.assetUrl });
+        showToast(`Story scene rendered · ${r.provider.toUpperCase()}`);
+        if (storageWarnRef.current) {
+          showToast('⚠ Browser storage full — this render is session-only. Export gallery JSON & clear space.');
         }
         const added = await addGalleryItem({ avatarId: girl.id, mode: 'image', prompt, assetUrl: r.assetUrl, provider: r.provider });
         void refreshGallery();
@@ -1973,14 +2073,14 @@ export default function App() {
     >
       {/* 1. LEFT VERTICAL NAVIGATION RAIL */}
       <aside className="nav-rail">
-        <div className="brand-logo" title="Grok Girls Studio">
-          M
+        <div className="brand-logo" title="DD³ Studio">
+          DD³
         </div>
 
         <div className="rail-build-label">{menuLabel('rail_header')}</div>
 
         <div className={`rail-menu ${isMobile ? 'rail-nowrap' : ''}`}>
-          {menuSection(menuItems, 'rail')
+          {menuSection(menuItems, 'primary')
             .filter(i => i.kind === 'Button')
             .filter(b => !isMobile || MOBILE_PRIMARY.includes(b.id))
             .map(b => (
@@ -2034,6 +2134,7 @@ export default function App() {
                     setAdult(v => !v);
                   }
                 }}
+                aria-label={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}
                 title={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}
               >
                 <span className="rail-icon">👑</span>
@@ -2099,6 +2200,24 @@ export default function App() {
 
       {/* 3. CENTER VIEWPORT & LOWER DOCK */}
       <section className="center-workspace">
+        <div className="phone-topbar">
+          <div className="phone-brand">
+            <img src="/icons/icon-192.png" alt="" className="phone-brand-icon" />
+            <span>DD³ STUDIO</span>
+          </div>
+          <div className="phone-topbar-actions">
+            <button
+              className="phone-icon-btn phone-edit-btn"
+              onClick={() => openSection((Object.keys(openSections) as InspectorSection[]).find(k => openSections[k]) || 'appearance')}
+              title="Open avatar menus"
+              aria-label="Open avatar menus"
+            >☰</button>
+            <button className={`phone-icon-btn crown-btn ${adult ? 'adult-active' : ''}`} onClick={() => {
+              if (!adult && !isAgeConfirmed()) setAgeGateOpen(true); else setAdult(v => !v);
+            }} aria-label={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'} title={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}>👑</button>
+            <button className="phone-icon-btn" onClick={() => setIsSettingsOpen(true)} title="Server & Settings" aria-label="Server & Settings">⚙️</button>
+          </div>
+        </div>
         {/* Viewport Header Bar */}
         <header className="viewport-header">
           <div className="avatar-design-title">
@@ -2476,6 +2595,7 @@ export default function App() {
           )}
         {cubeMode && (
           <div className="hd-cube-overlay">
+            <div className="live-editor-badge">● LIVE AVATAR EDITOR · MENU CHANGES APPLY NOW</div>
             <canvas ref={avatarCanvasRef} className="hd3d-canvas" aria-label="HD avatar 3D viewport" />
             <button className="hd-cube-close" onClick={() => setCubeMode(false)} title="Exit 3D viewport">
               ✕ EXIT 3D
@@ -2483,6 +2603,44 @@ export default function App() {
           </div>
         )}
         </div>
+
+        {view === 'builder' && (
+          <section className="builder-control-strip" aria-label="Avatar builder controls">
+            <div className="family-switcher">
+              <span className="family-label">FAMILY</span>
+              {[
+                { id: 'female' as const, label: 'Female', icon: '♀' },
+                { id: 'male' as const, label: 'Male', icon: '♂' },
+                { id: 'cyborg' as const, label: 'Cyborg', icon: '🤖' }
+              ].map(f => (
+                <button key={f.id} className={`family-btn ${draft.gender === f.id ? 'active' : ''}`} onClick={() => setDraft(d => ({ ...d, gender: f.id }))} aria-pressed={draft.gender === f.id} title={`Use ${f.label} avatar family`}>
+                  <span>{f.icon}</span>{f.label}
+                </button>
+              ))}
+            </div>
+            <div className="builder-category-strip" aria-label="Builder categories">
+              {BUILDER_SECTIONS.map(s => (
+                <button key={s.id} className={`builder-category-btn ${openSections[s.id] && view === 'builder' ? 'active' : ''}`} onClick={() => openSection(s.id)} title={s.label}>
+                  <span>{s.icon}</span><span>{s.label}</span>
+                </button>
+              ))}
+            </div>
+            <div className="phone-render-actions">
+              <button className="render-action primary" onClick={handleGenerate} disabled={busy}>GENERATE</button>
+              <button className="render-action" onClick={() => void handleHdRender()} disabled={busy || hdRendering}>HD</button>
+              <button className="render-action" onClick={handleRandomize} disabled={busy}>RANDOM</button>
+              <button className="render-action" onClick={() => setCubeMode(v => !v)}>{cubeMode ? '2D' : '3D'}</button>
+              <button className="render-action" onClick={handleSaveAvatar}>SAVE</button>
+              <button className="render-action" onClick={handleCancel}>CANCEL</button>
+            </div>
+            <div className="phone-camera-actions" aria-label="Camera controls">
+              <button onClick={() => setRotationAngle(r => (r + 45) % 360)} title="Rotate view">↻ Rotate</button>
+              <button onClick={() => setZoomLevel(z => (z > 1.2 ? 1 : 1.4))} title="Zoom view">⌕ Zoom</button>
+              <button onClick={resetCamera} title="Center view">⊙ Center</button>
+              <button onClick={handleSavePng} title="Save current image as PNG">⇩ PNG</button>
+            </div>
+          </section>
+        )}
 
         {immersive && (
           <button className="immersive-exit" onClick={() => setImmersive(false)}>
@@ -2573,7 +2731,7 @@ export default function App() {
                     ))}
                   </div>
                   <div className="categories-options">
-                    {AVATAR_CATEGORIES.find(c => c.id === catId)?.options.map(o => {
+                    {AVATAR_CATEGORIES.find(c => c.id === catId)?.options.filter(o => adult || !(catId === 'outfit' && o === 'Nude')).map(o => {
                       const active = activeCategoryOption(draft, catId) === o;
                       return (
                         <button
@@ -2851,7 +3009,6 @@ export default function App() {
                 setProvider(v);
               }}
             >
-              <option value="local">LOCAL</option>
               <option value="sdlocal">SD LOCAL (ON-DEVICE)</option>
               <option value="openrouter">OPENROUTER</option>
               <option value="gemini">GEMINI</option>
@@ -3073,7 +3230,6 @@ export default function App() {
                   }}
                   title="Chat AI engine"
                 >
-                  <option value="local">LOCAL</option>
                   <option value="ollama">OLLAMA (ON-DEVICE)</option>
                   <option value="openrouter">OPENROUTER</option>
                   <option value="gemini">GEMINI</option>
@@ -3379,9 +3535,21 @@ export default function App() {
       )}
       <aside className="inspector-panel">
         {isMobile && (
-          <button className="mobile-sheet-close" onClick={() => setMobileSheet('none')}>
-            ✕ CLOSE PANELS
-          </button>
+          <div className="mobile-inspector-head">
+            <label className="mobile-inspector-picker">
+              <span>EDIT</span>
+              <select
+                value={(Object.keys(openSections) as InspectorSection[]).find(k => openSections[k]) || 'appearance'}
+                onChange={e => openSection(e.target.value as InspectorSection)}
+                aria-label="Avatar edit menu"
+              >
+                {BUILDER_SECTIONS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+            </label>
+            <button className="mobile-sheet-close" onClick={() => setMobileSheet('none')} aria-label="Close avatar menus">
+              ✕
+            </button>
+          </div>
         )}
         <div className="inspector-scroll">
           {/* Section: APPEARANCE */}
@@ -3394,7 +3562,7 @@ export default function App() {
             {openSections.appearance && (
               <div className="accordion-body">
                 <div className="inspector-label">
-                  <span>Persona Name</span>
+                  <span>Character Name</span>
                   <input
                     className="name-input"
                     value={draft.name}
@@ -3402,6 +3570,21 @@ export default function App() {
                     onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
                     placeholder="Name your persona…"
                   />
+                </div>
+
+                <div className="inspector-label">
+                  <span>Persona</span>
+                  <select
+                    className="inspector-select"
+                    value={draft.personaId || PERSONA_PROFILES[0].id}
+                    onChange={e => setDraft(d => ({ ...d, personaId: e.target.value }))}
+                    aria-label="Persona archetype"
+                  >
+                    {PERSONA_PROFILES.map(p => (
+                      <option key={p.id} value={p.id}>{p.label}</option>
+                    ))}
+                  </select>
+                  <small className="persona-summary">{getPersonaProfile(draft.personaId).summary}</small>
                 </div>
 
                 <div className="inspector-label">
@@ -3415,16 +3598,16 @@ export default function App() {
                       ♀
                     </button>
                     <button
-                      className={`gender-btn ${draft.gender === 'nonbinary' ? 'active' : ''}`}
-                      onClick={() => setDraft(d => ({ ...d, gender: 'nonbinary' }))}
-                      title="Non-Binary"
+                      className={`gender-btn ${draft.gender === 'male' ? 'active' : ''}`}
+                      onClick={() => setDraft(d => ({ ...d, gender: 'male' }))}
+                      title="Male"
                     >
-                      ⚧
+                      ♂
                     </button>
                     <button
-                      className={`gender-btn ${draft.gender === 'android' ? 'active' : ''}`}
-                      onClick={() => setDraft(d => ({ ...d, gender: 'android' }))}
-                      title="Android / Cyber"
+                      className={`gender-btn ${draft.gender === 'cyborg' ? 'active' : ''}`}
+                      onClick={() => setDraft(d => ({ ...d, gender: 'cyborg' }))}
+                      title="Cyborg"
                     >
                       🤖
                     </button>
@@ -3734,7 +3917,7 @@ export default function App() {
                     value={draft.outfit}
                     onChange={e => setDraft(d => ({ ...d, outfit: e.target.value }))}
                   >
-                    {avatarOptions.outfit.map(o => (
+                    {avatarOptions.outfit.filter(o => adult || !/nude|naked|genitals|breasts exposed|fully nude/i.test(o)).map(o => (
                       <option key={o} value={o}>
                         {o.slice(0, 42)}…
                       </option>
@@ -3979,7 +4162,7 @@ export default function App() {
         <div className="modal-backdrop" onClick={() => setPremiumOpen(false)}>
           <div className="modal-card premium-card" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>⭐ Grok Girls Premium</h3>
+              <h3>⭐ DD³ Premium</h3>
               <button className="modal-close" onClick={() => setPremiumOpen(false)}>
                 ✕
               </button>
@@ -4270,62 +4453,27 @@ export default function App() {
             <div className="more-sheet-scroll">
               <div className="more-group-label">STUDIO</div>
               <div className="more-sheet-grid">
-                {menuSection(menuItems, 'rail')
-                  .filter(i => i.kind === 'Button')
-                  .filter(b => !MOBILE_PRIMARY.includes(b.id))
-                  .map(b => (
-                    <button
-                      key={b.id}
-                      className="more-item"
-                      onClick={() => {
-                        setMoreOpen(false);
-                        railAction(b.id);
-                      }}
-                      title={menuTitle(b.id)}
-                    >
+                {MOBILE_MORE.map(id => {
+                  const b = menuItems.find(i => i.id === id) || DEFAULT_MENU.find(i => i.id === id);
+                  if (!b) return null;
+                  return (
+                    <button key={b.id} className="more-item" onClick={() => { setMoreOpen(false); railAction(b.id); }} title={menuTitle(b.id)}>
                       <span className="more-item-icon">{RAIL_ICONS[b.id] || '•'}</span>
                       <span>{menuLabel(b.id)}</span>
                     </button>
-                  ))}
+                  );
+                })}
               </div>
               <div className="more-group-label">QUICK ACTIONS</div>
               <div className="more-sheet-grid">
-                <button
-                  className="more-item"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    handleRandomize();
-                  }}
-                  title={menuTitle('random')}
-                >
-                  <span className="more-item-icon">🎲</span>
-                  <span>Randomize</span>
+                <button className="more-item" onClick={() => { setMoreOpen(false); handleRandomize(); }} title={menuTitle('random')}>
+                  <span className="more-item-icon">🎲</span><span>Randomize</span>
                 </button>
-                <button
-                  className="more-item"
-                  onClick={() => {
-                    setMoreOpen(false);
-                    setStatsOpen(true);
-                  }}
-                  title={menuTitle('stats')}
-                >
-                  <span className="more-item-icon">📊</span>
-                  <span>Stats</span>
+                <button className="more-item" onClick={() => { setMoreOpen(false); setStatsOpen(true); }} title={menuTitle('stats')}>
+                  <span className="more-item-icon">📊</span><span>Stats</span>
                 </button>
-                <button
-                  className={`more-item more-adult ${adult ? 'active' : ''}`}
-                  onClick={() => {
-                    setMoreOpen(false);
-                    if (!adult && !isAgeConfirmed()) {
-                      setAgeGateOpen(true);
-                    } else {
-                      setAdult(v => !v);
-                    }
-                  }}
-                  title={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}
-                >
-                  <span className="more-item-icon">👑</span>
-                  <span>{adult ? '18+ ON' : 'Adult 18+'}</span>
+                <button className="more-item" onClick={() => { setMoreOpen(false); void copyPreviewToClipboard(); }} title="Copy current image">
+                  <span className="more-item-icon">⎘</span><span>Copy</span>
                 </button>
               </div>
             </div>

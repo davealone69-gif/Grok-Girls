@@ -1,7 +1,11 @@
+import { getPersonaProfile } from './personas';
+
 export type Mode = 'image' | 'video';
 export type Emotion = 'calm' | 'happy' | 'curious' | 'excited' | 'thoughtful';
 
 export interface AvatarSpec {
+  /** Personality archetype, independent of the character's display name. */
+  personaId?: string;
   id: string;
   name: string;
   age: number;
@@ -401,6 +405,11 @@ export function buildAvatarPrompt(
   adult = false
 ) {
   const scene = room ? `${room.setting}, ${room.lighting}, ${room.mood}` : '';
+  // Persona is an identity layer shared by image/video prompting and chat.
+  // It is deliberately separate from the character's display name.
+  const personaProfile = getPersonaProfile(a.personaId);
+  const persona = `${personaProfile.label}: ${personaProfile.summary}. ${personaProfile.videoDirection}`;
+
   const action = interaction && room ? room.interactions.find(x => x.id === interaction)?.prompt : '';
   const motion =
     mode === 'video'
@@ -412,7 +421,7 @@ export function buildAvatarPrompt(
     ? 'smooth flawless HD skin shader, filmic tone mapping, raytraced studio lighting, 85mm portrait lens, f/1.4, shallow depth of field, cinematic film grain'
     : 'clean composition, sharp focus';
   const overlay = adult ? ADULT_OVERLAY : SAFE_OVERLAY;
-  return `${a.name}, adult character (18+), ${a.ethnicity}, ${a.bodyType} build, ${a.eyeColor} ${a.eyeShape} eyes, ${a.faceShape} face, ${a.hairColor} ${a.hairStyle} hair, ${a.skinTone} skin, wearing ${a.outfit}, ${a.pose}, ${a.expression}. ${a.extra}. ${scene}. ${action}. ${motion}, ${polish}. ${overlay}`;
+  return `${a.name}, adult character (18+), persona: ${persona}, ${a.ethnicity}, ${a.bodyType} build, ${a.eyeColor} ${a.eyeShape} eyes, ${a.faceShape} face, ${a.hairColor} ${a.hairStyle} hair, ${a.skinTone} skin, wearing ${a.outfit}, ${a.pose}, ${a.expression}. ${a.extra}. ${scene}. ${action}. ${motion}, ${polish}. ${overlay}`;
 }
 
 export function relationshipModifier(g: Girl) {

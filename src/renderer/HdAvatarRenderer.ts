@@ -56,6 +56,7 @@ import { ShadowShader } from './ShadowShader';
 import { createIblPipeline, destroyIblPipeline, DEFAULT_IBL_SETTINGS, IblPipeline } from './IblPipeline';
 import { CinematicRenderer } from './CinematicPipeline';
 import { loadAvatarGlb, AvatarAsset, disposeAvatarAsset } from './avatar/GltfAvatar';
+import { morphPositions } from './avatar/GltfMorphs';
 import { WebPbrMaterial } from './avatar/GltfMaterial';
 
 /* 300 es — vertex shader for the non-skinned path. Native attribute
@@ -455,9 +456,24 @@ function glbFallbacks(gl: WebGL2RenderingContext): {
 function bindGlbMaterial(
   gl: WebGL2RenderingContext,
   u: UniformCache,
-  material: WebPbrMaterial
+  material: WebPbrMaterial,
+  skinTint: [number, number, number],
+  hairTint: [number, number, number],
+  eyeTint: [number, number, number]
 ): void {
-  gl.uniform4f(u.uBaseColorFactor, material.baseColor[0], material.baseColor[1], material.baseColor[2], material.baseColor[3]);
+  const name = (material.name ?? '').toLowerCase();
+  const tint =
+    /hair|brow/.test(name) ? hairTint :
+    /eye|iris|pupil/.test(name) ? eyeTint :
+    /skin|face|body|head|torso|arm|leg/.test(name) ? skinTint :
+    [1, 1, 1] as [number, number, number];
+  gl.uniform4f(
+    u.uBaseColorFactor,
+    material.baseColor[0] * tint[0],
+    material.baseColor[1] * tint[1],
+    material.baseColor[2] * tint[2],
+    material.baseColor[3]
+  );
   gl.uniform1f(u.uMetallicFactor, material.metallic);
   gl.uniform1f(u.uRoughnessFactor, material.roughness);
   gl.uniform3f(u.uEmissiveFactor, material.emissive[0], material.emissive[1], material.emissive[2]);
@@ -553,7 +569,11 @@ export class HdAvatarRenderer {
   // GLB parity (milestone 8)
   private glbAsset: AvatarAsset | null = null;
   private glbScale = 1;
+  private glbBodyScale: [number, number, number] = [1, 1, 1];
   private avatarVisible = true;
+  private skinTint: [number, number, number] = [1, 1, 1];
+  private hairTint: [number, number, number] = [1, 1, 1];
+  private eyeTint: [number, number, number] = [1, 1, 1];
   private uniforms = new Map<WebGLProgram, UniformCache>();
   private frameRenderer: HDFrameRenderer | null = null;
   private autoRotate = true;
@@ -656,6 +676,26 @@ export class HdAvatarRenderer {
   }
   setParameters(p: AvatarParameters): void {
     this.parameters = { ...p };
+  }
+  setSkinColor(r: number, g: number, b: number): void {
+    this.material.baseColorR = r;
+    this.material.baseColorG = g;
+    this.material.baseColorB = b;
+    this.skinTint = [r, g, b];
+  }
+  setHairColor(r: number, g: number, b: number): void {
+    this.hairBaseColor = [r, g, b];
+    this.hairTint = [r, g, b];
+  }
+  setEyeColor(r: number, g: number, b: number): void {
+    this.eyeTint = [r, g, b];
+  }
+  setGlbBodyScale(x: number, y: number, z: number): void {
+    this.glbBodyScale = [
+      Math.max(0.5, Math.min(1.5, x)),
+      Math.max(0.5, Math.min(1.5, y)),
+      Math.max(0.5, Math.min(1.5, z))
+    ];
   }
   setAutoRotate(v: boolean): void {
     this.autoRotate = v;
@@ -949,7 +989,14 @@ export class HdAvatarRenderer {
         shader.setModel(
           this.glbScale === 1
             ? meshModel
-            : mat4Multiply(meshModel, mat4Scale(this.glbScale, this.glbScale, this.glbScale))
+            : mat4Multiply(
+              meshModel,
+              mat4Scale(
+                this.glbScale * this.glbBodyScale[0],
+                this.glbScale * this.glbBodyScale[1],
+                this.glbScale * this.glbBodyScale[2]
+              )
+            )
         );
         const gl = this.gl;
         gl.bindVertexArray(prim.vao);
@@ -977,11 +1024,28 @@ export class HdAvatarRenderer {
     const asset = this.glbAsset;
     if (!asset) return;
     for (const prim of asset.primitives) {
-      if (!prim.morphs) continue;
+      if (!prim.morphs || !prim.positionBuffer) continue;
       const w = prim.morphs.weights;
-      const n = Math.min(weights.length, w.length);
-      for (let i = 0; i < n; i++) w[i] = weights[i];
-      for (let i = n; i < w.length; i++) w[i] = 0;
+      for (let i = 0; i < w.length; i++) w[i] = weights[i] ?? 0;
+      const positions = morphPositions(prim.basePositions, prim.morphs, weights);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, prim.positionBuffer);
+      this.gl.bufferSubData(this.gl.ARRAY_BUFFER, 0, positions);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+    }
+  }
+
+  /** Apply the 3DDD/GLB morph names used by the live avatar editor. */
+  setGlbMorphWeightsByName(weights: Record<string, number>): void {
+    const asset = this.glbAsset;
+    if (!asset) return;
+    for (const prim of asset.primitives) {
+      if (!prim.morphs || !prim.positionBuffer) continue;
+      const values = prim.morphs.targetNames.map(name => weights[name] ?? 0);
+      prim.morphs.weights.set(values.slice(0, prim.morphs.weights.length));
+      const positions = morphPositions(prim.basePositions, prim.morphs, values);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, prim.positionBuffer);
+      this.gl.bufferSubData(this.gl.ARRAY_BUFFER, 0, positions);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
     }
   }
 
@@ -1056,11 +1120,12 @@ export class HdAvatarRenderer {
       // The shader declares MAX_MORPHS (64) per-slot arrays — upload only
       // the first 64 deltas (positionDeltas holds verts*MAX_MORPHS*3).
       if (prim.morphs) {
-        const pMax = prim.morphs.positionDeltas.length > 192 ? prim.morphs.positionDeltas.subarray(0, 192) : prim.morphs.positionDeltas;
-        const nMax = prim.morphs.normalDeltas.length > 192 ? prim.morphs.normalDeltas.subarray(0, 192) : prim.morphs.normalDeltas;
-        if (u.uMorphPosition) gl.uniform3fv(u.uMorphPosition, pMax);
-        if (u.uMorphNormal) gl.uniform3fv(u.uMorphNormal, nMax);
-        if (u.uMorphWeight) gl.uniform1fv(u.uMorphWeight, prim.morphs.weights);
+        // Morphs are already baked into the live POSITION buffer above.
+        // Keep shader morph weights zero so the old per-target vec3 path cannot
+        // double-apply or truncate a real mesh's vertex deltas.
+        if (u.uMorphPosition) gl.uniform3fv(u.uMorphPosition, ZERO_MORPH_POSITION);
+        if (u.uMorphNormal) gl.uniform3fv(u.uMorphNormal, ZERO_MORPH_POSITION);
+        if (u.uMorphWeight) gl.uniform1fv(u.uMorphWeight, ZERO_MORPH_WEIGHT);
       } else {
         if (u.uMorphPosition) gl.uniform3fv(u.uMorphPosition, ZERO_MORPH_POSITION);
         if (u.uMorphNormal) gl.uniform3fv(u.uMorphNormal, ZERO_MORPH_POSITION);
@@ -1068,15 +1133,20 @@ export class HdAvatarRenderer {
       }
 
       const material = asset.materials[prim.materialIndex] ?? asset.materials[0];
-      if (material) bindGlbMaterial(gl, u, material);
+      if (material) bindGlbMaterial(gl, u, material, this.skinTint, this.hairTint, this.eyeTint);
 
       const meshModel = asset.meshModels[prim.meshIndex] ?? mat4Identity();
       gl.uniformMatrix4fv(
         u.uModel,
         false,
-        this.glbScale === 1
-          ? meshModel
-          : mat4Multiply(meshModel, mat4Scale(this.glbScale, this.glbScale, this.glbScale))
+        mat4Multiply(
+          meshModel,
+          mat4Scale(
+            this.glbScale * this.glbBodyScale[0],
+            this.glbScale * this.glbBodyScale[1],
+            this.glbScale * this.glbBodyScale[2]
+          )
+        )
       );
       gl.bindVertexArray(prim.vao);
       if (prim.indexBuffer) {

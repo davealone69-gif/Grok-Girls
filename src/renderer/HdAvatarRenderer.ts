@@ -56,6 +56,7 @@ import { ShadowShader } from './ShadowShader';
 import { createIblPipeline, destroyIblPipeline, DEFAULT_IBL_SETTINGS, IblPipeline } from './IblPipeline';
 import { CinematicRenderer } from './CinematicPipeline';
 import { loadAvatarGlb, AvatarAsset, disposeAvatarAsset } from './avatar/GltfAvatar';
+import { morphPositions } from './avatar/GltfMorphs';
 import { WebPbrMaterial } from './avatar/GltfMaterial';
 
 /* 300 es — vertex shader for the non-skinned path. Native attribute
@@ -1023,11 +1024,28 @@ export class HdAvatarRenderer {
     const asset = this.glbAsset;
     if (!asset) return;
     for (const prim of asset.primitives) {
-      if (!prim.morphs) continue;
+      if (!prim.morphs || !prim.positionBuffer) continue;
       const w = prim.morphs.weights;
-      const n = Math.min(weights.length, w.length);
-      for (let i = 0; i < n; i++) w[i] = weights[i];
-      for (let i = n; i < w.length; i++) w[i] = 0;
+      for (let i = 0; i < w.length; i++) w[i] = weights[i] ?? 0;
+      const positions = morphPositions(prim.basePositions, prim.morphs, weights);
+      gl.bindBuffer(gl.ARRAY_BUFFER, prim.positionBuffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, positions);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    }
+  }
+
+  /** Apply the 3DDD/GLB morph names used by the live avatar editor. */
+  setGlbMorphWeightsByName(weights: Record<string, number>): void {
+    const asset = this.glbAsset;
+    if (!asset) return;
+    for (const prim of asset.primitives) {
+      if (!prim.morphs || !prim.positionBuffer) continue;
+      const values = prim.morphs.targetNames.map(name => weights[name] ?? 0);
+      prim.morphs.weights.set(values.slice(0, prim.morphs.weights.length));
+      const positions = morphPositions(prim.basePositions, prim.morphs, values);
+      gl.bindBuffer(gl.ARRAY_BUFFER, prim.positionBuffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, positions);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
     }
   }
 
@@ -1104,9 +1122,12 @@ export class HdAvatarRenderer {
       if (prim.morphs) {
         const pMax = prim.morphs.positionDeltas.length > 192 ? prim.morphs.positionDeltas.subarray(0, 192) : prim.morphs.positionDeltas;
         const nMax = prim.morphs.normalDeltas.length > 192 ? prim.morphs.normalDeltas.subarray(0, 192) : prim.morphs.normalDeltas;
-        if (u.uMorphPosition) gl.uniform3fv(u.uMorphPosition, pMax);
-        if (u.uMorphNormal) gl.uniform3fv(u.uMorphNormal, nMax);
-        if (u.uMorphWeight) gl.uniform1fv(u.uMorphWeight, prim.morphs.weights);
+        // Morphs are already baked into the live POSITION buffer above.
+        // Keep shader morph weights zero so the old per-target vec3 path cannot
+        // double-apply or truncate a real mesh's vertex deltas.
+        if (u.uMorphPosition) gl.uniform3fv(u.uMorphPosition, ZERO_MORPH_POSITION);
+        if (u.uMorphNormal) gl.uniform3fv(u.uMorphNormal, ZERO_MORPH_POSITION);
+        if (u.uMorphWeight) gl.uniform1fv(u.uMorphWeight, ZERO_MORPH_WEIGHT);
       } else {
         if (u.uMorphPosition) gl.uniform3fv(u.uMorphPosition, ZERO_MORPH_POSITION);
         if (u.uMorphNormal) gl.uniform3fv(u.uMorphNormal, ZERO_MORPH_POSITION);

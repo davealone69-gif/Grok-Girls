@@ -3548,7 +3548,7 @@ export default function App() {
             {openSections.appearance && (
               <div className="accordion-body">
                 <div className="inspector-label">
-                  <span>Persona Name</span>
+                  <span>Character Name</span>
                   <input
                     className="name-input"
                     value={draft.name}
@@ -3556,6 +3556,21 @@ export default function App() {
                     onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
                     placeholder="Name your persona…"
                   />
+                </div>
+
+                <div className="inspector-label">
+                  <span>Persona</span>
+                  <select
+                    className="inspector-select"
+                    value={draft.personaId || PERSONA_PROFILES[0].id}
+                    onChange={e => setDraft(d => ({ ...d, personaId: e.target.value }))}
+                    aria-label="Persona archetype"
+                  >
+                    {PERSONA_PROFILES.map(p => (
+                      <option key={p.id} value={p.id}>{p.label}</option>
+                    ))}
+                  </select>
+                  <small className="persona-summary">{getPersonaProfile(draft.personaId).summary}</small>
                 </div>
 
                 <div className="inspector-label">

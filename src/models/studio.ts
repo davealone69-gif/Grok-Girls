@@ -1,3 +1,5 @@
+import { getPersonaProfile } from './personas';
+
 export type Mode = 'image' | 'video';
 export type Emotion = 'calm' | 'happy' | 'curious' | 'excited' | 'thoughtful';
 
@@ -405,12 +407,9 @@ export function buildAvatarPrompt(
   const scene = room ? `${room.setting}, ${room.lighting}, ${room.mood}` : '';
   // Persona is an identity layer shared by image/video prompting and chat.
   // It is deliberately separate from the character's display name.
-  const persona = (() => {
-    try {
-      const raw = (globalThis as any).__grokGirlsPersonaProfiles?.[a.personaId || ''];
-      return raw ? `${raw.label}: ${raw.summary}. ${raw.videoDirection}` : '';
-    } catch { return ''; }
-  })();
+  const personaProfile = getPersonaProfile(a.personaId);
+  const persona = `${personaProfile.label}: ${personaProfile.summary}. ${personaProfile.videoDirection}`;
+
   const action = interaction && room ? room.interactions.find(x => x.id === interaction)?.prompt : '';
   const motion =
     mode === 'video'

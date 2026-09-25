@@ -446,3 +446,19 @@
     backdrop-filter: blur(18px) !important;
   }
 }
+
+/* Live editor UX: the avatar stays visible while the single inspector is open. */
+@media (max-width: 900px) {
+  .app-container.mobile .inspector-panel {
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: var(--mobile-nav-h) !important;
+    max-height: min(46dvh, 500px) !important;
+    border-radius: 18px 18px 0 0 !important;
+    z-index: 1200 !important;
+  }
+  .app-container.mobile .mobile-backdrop {
+    background: rgba(0,0,0,.16) !important;
+  }
+}

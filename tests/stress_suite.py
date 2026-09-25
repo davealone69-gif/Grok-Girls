@@ -187,8 +187,6 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
     # Phone layout keeps Chat behind the More sheet. Open the actual visible
     # navigation control before targeting the secondary destination.
-    pg.get_by_role("button", name="More", exact=True).click()
-    pg.wait_for_timeout(150)
     pg.get_by_role("button", name="Chat", exact=False).first.click()
     pg.wait_for_timeout(200)
     pg.locator(".companion-input").fill("persist me")

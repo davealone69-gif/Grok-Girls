@@ -14,6 +14,7 @@ export function normalizeAvatarFamily(value: unknown): AvatarFamily {
 export interface AvatarDraft {
   id: string;
   name: string;
+  personaId?: string;
   age: number;
   /** Primary avatar family. Legacy values are accepted on import and normalized by normalizeAvatarFamily. */
   gender?: AvatarFamily;

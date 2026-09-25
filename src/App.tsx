@@ -395,7 +395,13 @@ export default function App() {
 
   const openSection = (sec: InspectorSection) => {
     setView('builder');
-    setOpenSections(prev => ({ ...prev, [sec]: true }));
+    setOpenSections(prev => {
+      const next = { ...prev };
+      (Object.keys(next) as InspectorSection[]).forEach(key => {
+        next[key] = key === sec;
+      });
+      return next;
+    });
     if (isMobile) {
       setMobileSheet('inspector');
       setMoreOpen(false);
@@ -537,7 +543,7 @@ export default function App() {
   const avatarVm = avatarVmRef.current;
   const [avatarDef, setAvatarDef] = useState<AvatarDefinition>(() => avatarVm.get());
   const avatarPreviewRef = useRef<AvatarPreviewHandle>(null);
-  const [cubeMode, setCubeMode] = useState(true);
+  const [cubeMode, setCubeMode] = useState(false);
   const avatar3dRef = useRef<HdAvatarRenderer | null>(null);
   const avatarCanvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
@@ -2115,12 +2121,21 @@ export default function App() {
       {/* 3. CENTER VIEWPORT & LOWER DOCK */}
       <section className="center-workspace">
         <div className="phone-topbar">
-          <div className="phone-brand">DD³</div>
+          <div className="phone-brand">
+            <img src="/icons/icon-192.png" alt="" className="phone-brand-icon" />
+            <span>DD³ STUDIO</span>
+          </div>
           <div className="phone-topbar-actions">
+            <button
+              className="phone-icon-btn phone-edit-btn"
+              onClick={() => openSection((Object.keys(openSections) as InspectorSection[]).find(k => openSections[k]) || 'appearance')}
+              title="Open avatar menus"
+              aria-label="Open avatar menus"
+            >☰</button>
             <button className={`phone-icon-btn crown-btn ${adult ? 'adult-active' : ''}`} onClick={() => {
               if (!adult && !isAgeConfirmed()) setAgeGateOpen(true); else setAdult(v => !v);
             }} aria-label={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'} title={adult ? 'Adult 18+ Mode ACTIVE' : 'Adult 18+ Mode OFF'}>👑</button>
-            <button className="phone-icon-btn" onClick={() => setIsSettingsOpen(true)} title="Settings" aria-label="Settings">⚙️</button>
+            <button className="phone-icon-btn" onClick={() => setIsSettingsOpen(true)} title="Server & Settings" aria-label="Server & Settings">⚙️</button>
           </div>
         </div>
         {/* Viewport Header Bar */}
@@ -3439,9 +3454,21 @@ export default function App() {
       )}
       <aside className="inspector-panel">
         {isMobile && (
-          <button className="mobile-sheet-close" onClick={() => setMobileSheet('none')}>
-            ✕ CLOSE PANELS
-          </button>
+          <div className="mobile-inspector-head">
+            <label className="mobile-inspector-picker">
+              <span>EDIT</span>
+              <select
+                value={(Object.keys(openSections) as InspectorSection[]).find(k => openSections[k]) || 'appearance'}
+                onChange={e => openSection(e.target.value as InspectorSection)}
+                aria-label="Avatar edit menu"
+              >
+                {BUILDER_SECTIONS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+            </label>
+            <button className="mobile-sheet-close" onClick={() => setMobileSheet('none')} aria-label="Close avatar menus">
+              ✕
+            </button>
+          </div>
         )}
         <div className="inspector-scroll">
           {/* Section: APPEARANCE */}

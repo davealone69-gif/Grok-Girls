@@ -544,6 +544,7 @@ export default function App() {
   const [avatarDef, setAvatarDef] = useState<AvatarDefinition>(() => avatarVm.get());
   const avatarPreviewRef = useRef<AvatarPreviewHandle>(null);
   const [cubeMode, setCubeMode] = useState(true);
+  const [avatar3dLoaded, setAvatar3dLoaded] = useState(false);
   const avatar3dRef = useRef<HdAvatarRenderer | null>(null);
   const avatarCanvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
@@ -650,6 +651,7 @@ export default function App() {
     if (!canvas) return;
     let renderer: HdAvatarRenderer | null = null;
     let cancelled = false;
+    setAvatar3dLoaded(false);
     try {
       renderer = new HdAvatarRenderer(canvas, { skeleton: defaultAvatarSkeleton() });
       avatar3dRef.current = renderer;
@@ -669,10 +671,16 @@ export default function App() {
         })
         .then(data => renderer?.loadGlb(data))
         .then(() => {
-          if (!cancelled) renderer?.setAvatarVisible(false);
+          if (!cancelled) {
+            renderer?.setAvatarVisible(false);
+            setAvatar3dLoaded(true);
+          }
         })
         .catch(() => {
-          if (!cancelled) renderer?.setAvatarVisible(true);
+          if (!cancelled) {
+            renderer?.setAvatarVisible(true);
+            setAvatar3dLoaded(false);
+          }
         });
     } catch (e) {
       console.warn('[avatar3d] renderer failed to start', e);
@@ -681,8 +689,9 @@ export default function App() {
       cancelled = true;
       renderer?.release();
       avatar3dRef.current = null;
+      setAvatar3dLoaded(false);
     };
-  }, [cubeMode]);
+  }, [cubeMode, draft.gender]);
 
   // ---- avatar definition drives the 3D parameters (native morph layer) ----
   useEffect(() => {
@@ -731,7 +740,7 @@ export default function App() {
       ? { muscle: 0.22, weight: 0.16, height: 0.62, shoulder_width: 0.34, hip_width: 0.30, bust: 0.34, limb_length: 0.68 }
       : { muscle: 0.38, weight: 0.46, height: 0.52, shoulder_width: 0.50, hip_width: 0.52, bust: 0.46, limb_length: 0.52 };
     renderer.setGlbMorphWeightsByName(bodyMorphs);
-  }, [avatarDef, draft, cubeMode]);
+  }, [avatarDef, draft, cubeMode, avatar3dLoaded]);
 
   // ---- category catalog state (AvatarCategories mirror) ----
   const [catId, setCatId] = useState('gender');

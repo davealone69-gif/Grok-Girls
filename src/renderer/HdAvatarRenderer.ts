@@ -1120,8 +1120,6 @@ export class HdAvatarRenderer {
       // The shader declares MAX_MORPHS (64) per-slot arrays — upload only
       // the first 64 deltas (positionDeltas holds verts*MAX_MORPHS*3).
       if (prim.morphs) {
-        const pMax = prim.morphs.positionDeltas.length > 192 ? prim.morphs.positionDeltas.subarray(0, 192) : prim.morphs.positionDeltas;
-        const nMax = prim.morphs.normalDeltas.length > 192 ? prim.morphs.normalDeltas.subarray(0, 192) : prim.morphs.normalDeltas;
         // Morphs are already baked into the live POSITION buffer above.
         // Keep shader morph weights zero so the old per-target vec3 path cannot
         // double-apply or truncate a real mesh's vertex deltas.

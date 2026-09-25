@@ -86,7 +86,7 @@ dependencies {
 }
 
 tasks.register('stage3dddAvatarAssets', Copy) {
-    from("${rootProject.projectDir.parentFile.parentFile}/public/vendor/3DDD/app/src/main/assets/models")
+    from("${rootProject.projectDir.parentFile}/public/vendor/3DDD/app/src/main/assets/models")
     into("${projectDir}/src/main/assets/models")
 }
 

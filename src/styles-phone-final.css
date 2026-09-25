@@ -102,10 +102,8 @@
     justify-content: center !important;
   }
 
-  .app-container.mobile .angle-strip,
   .app-container.mobile .identity-strip,
   .app-container.mobile .dock-tabs,
-  .app-container.mobile .lower-dock,
   .app-container.mobile .master-footer {
     width: 100% !important;
     max-width: 100% !important;
@@ -246,7 +244,6 @@
   .app-container.mobile .mode-pills,
   .app-container.mobile .angle-strip,
   .app-container.mobile .lower-dock,
-  .app-container.mobile .master-footer,
   .app-container.mobile .builder-category-strip,
   .app-container.mobile .family-switcher {
     display: none !important;
@@ -279,7 +276,10 @@
   }
 
   .app-container.mobile .phone-camera-actions {
-    display: none !important;
+    display: flex !important;
+    gap: 6px !important;
+    overflow-x: auto !important;
+    padding: 4px 0 2px !important;
   }
 
   /* One clean accordion drawer for all avatar menus. */

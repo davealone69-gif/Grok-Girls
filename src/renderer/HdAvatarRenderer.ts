@@ -455,9 +455,24 @@ function glbFallbacks(gl: WebGL2RenderingContext): {
 function bindGlbMaterial(
   gl: WebGL2RenderingContext,
   u: UniformCache,
-  material: WebPbrMaterial
+  material: WebPbrMaterial,
+  skinTint: [number, number, number],
+  hairTint: [number, number, number],
+  eyeTint: [number, number, number]
 ): void {
-  gl.uniform4f(u.uBaseColorFactor, material.baseColor[0], material.baseColor[1], material.baseColor[2], material.baseColor[3]);
+  const name = (material.name ?? '').toLowerCase();
+  const tint =
+    /hair|brow/.test(name) ? hairTint :
+    /eye|iris|pupil/.test(name) ? eyeTint :
+    /skin|face|body|head|torso|arm|leg/.test(name) ? skinTint :
+    [1, 1, 1] as [number, number, number];
+  gl.uniform4f(
+    u.uBaseColorFactor,
+    material.baseColor[0] * tint[0],
+    material.baseColor[1] * tint[1],
+    material.baseColor[2] * tint[2],
+    material.baseColor[3]
+  );
   gl.uniform1f(u.uMetallicFactor, material.metallic);
   gl.uniform1f(u.uRoughnessFactor, material.roughness);
   gl.uniform3f(u.uEmissiveFactor, material.emissive[0], material.emissive[1], material.emissive[2]);
@@ -553,7 +568,11 @@ export class HdAvatarRenderer {
   // GLB parity (milestone 8)
   private glbAsset: AvatarAsset | null = null;
   private glbScale = 1;
+  private glbBodyScale: [number, number, number] = [1, 1, 1];
   private avatarVisible = true;
+  private skinTint: [number, number, number] = [1, 1, 1];
+  private hairTint: [number, number, number] = [1, 1, 1];
+  private eyeTint: [number, number, number] = [1, 1, 1];
   private uniforms = new Map<WebGLProgram, UniformCache>();
   private frameRenderer: HDFrameRenderer | null = null;
   private autoRotate = true;
@@ -656,6 +675,26 @@ export class HdAvatarRenderer {
   }
   setParameters(p: AvatarParameters): void {
     this.parameters = { ...p };
+  }
+  setSkinColor(r: number, g: number, b: number): void {
+    this.material.baseColorR = r;
+    this.material.baseColorG = g;
+    this.material.baseColorB = b;
+    this.skinTint = [r, g, b];
+  }
+  setHairColor(r: number, g: number, b: number): void {
+    this.hairBaseColor = [r, g, b];
+    this.hairTint = [r, g, b];
+  }
+  setEyeColor(r: number, g: number, b: number): void {
+    this.eyeTint = [r, g, b];
+  }
+  setGlbBodyScale(x: number, y: number, z: number): void {
+    this.glbBodyScale = [
+      Math.max(0.5, Math.min(1.5, x)),
+      Math.max(0.5, Math.min(1.5, y)),
+      Math.max(0.5, Math.min(1.5, z))
+    ];
   }
   setAutoRotate(v: boolean): void {
     this.autoRotate = v;
@@ -949,7 +988,14 @@ export class HdAvatarRenderer {
         shader.setModel(
           this.glbScale === 1
             ? meshModel
-            : mat4Multiply(meshModel, mat4Scale(this.glbScale, this.glbScale, this.glbScale))
+            : mat4Multiply(
+              meshModel,
+              mat4Scale(
+                this.glbScale * this.glbBodyScale[0],
+                this.glbScale * this.glbBodyScale[1],
+                this.glbScale * this.glbBodyScale[2]
+              )
+            )
         );
         const gl = this.gl;
         gl.bindVertexArray(prim.vao);
@@ -1068,7 +1114,7 @@ export class HdAvatarRenderer {
       }
 
       const material = asset.materials[prim.materialIndex] ?? asset.materials[0];
-      if (material) bindGlbMaterial(gl, u, material);
+      if (material) bindGlbMaterial(gl, u, material, this.skinTint, this.hairTint, this.eyeTint);
 
       const meshModel = asset.meshModels[prim.meshIndex] ?? mat4Identity();
       gl.uniformMatrix4fv(

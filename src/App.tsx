@@ -208,6 +208,7 @@ function defaultDraft(g: Girl): AvatarDraft {
   return {
     id: g.id,
     name: g.name,
+    personaId: g.personaId || personaIdForCharacter(g.id, g.traits),
     age: g.age,
     gender: 'female',
     ethnicity: g.ethnicity,
@@ -247,6 +248,7 @@ function defaultDraft(g: Girl): AvatarDraft {
 
 const draftToGirlPatch = (d: AvatarDraft): Partial<Girl> => ({
   name: d.name,
+  personaId: d.personaId,
   age: d.age,
   ethnicity: d.ethnicity,
   bodyType: d.bodyType,

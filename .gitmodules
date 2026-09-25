@@ -1,0 +1,3 @@
+[submodule "vendor/3DDD"]
+	path = vendor/3DDD
+	url = https://github.com/davealone69-gif/3DDD.git

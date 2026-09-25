@@ -404,3 +404,45 @@
     font-size: 8.5px !important;
   }
 }
+
+@media (max-width: 900px) {
+  .app-container.mobile .hd-cube-overlay {
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 50 !important;
+    display: flex !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    background: radial-gradient(circle at 50% 35%, #20202b 0%, #08080d 65%) !important;
+  }
+  .app-container.mobile .hd3d-canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+  }
+  .app-container.mobile .live-editor-badge {
+    position: absolute !important;
+    top: 8px !important;
+    left: 8px !important;
+    z-index: 70 !important;
+    padding: 6px 9px !important;
+    border-radius: 9px !important;
+    background: rgba(8,8,14,.82) !important;
+    border: 1px solid #7540b7 !important;
+    color: #e5d7ff !important;
+    font-size: 8px !important;
+    font-weight: 900 !important;
+    letter-spacing: .08em !important;
+    pointer-events: none !important;
+  }
+  .app-container.mobile .hd-cube-close {
+    top: 8px !important;
+    right: 8px !important;
+    bottom: auto !important;
+    z-index: 71 !important;
+  }
+  .app-container.mobile .inspector-panel {
+    background: rgba(12,12,20,.98) !important;
+    backdrop-filter: blur(18px) !important;
+  }
+}

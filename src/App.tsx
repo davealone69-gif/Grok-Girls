@@ -265,6 +265,12 @@ const draftToGirlPatch = (d: AvatarDraft): Partial<Girl> => ({
   extra: d.extra
 });
 
+const ADULT_ONLY_OUTFIT_RE = /nude|naked|genitals|breasts exposed|fully nude|no panties|nothing underneath|garter only|micro bikini|open robe|see-through|sheer.*no (bra|panties)/i;
+
+function outfitRequiresAdult(value: string | undefined): boolean {
+  return !!value && ADULT_ONLY_OUTFIT_RE.test(value);
+}
+
 function cycleOption<T>(list: readonly T[], current: T | undefined): T {
   const idx = list.indexOf(current as T);
   return list[(idx + 1) % list.length];
@@ -627,7 +633,7 @@ export default function App() {
   const loadOutfit = () => {
     const def = loadAvatarDefinition(identityId()) ?? DEFAULT_AVATAR_DEFINITION;
     const loaded = applyAvatarDefinition(draft, def);
-    if (!adult && loaded.outfit === 'Nude') {
+    if (!adult && outfitRequiresAdult(loaded.outfit)) {
       showToast('Saved identity contains an 18+ outfit. Enable 18+ mode before loading it.');
       return;
     }
@@ -1341,8 +1347,8 @@ export default function App() {
   });
 
   const generationAllowed = () => {
-    if (!adult && toAvatarDefinition(draft).outfit === 'Nude') {
-      showToast('18+ mode is required for the Nude outfit.');
+    if (!adult && outfitRequiresAdult(draft.outfit)) {
+      showToast('18+ mode is required for this outfit.');
       return false;
     }
     return true;

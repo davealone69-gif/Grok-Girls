@@ -48,6 +48,9 @@ export interface GltfNode {
 
 export interface GltfMesh {
   primitives: GltfPrimitive[];
+  /** 3DDD-compatible names for morph targets, stored in mesh.extras.targetNames. */
+  extras?: { targetNames?: string[] };
+  weights?: number[];
 }
 
 export interface GltfPrimitive {

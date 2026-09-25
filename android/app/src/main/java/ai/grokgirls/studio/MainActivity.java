@@ -1,8 +1,6 @@
 package ai.grokgirls.studio;
 
 import android.os.Bundle;
-import android.view.Window;
-import android.view.WindowInsets;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 

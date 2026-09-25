@@ -60,6 +60,7 @@ export interface GltfPrimitive {
 }
 
 export interface GltfMaterial {
+  name?: string;
   pbrMetallicRoughness?: {
     baseColorFactor?: number[];
     baseColorTexture?: { index: number };

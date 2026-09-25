@@ -574,7 +574,7 @@ export default function App() {
       let count = 0;
       if (patch.draft && Object.keys(patch.draft).length) {
         const safeDraft = { ...patch.draft };
-        if (!adult && safeDraft.outfit === 'Nude') delete safeDraft.outfit;
+        if (!adult && outfitRequiresAdult(safeDraft.outfit)) delete safeDraft.outfit;
         setDraft(d => ({ ...d, ...safeDraft }));
         count += Object.keys(safeDraft).length;
       }

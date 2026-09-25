@@ -654,7 +654,15 @@ export default function App() {
       renderer = new HdAvatarRenderer(canvas, { skeleton: defaultAvatarSkeleton() });
       avatar3dRef.current = renderer;
       renderer.start();
-      void fetch('/avatars/my_avatar.glb')
+      const gender = (draft.gender || 'female').toLowerCase();
+      const rig = gender === 'male'
+        ? 'male'
+        : gender === 'cyborg'
+        ? 'cyborg'
+        : gender === 'androgynous'
+        ? 'androgynous'
+        : 'female';
+      void fetch(`/vendor/3DDD/app/src/main/assets/models/${rig}.glb`)
         .then(r => {
           if (!r.ok) throw new Error(`avatar asset HTTP ${r.status}`);
           return r.arrayBuffer();
@@ -711,6 +719,18 @@ export default function App() {
     renderer.setHairColor(...rgb(color(avatarDef.hair, '#4b2730')));
     renderer.setEyeColor(...rgb(color(draft.eyeColor || avatarDef.eyes, '#4f77a8')));
     renderer.setGlbBodyScale(bodyW, height, bodyW);
+
+    // 3DDD's proven humanoid rigs expose seven full-vertex morph targets.
+    // Apply the body editor to those targets immediately, with no image-generation
+    // round trip. Values stay normalized 0..1 and are deliberately conservative.
+    const bodyMorphs = b === 'Heavy'
+      ? { muscle: 0.30, weight: 0.86, height: 0.52, shoulder_width: 0.58, hip_width: 0.82, bust: 0.76, limb_length: 0.50 }
+      : b === 'Athletic'
+      ? { muscle: 0.78, weight: 0.22, height: 0.56, shoulder_width: 0.78, hip_width: 0.46, bust: 0.48, limb_length: 0.62 }
+      : b === 'Slim'
+      ? { muscle: 0.22, weight: 0.16, height: 0.62, shoulder_width: 0.34, hip_width: 0.30, bust: 0.34, limb_length: 0.68 }
+      : { muscle: 0.38, weight: 0.46, height: 0.52, shoulder_width: 0.50, hip_width: 0.52, bust: 0.46, limb_length: 0.52 };
+    renderer.setGlbMorphWeightsByName(bodyMorphs);
   }, [avatarDef, draft, cubeMode]);
 
   // ---- category catalog state (AvatarCategories mirror) ----

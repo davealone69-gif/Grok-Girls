@@ -296,6 +296,13 @@ export default function App() {
     saveDraft(draft);
   }, [draft]);
 
+  // Persona is an identity contract, not just an editor label. Keep the
+  // selected archetype on the active Girl immediately so Chat and Video use
+  // the same personality even before the user presses SAVE.
+  useEffect(() => {
+    if (draft.personaId) updateGirl({ personaId: draft.personaId });
+  }, [draft.personaId]);
+
   // Undo / redo history for the draft
   const historyRef = useRef<AvatarDraft[]>([]);
   const futureRef = useRef<AvatarDraft[]>([]);

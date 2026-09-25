@@ -1,6 +1,10 @@
 package ai.grokgirls.studio;
 
 import android.os.Bundle;
+import android.view.Window;
+import android.view.WindowInsets;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -11,6 +15,16 @@ public class MainActivity extends BridgeActivity {
   @Override
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+
+    // Phone studio owns the full screen. Android's navigation buttons/gesture
+    // bar must not cover the render controls or bottom navigation.
+    WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+    WindowInsetsControllerCompat controller =
+        new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
+    controller.hide(WindowInsetsCompat.Type.navigationBars());
+    controller.setSystemBarsBehavior(
+        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+
     // Native 3D avatar viewport (Kotlin/GLES3 engine, see NativeAvatarActivity).
     // JS: await Capacitor.Plugins.AvatarStudio.openViewport({...})
     registerPlugin(AvatarStudioPlugin.class);

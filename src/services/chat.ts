@@ -1,4 +1,5 @@
 import { Girl, Room, ADULT_OVERLAY, SAFE_OVERLAY } from '../models/studio';
+import { getPersonaProfile } from '../models/personas';
 import { chatWithProvider, ProviderName } from './providers';
 import { ADULT_ACTS, QUICK_ACT_CHIPS } from './adultActs';
 import { applyAvatarLlmText, AVATAR_LLM_INSTRUCTIONS } from './llmAvatarBridge';
@@ -90,7 +91,8 @@ export async function reply(
   // The on-device Ollama engine understands the 🧬 structured avatar-spec
   // tail — a single-line contract owned by the app, not by any server.
   const specTail = provider === 'ollama' ? SPEC_SYSTEM_TAIL : '';
-  const system = `You are ${girl.name}, an adult fictional companion (18+). Personality: ${girl.traits.join(', ')}. Bio: ${girl.bio}. Current room: ${room.name}. Mood: ${girl.emotion}. Affinity: ${Math.round(girl.affinity)}%. Trust: ${Math.round(girl.trust)}%. Be warm, conversational and consistent with the character. Content policy: ${policy}. ${AVATAR_LLM_INSTRUCTIONS}${specTail}`;
+  const persona = getPersonaProfile(girl.personaId);
+  const system = `You are ${girl.name}, an adult fictional companion (18+). Persona archetype: ${persona.label}. Persona summary: ${persona.summary}. Behaviour rules: ${persona.chatDirective}. Core traits: ${persona.traits.join(', ')}. Visual identity traits: ${girl.traits.join(', ')}. Bio: ${girl.bio}. Current room: ${room.name}. Mood: ${girl.emotion}. Affinity: ${Math.round(girl.affinity)}%. Trust: ${Math.round(girl.trust)}%. Stay consistent with this persona across every reply. Content policy: ${policy}. ${AVATAR_LLM_INSTRUCTIONS}${specTail}`;
 
   if (provider === 'local') {
     throw new Error('Local scripted replies are disabled as an AI provider. Enable Ollama or configure another real chat engine.');

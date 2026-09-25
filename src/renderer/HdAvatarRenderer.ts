@@ -1043,9 +1043,9 @@ export class HdAvatarRenderer {
       const values = prim.morphs.targetNames.map(name => weights[name] ?? 0);
       prim.morphs.weights.set(values.slice(0, prim.morphs.weights.length));
       const positions = morphPositions(prim.basePositions, prim.morphs, values);
-      this.gl.bindBuffer(gl.ARRAY_BUFFER, prim.positionBuffer);
-      this.gl.bufferSubData(gl.ARRAY_BUFFER, 0, positions);
-      this.gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, prim.positionBuffer);
+      this.gl.bufferSubData(this.gl.ARRAY_BUFFER, 0, positions);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
     }
   }
 

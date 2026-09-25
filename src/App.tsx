@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { Girl, rooms, seedGirls, Room } from './models/studio';
+import { PERSONA_PROFILES, personaIdForCharacter, getPersonaProfile } from './models/personas';
 import { advanceStory, initialStory, StoryState, storyChapters, storyPrompt } from './models/story';
 import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDeleted, addActMemory } from './services/memory';
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';

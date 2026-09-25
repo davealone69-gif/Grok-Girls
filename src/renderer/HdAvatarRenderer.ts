@@ -1141,9 +1141,14 @@ export class HdAvatarRenderer {
       gl.uniformMatrix4fv(
         u.uModel,
         false,
-        this.glbScale === 1
-          ? meshModel
-          : mat4Multiply(meshModel, mat4Scale(this.glbScale, this.glbScale, this.glbScale))
+        mat4Multiply(
+          meshModel,
+          mat4Scale(
+            this.glbScale * this.glbBodyScale[0],
+            this.glbScale * this.glbBodyScale[1],
+            this.glbScale * this.glbBodyScale[2]
+          )
+        )
       );
       gl.bindVertexArray(prim.vao);
       if (prim.indexBuffer) {

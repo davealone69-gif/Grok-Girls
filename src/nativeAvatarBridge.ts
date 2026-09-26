@@ -12,7 +12,7 @@ interface AvatarStudioPlugin {
 }
 
 const AvatarStudio = registerPlugin<AvatarStudioPlugin>('AvatarStudio');
-const DEFAULT_AVATAR = 'avatars/my_avatar.glb';
+const DEFAULT_AVATAR = 'avatars/hunyuan-test.glb';
 
 type WindowWithGrokBridge = Window & {
   __grokGirlsVm?: { get?: () => Record<string, string> };
@@ -76,15 +76,8 @@ function installNativeActions(): void {
       void (async () => {
         try {
           const definition = currentDefinition();
-          const rendered = await renderNativeHdAvatar(definition, 1920, 1080);
-          await addGalleryItem({
-            avatarId: definition.gender || 'native-hd',
-            mode: 'image',
-            prompt: `NATIVE HD RENDER · ${definition.gender} · ${definition.skin} · ${definition.hair} · ${definition.outfit}`,
-            assetUrl: rendered.url,
-            provider: 'hdrenderer'
-          });
-          window.dispatchEvent(new CustomEvent('grok-native-hd-complete', { detail: rendered }));
+          await openNativeHdAvatar(definition);
+          window.dispatchEvent(new CustomEvent('grok-native-hd-complete', { detail: { avatar: DEFAULT_AVATAR } }));
         } catch (error) {
           window.dispatchEvent(
             new CustomEvent('grok-native-hd-error', {

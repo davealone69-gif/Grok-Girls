@@ -370,6 +370,7 @@ export default function App() {
   });
   const [mobileSheet, setMobileSheet] = useState<'none' | 'inspector'>('none');
   const [moreOpen, setMoreOpen] = useState(false);
+  const [mobileMenuHidden, setMobileMenuHidden] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 900px)');
@@ -378,6 +379,7 @@ export default function App() {
       if (!e.matches) {
         setMobileSheet('none');
         setMoreOpen(false);
+        setMobileMenuHidden(false);
       }
     };
     mq.addEventListener?.('change', onChange);
@@ -1969,7 +1971,7 @@ export default function App() {
     <div
       className={`app-container ${immersive ? 'immersive' : ''} ${isMobile ? 'mobile' : ''} ${
         mobileSheet === 'inspector' ? 'inspector-open' : ''
-      } ${moreOpen ? 'more-open' : ''}`}
+      } ${moreOpen ? 'more-open' : ''} ${mobileMenuHidden ? 'mobile-menu-hidden' : ''}`}
     >
       {/* 1. LEFT VERTICAL NAVIGATION RAIL */}
       <aside className="nav-rail">
@@ -2043,6 +2045,22 @@ export default function App() {
           )}
         </div>
       </aside>
+
+      {isMobile && (
+        <button
+          type="button"
+          className="mobile-menu-toggle"
+          onClick={() => {
+            setMobileMenuHidden(v => !v);
+            setMoreOpen(false);
+            setMobileSheet('none');
+          }}
+          title={mobileMenuHidden ? 'Show app menu' : 'Hide app menu'}
+          aria-label={mobileMenuHidden ? 'Show app menu' : 'Hide app menu'}
+        >
+          {mobileMenuHidden ? '☰' : '⌄'}
+        </button>
+      )}
 
       {/* 2. PRESETS DRAWER (Column 2) */}
       <section className="presets-drawer">

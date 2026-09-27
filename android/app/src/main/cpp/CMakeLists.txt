@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.24.1)
 project(grok_vknn LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -26,13 +26,10 @@ target_include_directories(grok_vknn PRIVATE
     ${vknn_SOURCE_DIR}/examples/splatting
 )
 target_link_libraries(grok_vknn PRIVATE
-    vknn
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,vknn>"
     log android vulkan
 )
 target_link_options(grok_vknn PRIVATE
-    "-Wl,--whole-archive"
-    "$<TARGET_FILE:vknn>"
-    "-Wl,--no-whole-archive"
     "-Wl,-z,max-page-size=16384"
     "-Wl,-z,common-page-size=16384"
 )

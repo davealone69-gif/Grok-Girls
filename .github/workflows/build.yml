@@ -127,7 +127,9 @@ jobs:
         with:
           packages: ''
       - name: Install Android SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1"
+          sudo apt-get update -qq
+          sudo apt-get install -y glslang-tools
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
       - name: Build web app

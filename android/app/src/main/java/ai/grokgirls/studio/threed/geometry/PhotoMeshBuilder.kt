@@ -47,7 +47,7 @@ object PhotoMeshBuilder {
         fun worldY(cy: Int) = (gh - cy - 0.5f) * cell
         fun depthAt(cx: Int, cy: Int): Float {
             val t = (distance[cy * gw + cx] / maxDistance).coerceIn(0f, 1f)
-            return options.depth * sqrt(t)
+            return options.depth * sqrt(t.toDouble()).toFloat()
         }
         fun uFor(cx: Int) = (cx + 0.5f) / gw
         fun vFor(cy: Int) = 1f - (cy + 0.5f) / gh
@@ -93,6 +93,7 @@ object PhotoMeshBuilder {
             if (openRight && below >= 0) quad(front[below], front[i], back[i], back[below])
             if (openTop && right >= 0) quad(front[right], front[i], back[i], back[right])
             if (openBottom && right >= 0) quad(front[i], front[right], back[right], back[i])
+        }
         if (indices.isEmpty()) return null
         val p = positions.toFloatArray()
         return TriangleMesh(p, rebuildNormals(p, indices.toIntArray()), uvs.toFloatArray(), indices.toIntArray())

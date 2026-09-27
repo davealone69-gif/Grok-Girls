@@ -4,6 +4,7 @@ import android.os.Bundle;
 
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -11,6 +12,21 @@ public class MainActivity extends BridgeActivity {
   @Override
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+    // Hide Android navigation controls while the studio is in use.
+    // The bars can be revealed temporarily with an edge swipe, then Android
+    // automatically returns to immersive mode.
+    WindowInsetsControllerCompat controller = new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
+    controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+    controller.hide(WindowInsetsCompat.Type.navigationBars());
+
+    // Re-apply after focus/system-UI changes so returning to the app does not
+    // leave the Android navigation bar covering the bottom controls.
+    getWindow().getDecorView().setOnSystemUiVisibilityChangeListener(visibility -> {
+      WindowInsetsControllerCompat c = new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
+      c.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+      c.hide(WindowInsetsCompat.Type.navigationBars());
+    });
+
     // Native 3D avatar viewport (Kotlin/GLES3 engine, see NativeAvatarActivity).
     // JS: await Capacitor.Plugins.AvatarStudio.openViewport({...})
     registerPlugin(AvatarStudioPlugin.class);

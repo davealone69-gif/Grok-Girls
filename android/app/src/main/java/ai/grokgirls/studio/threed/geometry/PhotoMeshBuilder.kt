@@ -88,11 +88,11 @@ object PhotoMeshBuilder {
             val openBottom = cy == gh - 1 || !foreground[(cy + 1) * gw + cx]
             val below = if (cy + 1 < gh && foreground[(cy + 1) * gw + cx]) (cy + 1) * gw + cx else -1
             val right = if (cx + 1 < gw && foreground[cy * gw + cx + 1]) cy * gw + cx + 1 else -1
-            if (openLeft && cy > 0 && foreground[(cy - 1) * gw + cx]) quad(front[i], front[(cy - 1) * gw + cx], back[(cy - 1) * gw + cx], back[i])
+            // Close each exposed boundary using adjacent surface-center vertices.
+            if (openLeft && below >= 0) quad(front[i], front[below], back[below], back[i])
             if (openRight && below >= 0) quad(front[below], front[i], back[i], back[below])
-            if (openTop && cx > 0 && foreground[cy * gw + cx - 1]) quad(front[cy * gw + cx - 1], front[i], back[i], back[cy * gw + cx - 1])
+            if (openTop && right >= 0) quad(front[right], front[i], back[i], back[right])
             if (openBottom && right >= 0) quad(front[i], front[right], back[right], back[i])
-        }
         if (indices.isEmpty()) return null
         val p = positions.toFloatArray()
         return TriangleMesh(p, rebuildNormals(p, indices.toIntArray()), uvs.toFloatArray(), indices.toIntArray())

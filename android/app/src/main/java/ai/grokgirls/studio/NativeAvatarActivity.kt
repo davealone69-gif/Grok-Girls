@@ -16,7 +16,7 @@ import com.aura.avatarstudio.renderer.HdAvatarRenderer
 class NativeAvatarActivity : Activity() {
 
     private lateinit var renderer: HdAvatarRenderer
-    private lateinit var glView: com.aura.avatarstudio.GltfAvatarView
+    private lateinit var glView: android.opengl.GLSurfaceView
     private var lastX = 0f
     private var lastY = 0f
     private var pinchBase = 0f
@@ -33,8 +33,13 @@ class NativeAvatarActivity : Activity() {
         val definition = NativeAvatarDefinition.parse(intent.getStringExtra(EXTRA_DEFINITION))
 
         val root = FrameLayout(this)
-        glView = object : com.aura.avatarstudio.GltfAvatarView(this@NativeAvatarActivity, asset) {
-            override fun onTouchEvent(event: MotionEvent): Boolean {
+        glView = android.opengl.GLSurfaceView(this).apply {
+            setEGLContextClientVersion(3)
+            setEGLConfigChooser(8, 8, 8, 8, 24, 8)
+            preserveEGLContextOnPause = true
+            setRenderer(renderer)
+            renderMode = android.opengl.GLSurfaceView.RENDERMODE_CONTINUOUSLY
+            setOnTouchListener { _, event ->
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         lastX = event.x
@@ -49,32 +54,19 @@ class NativeAvatarActivity : Activity() {
                     MotionEvent.ACTION_MOVE -> {
                         if (event.pointerCount >= 2) {
                             val d = distance(event)
-                            if (pinchBase > 0f && d > 0f) {
-                                this@NativeAvatarActivity.renderer.zoomCamera(d / pinchBase)
-                            }
+                            if (pinchBase > 0f && d > 0f) renderer.zoomCamera(d / pinchBase)
                             pinchBase = d
                         } else {
-                            this@NativeAvatarActivity.renderer.rotateCamera(
-                                event.x - lastX,
-                                event.y - lastY
-                            )
+                            renderer.rotateCamera(event.x - lastX, event.y - lastY)
                         }
                         lastX = event.x
                         lastY = event.y
                     }
                     MotionEvent.ACTION_POINTER_UP -> pinchBase = 0f
                 }
-                return true
+                true
             }
         }
-        // Use the renderer owned by this activity rather than the helper's
-        // private renderer, so definition/camera controls are one source.
-        glView.setRenderer(renderer)
-        glView.setEGLContextClientVersion(3)
-        glView.setEGLConfigChooser(8, 8, 8, 8, 24, 8)
-        glView.preserveEGLContextOnPause = true
-        glView.renderMode = android.opengl.GLSurfaceView.RENDERMODE_CONTINUOUSLY
-
         root.addView(glView, FrameLayout.LayoutParams(-1, -1))
 
         val label = TextView(this).apply {

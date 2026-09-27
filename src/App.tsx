@@ -2974,7 +2974,7 @@ export default function App() {
             ⧉ x4
           </button>
 
-          <button className="btn-generate-media" disabled={busy} onClick={handleGenerate}>
+          <button className="btn-generate-media" disabled={busy} onClick={() => void handleGenerate()}>
             {busy ? 'RENDERING…' : '✨ GENERATE RENDER'}
           </button>
 

@@ -783,9 +783,51 @@ export default function App() {
       setHdProgress(0);
     }
   };
+  const openReal3D = async () => {
+    if (hy3dBusy || busyRef.current) return;
+    setHy3dStatus('Opening native GLES3 Hunyuan3D test asset...');
+    try {
+      await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft));
+      setHy3dStatus('Native 3D renderer opened. Drag to orbit, pinch to zoom.');
+    } catch (e) {
+      setHy3dStatus(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const generateReal3D = async () => {
+    if (hy3dBusy || busyRef.current) return;
+    setHy3dBusy(true);
+    setHy3dStatus('Checking Hunyuan3D worker...');
+    try {
+      const worker = await hunyuan3dStatus();
+      if (!worker.ok) throw new Error(worker.message);
+      setHy3dStatus('Generating the real source image with local Stable Diffusion...');
+      const image = await sdTxt2Img(
+        { prompt: compiledPrompt, width: 512, height: 768, steps: Math.min(Number(stepsInput) || 12, 16), cfgScale: Number(cfgInput) || 6 },
+        { autoStart: true, timeoutMs: 600000 }
+      );
+      setHy3dStatus('Hunyuan3D is generating the GLB. This can take a long time on a phone...');
+      const glb = await generateHunyuan3D(image.dataUrl, {
+        texture: true,
+        seed: Number(seedInput) || 1234,
+        octreeResolution: 256,
+        steps: 5
+      });
+      setHy3dStatus('Real GLB generated. Opening the native GLES3 renderer...');
+      await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), glb.file);
+      setHy3dStatus('REAL 3D READY - generated GLB is loaded by the native renderer.');
+    } catch (e) {
+      setHy3dStatus(e instanceof Error ? e.message : String(e));
+    } finally {
+      setHy3dBusy(false);
+    }
+  };
+
   const headerAction = (id: string) => {
     if (id === 'generate') handleGenerate();
     else if (id === 'hd_render') void handleHdRender();
+    else if (id === 'real_3d') void openReal3D();
+    else if (id === 'generate_3d') void generateReal3D();
     else if (id === 'random') handleRandomize();
     else if (id === 'rotate') setRotationAngle(r => (r + 45) % 360);
     else if (id === 'zoom') setZoomLevel(z => (z > 1.2 ? 1 : 1.4));

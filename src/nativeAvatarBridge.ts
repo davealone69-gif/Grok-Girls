@@ -26,7 +26,7 @@ function currentDefinition(): Record<string, string> {
   }
 }
 
-export async function openNativeHdAvatar(definition: Record<string, unknown> = currentDefinition(), file?: string): Promise<void> {
+export async function openNativeHdAvatar(definition: object = currentDefinition(), file?: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   await AvatarStudio.openViewport({
     avatar: DEFAULT_AVATAR,
@@ -36,7 +36,7 @@ export async function openNativeHdAvatar(definition: Record<string, unknown> = c
 }
 
 export async function renderNativeHdAvatar(
-  definition: Record<string, unknown> = currentDefinition(),
+  definition: object = currentDefinition(),
   width = 1920,
   height = 1080
 ): Promise<{ url: string; width: number; height: number }> {

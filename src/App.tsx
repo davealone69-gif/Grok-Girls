@@ -2204,6 +2204,10 @@ export default function App() {
               ))}
           </div>
 
+          <div className="native-3d-controls">
+            <button className="native-action native-3d-test" disabled={hy3dBusy} onClick={() => void openReal3D()} title="Open the real native GLES3 Hunyuan3D renderer">🧊 REAL 3D</button>
+            <button className="native-action native-3d-generate" disabled={hy3dBusy} onClick={() => void generateReal3D()} title="Generate a real Hunyuan3D GLB and load it into the native renderer">🧬 {hy3dBusy ? '3D…' : 'MAKE 3D'}</button>
+          </div>
           <div className="mode-pills">
             <button
               className={`mode-pill ${view === 'builder' ? 'active' : ''}`}

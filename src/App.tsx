@@ -2008,8 +2008,8 @@ export default function App() {
               }}
               title={moreOpen ? 'Close 18+ / More' : '18+ / More options'}
             >
-              <span className="rail-icon">{moreOpen ? '✕' : '⋮'}</span>
-              <span>More</span>
+              <span className="rail-icon">{moreOpen ? '✕' : '👑'}</span>
+              <span>18+ / More</span>
             </button>
           ) : (
             <>

@@ -105,6 +105,6 @@ class NativeAvatarActivity : Activity() {
     companion object {
         const val EXTRA_AVATAR = "avatar"
         const val EXTRA_DEFINITION = "definition"
-        const val DEFAULT_AVATAR = "avatars/my_avatar.glb"
+        const val DEFAULT_AVATAR = "avatars/hunyuan-test.glb"
     }
 }

@@ -1,6 +1,7 @@
 package ai.grokgirls.studio
 
 import android.graphics.Bitmap
+import android.graphics.Bitmap.CompressFormat
 import android.graphics.BitmapFactory
 import android.util.Base64
 import com.getcapacitor.JSObject
@@ -11,6 +12,7 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import ai.grokgirls.studio.threed.geometry.PhotoMeshBuilder
 import ai.grokgirls.studio.threed.scan.GltfMeshWriter
 import ai.grokgirls.studio.threed.scan.SilhouetteExtractor
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -57,7 +59,13 @@ class Photo3DLocalPlugin : Plugin() {
                 val name = (call.getString("name") ?: "photo-avatar")
                     .replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "photo-avatar" }
                 val file = File(dir, name + "-" + UUID.randomUUID().toString() + ".glb")
-                GltfMeshWriter.write(mesh, bytes, name, file)
+                val png = ByteArrayOutputStream().use { out ->
+                    if (!bitmap!!.compress(CompressFormat.PNG, 100, out)) {
+                        throw IllegalStateException("Could not encode the source image as PNG texture.")
+                    }
+                    out.toByteArray()
+                }
+                GltfMeshWriter.write(mesh, png, name, file)
                 if (!file.isFile || file.length() < 20L) {
                     throw IllegalStateException("GLB writer returned no usable file.")
                 }

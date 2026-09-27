@@ -11,6 +11,7 @@ interface VknnPlugin {
     message?: string;
   }>;
   downloadModel(): Promise<{ ok?: boolean; file?: string; bytes?: number; error?: string }>;
+  probeModel(): Promise<{ ok?: boolean; error?: string; message?: string; gaussians?: number; views?: number; width?: number; height?: number }>;
   addListener(
     event: 'downloadProgress',
     cb: (data: { done: number; total: number; fraction: number }) => void
@@ -36,4 +37,10 @@ export async function downloadVknn3DModel(
   } finally {
     await listener?.remove().catch(() => undefined);
   }
+}
+
+export async function probeVknn3DModel() {
+  const result = await Vknn3D.probeModel();
+  if (!result.ok) throw new Error(result.error || result.message || 'VKNN YoNoSplat probe failed.');
+  return result;
 }

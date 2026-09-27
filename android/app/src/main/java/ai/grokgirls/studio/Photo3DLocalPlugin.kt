@@ -69,6 +69,10 @@ class Photo3DLocalPlugin : Plugin() {
                 if (!file.isFile || file.length() < 20L) {
                     throw IllegalStateException("GLB writer returned no usable file.")
                 }
+                val magic = file.inputStream().use { input ->
+                    ByteArray(4).also { input.read(it) }.toString(Charsets.US_ASCII)
+                }
+                if (magic != "glTF") throw IllegalStateException("GLB validation failed: missing glTF magic.")
                 val result = JSObject()
                 result.put("ok", true)
                 result.put("file", file.absolutePath)

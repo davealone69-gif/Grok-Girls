@@ -1,11 +1,14 @@
 package ai.grokgirls.studio
 
 import android.app.Activity
-import android.opengl.GLSurfaceView
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.Window
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.TextView
 import com.aura.avatarstudio.renderer.GltfAvatarLoader
 import com.aura.avatarstudio.renderer.HdAvatarRenderer
 
@@ -13,29 +16,83 @@ import com.aura.avatarstudio.renderer.HdAvatarRenderer
 class NativeAvatarActivity : Activity() {
 
     private lateinit var renderer: HdAvatarRenderer
-    private var glView: GLSurfaceView? = null
+    private lateinit var glView: com.aura.avatarstudio.GltfAvatarView
+    private var lastX = 0f
+    private var lastY = 0f
+    private var pinchBase = 0f
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestWindowFeature(Window.FEATURE_NO_TITLE)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        enterImmersive()
 
         renderer = HdAvatarRenderer(this)
         val asset = intent.getStringExtra(EXTRA_AVATAR) ?: DEFAULT_AVATAR
+        val filePath = intent.getStringExtra(EXTRA_FILE)
         val definition = NativeAvatarDefinition.parse(intent.getStringExtra(EXTRA_DEFINITION))
 
-        val view = GLSurfaceView(this).apply {
-            setEGLContextClientVersion(3)
-            setEGLConfigChooser(8, 8, 8, 8, 24, 8)
-            preserveEGLContextOnPause = true
-            setRenderer(renderer)
-            renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
+        val root = FrameLayout(this)
+        glView = object : com.aura.avatarstudio.GltfAvatarView(this@NativeAvatarActivity, asset) {
+            override fun onTouchEvent(event: MotionEvent): Boolean {
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        lastX = event.x
+                        lastY = event.y
+                        pinchBase = 0f
+                    }
+                    MotionEvent.ACTION_POINTER_DOWN -> {
+                        pinchBase = distance(event)
+                        lastX = event.x
+                        lastY = event.y
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        if (event.pointerCount >= 2) {
+                            val d = distance(event)
+                            if (pinchBase > 0f && d > 0f) {
+                                this@NativeAvatarActivity.renderer.zoomCamera(d / pinchBase)
+                            }
+                            pinchBase = d
+                        } else {
+                            this@NativeAvatarActivity.renderer.rotateCamera(
+                                event.x - lastX,
+                                event.y - lastY
+                            )
+                        }
+                        lastX = event.x
+                        lastY = event.y
+                    }
+                    MotionEvent.ACTION_POINTER_UP -> pinchBase = 0f
+                }
+                return true
+            }
         }
-        glView = view
-        setContentView(view)
+        // Use the renderer owned by this activity rather than the helper's
+        // private renderer, so definition/camera controls are one source.
+        glView.setRenderer(renderer)
+        glView.setEGLContextClientVersion(3)
+        glView.setEGLConfigChooser(8, 8, 8, 8, 24, 8)
+        glView.preserveEGLContextOnPause = true
+        glView.renderMode = android.opengl.GLSurfaceView.RENDERMODE_CONTINUOUSLY
 
-        view.queueEvent {
-            val loaded = GltfAvatarLoader(this@NativeAvatarActivity).loadFromAssets(asset)
+        root.addView(glView, FrameLayout.LayoutParams(-1, -1))
+
+        val label = TextView(this).apply {
+            text = if (filePath != null) "HUNYUAN3D GLB · GENERATED" else "HUNYUAN3D GLB · TEST ASSET"
+            textSize = 11f
+            setTextColor(0xffd9c7ff.toInt())
+            setBackgroundColor(0xaa08080f.toInt())
+            setPadding(16, 10, 16, 10)
+        }
+        root.addView(label, FrameLayout.LayoutParams(-2, -2))
+        setContentView(root)
+
+        glView.queueEvent {
+            val loaded = if (!filePath.isNullOrBlank()) {
+                GltfAvatarLoader(this@NativeAvatarActivity).loadFromFile(filePath)
+            } else {
+                GltfAvatarLoader(this@NativeAvatarActivity).loadFromAssets(asset)
+            }
             renderer.setAvatar(loaded)
             applyDefinition(definition)
         }
@@ -57,46 +114,34 @@ class NativeAvatarActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        glView?.onResume()
+        enterImmersive()
+        if (::glView.isInitialized) glView.onResume()
     }
 
     override fun onPause() {
-        glView?.onPause()
+        if (::glView.isInitialized) glView.onPause()
         super.onPause()
     }
 
-    private var lastX = 0f
-    private var lastY = 0f
-    private var pinchBase = 1f
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                lastX = event.x
-                lastY = event.y
+    private fun enterImmersive() {
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            window.setDecorFitsSystemWindows(false)
+            window.insetsController?.let {
+                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                it.hide(WindowInsets.Type.systemBars())
             }
-            MotionEvent.ACTION_POINTER_DOWN -> {
-                pinchBase = touchDistance(event)
-                lastX = event.x
-                lastY = event.y
-            }
-            MotionEvent.ACTION_MOVE -> {
-                if (event.pointerCount >= 2) {
-                    val d = touchDistance(event)
-                    if (pinchBase > 0f && d > 0f) renderer.zoomCamera(d / pinchBase)
-                    pinchBase = d
-                } else {
-                    renderer.rotateCamera(event.x - lastX, event.y - lastY)
-                }
-                lastX = event.x
-                lastY = event.y
-            }
-            MotionEvent.ACTION_POINTER_UP -> pinchBase = 0f
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility =
+                android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or
+                    android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                    android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                    android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                    android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
         }
-        return true
     }
 
-    private fun touchDistance(event: MotionEvent): Float {
+    private fun distance(event: MotionEvent): Float {
         val dx = event.getX(0) - event.getX(1)
         val dy = event.getY(0) - event.getY(1)
         return kotlin.math.sqrt(dx * dx + dy * dy)
@@ -104,6 +149,7 @@ class NativeAvatarActivity : Activity() {
 
     companion object {
         const val EXTRA_AVATAR = "avatar"
+        const val EXTRA_FILE = "file"
         const val EXTRA_DEFINITION = "definition"
         const val DEFAULT_AVATAR = "avatars/hunyuan-test.glb"
     }

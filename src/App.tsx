@@ -9,7 +9,7 @@ import { setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
 import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
 import { buildPhoto3D } from './services/photo3dLocal';
-import { downloadVknn3DModel, vknn3dStatus } from './services/vknn3dLocal';
+import { downloadVknn3DModel, probeVknn3DModel, vknn3dStatus } from './services/vknn3dLocal';
 import { openNativeHdAvatar } from './nativeAvatarBridge';
 import { DEFAULT_MENU, loadMenuXml, MenuItem, menuSection } from './services/menuXml';
 import {
@@ -787,6 +787,22 @@ export default function App() {
       setHdProgress(0);
     }
   };
+  const testVknn3D = async () => {
+    if (vknnBusy || busyRef.current) return;
+    setVknnBusy(true);
+    setVknnStatus('Loading the real YoNoSplat model and initializing Vulkan...');
+    try {
+      const probe = await probeVknn3DModel();
+      setVknnStatus(
+        `VKNN Vulkan READY · ${probe.views ?? 0} views · ${(probe.width ?? 0)}×${(probe.height ?? 0)} input · ${(probe.gaussians ?? 0).toLocaleString()} Gaussians.`
+      );
+    } catch (e) {
+      setVknnStatus(e instanceof Error ? e.message : String(e));
+    } finally {
+      setVknnBusy(false);
+    }
+  };
+
   const installVknn3D = async () => {
     if (vknnBusy || busyRef.current) return;
     setVknnBusy(true);
@@ -4451,6 +4467,10 @@ export default function App() {
                 <button className="more-item" disabled={vknnBusy} onClick={() => { setMoreOpen(false); void installVknn3D(); }} title="Install the real VKNN YoNoSplat Vulkan model">
                   <span className="more-item-icon">⚡</span>
                   <span>{vknnBusy ? 'INSTALLING VKNN...' : 'INSTALL VKNN 3D'}</span>
+                </button>
+                <button className="more-item" disabled={vknnBusy} onClick={() => { setMoreOpen(false); void testVknn3D(); }} title="Load the real YoNoSplat model and test Vulkan">
+                  <span className="more-item-icon">🧪</span>
+                  <span>{vknnBusy ? 'TESTING VKNN...' : 'TEST VKNN VULKAN'}</span>
                 </button>
               </div>
               {vknnStatus && <div className="more-3d-status" role="status">{vknnStatus}</div>}

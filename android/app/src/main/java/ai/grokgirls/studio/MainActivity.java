@@ -53,6 +53,8 @@ public class MainActivity extends BridgeActivity {
     // sd-server on :1234 — separate port and lifecycle from Ollama's
     // :11434). JS: Capacitor.Plugins.SdLocal
     registerPlugin(SdLocalPlugin.class);
+    // Official Hunyuan3D-2.1 image-to-GLB worker bridge.
+    registerPlugin(Hunyuan3DLocalPlugin.class);
     // Keep the studio UI out from under the phone's system bars (status bar
     // and navigation buttons). Without this, Android draws the WebView
     // edge-to-edge and the GENERATE / SAVE footer ends up hidden behind the

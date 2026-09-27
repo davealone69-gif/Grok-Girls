@@ -2006,7 +2006,7 @@ export default function App() {
                 setMoreOpen(o => !o);
                 setMobileSheet('none');
               }}
-              title={moreOpen ? 'Close more' : 'More options'}
+              title={moreOpen ? 'Close 18+ / More' : '18+ / More options'}
             >
               <span className="rail-icon">{moreOpen ? '✕' : '⋮'}</span>
               <span>More</span>

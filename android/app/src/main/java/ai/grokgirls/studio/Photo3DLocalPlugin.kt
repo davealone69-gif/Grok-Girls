@@ -23,6 +23,63 @@ class Photo3DLocalPlugin : Plugin() {
     private val pool = Executors.newCachedThreadPool()
 
     @PluginMethod
+    fun buildMultiView(call: PluginCall) {
+        val images = call.getArray("images")
+        if (images == null || images.length() < 3) {
+            call.resolve(error("Multi-view 3D requires at least 3 real captured frames."))
+            return
+        }
+        pool.execute {
+            try {
+                val views = ArrayList<ai.grokgirls.studio.threed.scan.VisualHull.View>()
+                var firstPng: ByteArray? = null
+                for (i in 0 until images.length()) {
+                    val dataUrl = images.optString(i, "")
+                    val comma = dataUrl.indexOf(',')
+                    val bytes = Base64.decode(if (comma >= 0) dataUrl.substring(comma + 1) else dataUrl, Base64.DEFAULT)
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        ?: throw IllegalArgumentException("Frame $i could not be decoded.")
+                    val silhouette = SilhouetteExtractor.extract(bitmap)
+                    if (firstPng == null) {
+                        firstPng = ByteArrayOutputStream().use { out ->
+                            if (!bitmap.compress(CompressFormat.PNG, 100, out)) throw IllegalStateException("Could not encode first frame.")
+                            out.toByteArray()
+                        }
+                    }
+                    val azimuth = (2.0 * Math.PI * i / images.length()).toFloat()
+                    views.add(
+                        ai.grokgirls.studio.threed.scan.VisualHull.View(
+                            silhouette.mask, silhouette.width, silhouette.height, azimuth
+                        )
+                    )
+                    bitmap.recycle()
+                }
+                val resolution = (call.getInt("resolution") ?: 56).coerceIn(24, 72)
+                val hull = ai.grokgirls.studio.threed.scan.VisualHull(resolution)
+                hull.carve(views)
+                if (hull.occupiedCount() == 0) throw IllegalStateException("Visual hull was completely carved away.")
+                val mesh = hull.buildMesh()
+                if (mesh.triangleCount == 0) throw IllegalStateException("Visual hull produced no triangles.")
+                val dir = File(context.filesDir, "threed/avatars").apply { mkdirs() }
+                val name = (call.getString("name") ?: "multiview-avatar")
+                    .replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "multiview-avatar" }
+                val file = File(dir, name + "-" + UUID.randomUUID().toString() + ".glb")
+                GltfMeshWriter.write(mesh, firstPng, name, file)
+                val result = JSObject()
+                result.put("ok", true)
+                result.put("file", file.absolutePath)
+                result.put("bytes", file.length())
+                result.put("triangles", mesh.triangleCount)
+                result.put("vertices", mesh.vertexCount)
+                result.put("occupiedVoxels", hull.occupiedCount())
+                call.resolve(result)
+            } catch (t: Throwable) {
+                call.resolve(error(t.message ?: t.javaClass.simpleName))
+            }
+        }
+    }
+
+    @PluginMethod
     fun build(call: PluginCall) {
         val dataUrl = call.getString("image")?.trim().orEmpty()
         if (dataUrl.isEmpty()) {

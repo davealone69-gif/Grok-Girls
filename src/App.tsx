@@ -4377,6 +4377,18 @@ export default function App() {
                     </button>
                   ))}
               </div>
+              <div className="more-group-label">3D AVATAR</div>
+              <div className="more-sheet-grid">
+                <button className="more-item more-3d-test" disabled={hy3dBusy} onClick={() => { setMoreOpen(false); void openReal3D(); }} title="Open the real native GLES3 Hunyuan3D renderer">
+                  <span className="more-item-icon">🧊</span>
+                  <span>OPEN REAL 3D</span>
+                </button>
+                <button className="more-item more-3d-generate" disabled={hy3dBusy} onClick={() => { setMoreOpen(false); void generateReal3D(); }} title="Generate a real GLB with Hunyuan3D and load it into the native renderer">
+                  <span className="more-item-icon">🧬</span>
+                  <span>{hy3dBusy ? 'GENERATING 3D...' : 'GENERATE 3D GLB'}</span>
+                </button>
+              </div>
+              {hy3dStatus && <div className="more-3d-status" role="status">{hy3dStatus}</div>}
               <div className="more-group-label">QUICK ACTIONS</div>
               <div className="more-sheet-grid">
                 <button

@@ -55,6 +55,8 @@ public class MainActivity extends BridgeActivity {
     registerPlugin(SdLocalPlugin.class);
     // Official Hunyuan3D-2.1 image-to-GLB worker bridge.
     registerPlugin(Hunyuan3DLocalPlugin.class);
+    // Real 3DDD single-image -> mesh -> GLB fallback/generator.
+    registerPlugin(Photo3DLocalPlugin.class);
     // Keep the studio UI out from under the phone's system bars (status bar
     // and navigation buttons). Without this, Android draws the WebView
     // edge-to-edge and the GENERATE / SAVE footer ends up hidden behind the

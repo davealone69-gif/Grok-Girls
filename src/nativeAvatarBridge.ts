@@ -1,5 +1,4 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { addGalleryItem } from './services/gallery';
 
 interface AvatarStudioPlugin {
   openViewport(options?: { avatar?: string; file?: string; definition?: string }): Promise<void>;

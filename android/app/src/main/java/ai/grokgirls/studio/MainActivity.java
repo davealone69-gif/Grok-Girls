@@ -57,6 +57,8 @@ public class MainActivity extends BridgeActivity {
     registerPlugin(Hunyuan3DLocalPlugin.class);
     // Real 3DDD single-image -> mesh -> GLB fallback/generator.
     registerPlugin(Photo3DLocalPlugin.class);
+    // VKNN + YoNoSplat on-device Vulkan 3DGS model manager.
+    registerPlugin(Vknn3DPlugin.class);
     // Keep the studio UI out from under the phone's system bars (status bar
     // and navigation buttons). Without this, Android draws the WebView
     // edge-to-edge and the GENERATE / SAVE footer ends up hidden behind the

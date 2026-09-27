@@ -2,7 +2,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import { addGalleryItem } from './services/gallery';
 
 interface AvatarStudioPlugin {
-  openViewport(options?: { avatar?: string; definition?: string }): Promise<void>;
+  openViewport(options?: { avatar?: string; file?: string; definition?: string }): Promise<void>;
   renderImage(options?: {
     avatar?: string;
     definition?: string;
@@ -27,10 +27,11 @@ function currentDefinition(): Record<string, string> {
   }
 }
 
-export async function openNativeHdAvatar(definition = currentDefinition()): Promise<void> {
+export async function openNativeHdAvatar(definition = currentDefinition(), file?: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   await AvatarStudio.openViewport({
     avatar: DEFAULT_AVATAR,
+    file,
     definition: JSON.stringify(definition)
   });
 }

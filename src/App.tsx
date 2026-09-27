@@ -9,6 +9,7 @@ import { setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
 import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
 import { buildPhoto3D } from './services/photo3dLocal';
+import { downloadVknn3DModel, vknn3dStatus } from './services/vknn3dLocal';
 import { openNativeHdAvatar } from './nativeAvatarBridge';
 import { DEFAULT_MENU, loadMenuXml, MenuItem, menuSection } from './services/menuXml';
 import {
@@ -751,6 +752,8 @@ export default function App() {
     }
   };
   const [hy3dBusy, setHy3dBusy] = useState(false);
+  const [vknnBusy, setVknnBusy] = useState(false);
+  const [vknnStatus, setVknnStatus] = useState('');
   const [hy3dStatus, setHy3dStatus] = useState('');
   const [hdRendering, setHdRendering] = useState(false);
   const [hdProgress, setHdProgress] = useState(0);
@@ -784,6 +787,31 @@ export default function App() {
       setHdProgress(0);
     }
   };
+  const installVknn3D = async () => {
+    if (vknnBusy || busyRef.current) return;
+    setVknnBusy(true);
+    setVknnStatus('Checking VKNN native Vulkan module...');
+    try {
+      const st = await vknn3dStatus();
+      if (!st.nativeLoaded) throw new Error(st.nativeError || st.message || 'VKNN native module is unavailable.');
+      if (st.modelPresent) {
+        setVknnStatus(`VKNN ready · YoNoSplat model already present (${(st.modelBytes ?? 0).toLocaleString()} bytes).`);
+        return;
+      }
+      setVknnStatus('Downloading the real YoNoSplat VKNN model (~2.9 GB). Keep the phone on power/Wi-Fi...');
+      const model = await downloadVknn3DModel((fraction, done, total) => {
+        if (fraction >= 0) {
+          setVknnStatus(`Downloading YoNoSplat VKNN model · ${Math.round(fraction * 100)}% · ${(done / 1048576).toFixed(0)} / ${(total / 1048576).toFixed(0)} MB`);
+        }
+      });
+      setVknnStatus(`VKNN YoNoSplat model installed · ${model.bytes.toLocaleString()} bytes. Native Vulkan inference is ready for device testing.`);
+    } catch (e) {
+      setVknnStatus(e instanceof Error ? e.message : String(e));
+    } finally {
+      setVknnBusy(false);
+    }
+  };
+
   const openReal3D = async () => {
     if (hy3dBusy || busyRef.current) return;
     setHy3dStatus('Opening native GLES3 Hunyuan3D test asset...');
@@ -4418,7 +4446,15 @@ export default function App() {
                 </button>
               </div>
               {hy3dStatus && <div className="more-3d-status" role="status">{hy3dStatus}</div>}
-              <div className="more-group-label">QUICK ACTIONS</div>
+              <div className="more-group-label">VKNN · YONOSPLAT</div>
+              <div className="more-sheet-grid">
+                <button className="more-item" disabled={vknnBusy} onClick={() => { setMoreOpen(false); void installVknn3D(); }} title="Install the real VKNN YoNoSplat Vulkan model">
+                  <span className="more-item-icon">⚡</span>
+                  <span>{vknnBusy ? 'INSTALLING VKNN...' : 'INSTALL VKNN 3D'}</span>
+                </button>
+              </div>
+              {vknnStatus && <div className="more-3d-status" role="status">{vknnStatus}</div>}
+
               <div className="more-sheet-grid">
                 <button
                   className="more-item"

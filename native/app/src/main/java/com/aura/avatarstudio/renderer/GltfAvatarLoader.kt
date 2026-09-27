@@ -16,6 +16,12 @@ class GltfAvatarLoader(
     private val context: Context
 ) {
 
+    fun loadFromFile(filePath: String): HdAvatar {
+        val file = java.io.File(filePath)
+        require(file.isFile) { "GLB file not found: $filePath" }
+        return loadGlb(file.readBytes())
+    }
+
     fun loadFromAssets(
         assetName: String
     ): HdAvatar {

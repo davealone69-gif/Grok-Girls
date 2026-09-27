@@ -10,6 +10,15 @@ interface Photo3DPlugin {
     usedSilhouette?: boolean;
     error?: string;
   }>;
+  buildMultiView(opts: { images: string[]; name?: string; resolution?: number }): Promise<{
+    ok?: boolean;
+    file?: string;
+    bytes?: number;
+    triangles?: number;
+    vertices?: number;
+    occupiedVoxels?: number;
+    error?: string;
+  }>;
 }
 
 const Photo3DLocal = registerPlugin<Photo3DPlugin>('Photo3DLocal');
@@ -42,5 +51,22 @@ export async function buildPhoto3D(
     triangles: raw.triangles ?? 0,
     vertices: raw.vertices ?? 0,
     usedSilhouette: Boolean(raw.usedSilhouette)
+  };
+}
+
+export async function buildPhoto3DMultiView(
+  images: string[],
+  name = 'grok-girls-multiview',
+  resolution = 56
+) {
+  if (images.length < 3) throw new Error('Multi-view 3D requires at least 3 real captured frames.');
+  const result = await Photo3DLocal.buildMultiView({ images, name, resolution });
+  if (!result.ok || !result.file) throw new Error(result.error || '3DDD multi-view reconstruction failed.');
+  return {
+    file: result.file,
+    bytes: result.bytes ?? 0,
+    triangles: result.triangles ?? 0,
+    vertices: result.vertices ?? 0,
+    occupiedVoxels: result.occupiedVoxels ?? 0
   };
 }

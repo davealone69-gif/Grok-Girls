@@ -41,6 +41,49 @@ class Vknn3DPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun probeModel(call: PluginCall) {
+        pool.execute {
+            val result = JSObject()
+            try {
+                if (!VknnNative.ensureLoaded()) {
+                    result.put("ok", false)
+                    result.put("error", VknnNative.error() ?: "VKNN native library could not be loaded.")
+                    call.resolve(result)
+                    return@execute
+                }
+                val file = modelFile()
+                if (!file.isFile) {
+                    result.put("ok", false)
+                    result.put("error", "YoNoSplat model is not downloaded. Install the VKNN model first.")
+                    call.resolve(result)
+                    return@execute
+                }
+                val cache = File(context.cacheDir, "vknn/yonosplat.cache").apply { parentFile?.mkdirs() }
+                val handle = VknnNative.nativeSplatLoad(
+                    file.absolutePath, cache.absolutePath, "low", "vulkan", 512
+                )
+                if (handle == 0L) {
+                    result.put("ok", false)
+                    result.put("error", "VKNN returned a null YoNoSplat handle. Check the native log for the Vulkan capability/load failure.")
+                } else {
+                    val info = VknnNative.nativeSplatInfo(handle)
+                    VknnNative.nativeSplatFree(handle)
+                    result.put("ok", true)
+                    result.put("gaussians", info.getOrElse(0) { 0 })
+                    result.put("views", info.getOrElse(1) { 0 })
+                    result.put("height", info.getOrElse(2) { 0 })
+                    result.put("width", info.getOrElse(3) { 0 })
+                    result.put("message", "VKNN YoNoSplat model loaded and Vulkan rasterizer initialized.")
+                }
+            } catch (t: Throwable) {
+                result.put("ok", false)
+                result.put("error", t.message ?: t.javaClass.simpleName)
+            }
+            call.resolve(result)
+        }
+    }
+
+    @PluginMethod
     fun downloadModel(call: PluginCall) {
         pool.execute {
             try {

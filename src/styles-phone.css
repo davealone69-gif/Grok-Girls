@@ -916,3 +916,50 @@
     max-height: min(78dvh, calc(100dvh - var(--mobile-nav-h) - 20px)) !important;
   }
 }
+
+/* Android phone menu: floating and collapsible, never pinned to the system-navigation edge. */
+@media (max-width: 900px) {
+  .app-container.mobile .nav-rail {
+    position: fixed !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
+    inset-inline: 10px !important;
+    width: auto !important;
+    height: var(--mobile-nav-h) !important;
+    min-height: var(--mobile-nav-h) !important;
+    border: 1px solid rgba(144,78,221,.45) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 10px 34px rgba(0,0,0,.65),0 0 0 1px rgba(0,0,0,.35) !important;
+    z-index: 1900 !important;
+    transition: transform .22s ease,opacity .22s ease !important;
+  }
+  .app-container.mobile.mobile-menu-hidden .nav-rail {
+    transform: translateY(calc(100% + 30px)) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+  .app-container.mobile .master-footer {
+    margin-bottom: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom,0px) + 18px) !important;
+  }
+  .app-container.mobile .more-sheet {
+    bottom: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom,0px) + 18px) !important;
+  }
+  .mobile-menu-toggle {
+    position: fixed;
+    right: 14px;
+    bottom: calc(env(safe-area-inset-bottom,0px) + 6px);
+    width: 34px;
+    height: 26px;
+    border-radius: 999px;
+    border: 1px solid rgba(144,78,221,.55);
+    background: rgba(13,13,24,.92);
+    color: #fff;
+    z-index: 2100;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    font-weight: 900;
+    box-shadow: 0 6px 20px rgba(0,0,0,.55);
+  }
+}

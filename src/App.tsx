@@ -8,6 +8,7 @@ import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from '.
 import { setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
 import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
+import { buildPhoto3D } from './services/photo3dLocal';
 import { openNativeHdAvatar } from './nativeAvatarBridge';
 import { DEFAULT_MENU, loadMenuXml, MenuItem, menuSection } from './services/menuXml';
 import {
@@ -797,25 +798,49 @@ export default function App() {
   const generateReal3D = async () => {
     if (hy3dBusy || busyRef.current) return;
     setHy3dBusy(true);
-    setHy3dStatus('Checking Hunyuan3D worker...');
+    setHy3dStatus('Checking available real 3D workers...');
     try {
-      const worker = await hunyuan3dStatus();
-      if (!worker.ok) throw new Error(worker.message);
+      let workerReady = false;
+      try {
+        const worker = await hunyuan3dStatus();
+        workerReady = worker.ok;
+        if (!workerReady) setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
+      } catch {
+        setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
+      }
+
       setHy3dStatus('Generating the real source image with local Stable Diffusion...');
       const image = await sdTxt2Img(
-        { prompt: compiledPrompt, width: 512, height: 768, steps: Math.min(Number(stepsInput) || 12, 16), cfgScale: Number(cfgInput) || 6 },
+        {
+          prompt: compiledPrompt,
+          width: 512,
+          height: 768,
+          steps: Math.min(Number(stepsInput) || 12, 16),
+          cfgScale: Number(cfgInput) || 6
+        },
         { autoStart: true, timeoutMs: 600000 }
       );
-      setHy3dStatus('Hunyuan3D is generating the GLB. This can take a long time on a phone...');
-      const glb = await generateHunyuan3D(image.dataUrl, {
-        texture: true,
-        seed: Number(seedInput) || 1234,
-        octreeResolution: 256,
-        steps: 5
-      });
-      setHy3dStatus('Real GLB generated. Opening the native GLES3 renderer...');
-      await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), glb.file);
-      setHy3dStatus('REAL 3D READY - generated GLB is loaded by the native renderer.');
+
+      if (workerReady) {
+        setHy3dStatus('Hunyuan3D is generating the GLB...');
+        const glb = await generateHunyuan3D(image.dataUrl, {
+          texture: true,
+          seed: Number(seedInput) || 1234,
+          octreeResolution: 256,
+          steps: 5
+        });
+        setHy3dStatus('Real Hunyuan3D GLB generated. Opening the native renderer...');
+        await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), glb.file);
+        setHy3dStatus('REAL 3D READY · Hunyuan3D GLB loaded by the native GLES3 renderer.');
+      } else {
+        setHy3dStatus('Building a real closed 3D mesh from the generated image...');
+        const mesh = await buildPhoto3D(image.dataUrl, girl.name || 'grok-girls-avatar');
+        setHy3dStatus(
+          `Real 3DDD GLB generated · ${mesh.vertices.toLocaleString()} vertices · ${mesh.triangles.toLocaleString()} triangles. Opening renderer...`
+        );
+        await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), mesh.file);
+        setHy3dStatus('REAL 3D READY · 3DDD GLB loaded by the native GLES3 renderer.');
+      }
     } catch (e) {
       setHy3dStatus(e instanceof Error ? e.message : String(e));
     } finally {

@@ -963,3 +963,26 @@
     box-shadow: 0 6px 20px rgba(0,0,0,.55);
   }
 }
+
+
+/* Phone-first real image generation control */
+@media (max-width: 900px) {
+  .app-container.mobile .mobile-create-image {
+    position: fixed !important;
+    left: 14px !important;
+    right: 14px !important;
+    bottom: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom, 0px) + 18px) !important;
+    min-height: 48px !important;
+    z-index: 2050 !important;
+    border: 1px solid rgba(127,240,189,.65) !important;
+    border-radius: 14px !important;
+    background: rgba(13,13,24,.96) !important;
+    color: #fff !important;
+    font-weight: 900 !important;
+    letter-spacing: .05em !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,.55), 0 0 18px rgba(127,240,189,.12) !important;
+  }
+  .app-container.mobile .mobile-create-image:disabled {
+    opacity: .7 !important;
+  }
+}

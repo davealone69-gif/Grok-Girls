@@ -5,7 +5,7 @@ import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDele
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
-import { setSdEnabled } from './services/sdLocal';
+import { setSdEnabled, sdStatus } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
 import { DEFAULT_MENU, loadMenuXml, MenuItem, menuSection } from './services/menuXml';
 import {
@@ -494,6 +494,20 @@ export default function App() {
   useEffect(() => {
     saveProviderPref('image', provider);
   }, [provider]);
+
+  // Phone-first: if the real local SD server is already running, make it the
+  // image engine automatically so the user does not have to hunt through settings.
+  useEffect(() => {
+    let alive = true;
+    void sdStatus().then(st => {
+      if (!alive || !st.ok) return;
+      setSdEnabled(true);
+      setProvider('sdlocal');
+    }).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   // H1: chat has its OWN engine selector — picking SELF-HOSTED for renders
   // no longer breaks chat. The footer ENGINE drives generation only.
   const [chatProvider, setChatProvider] = useState<ProviderName>(() => getProviderPref('chat'));
@@ -1245,9 +1259,10 @@ export default function App() {
     negative: combinedNegative() || undefined
   });
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (forcedProvider?: ProviderName) => {
+    const engine = forcedProvider ?? provider;
     if (busyRef.current) return;
-    if (provider === 'selfhosted' && !getServerBase()) {
+    if (engine === 'selfhosted' && !getServerBase()) {
       showToast('Configure your self-hosted server in ⚙ Settings → Self-Hosted first');
       setResult(
         'SELF-HOSTED engine selected but no server URL is configured. Open ⚙ Settings and enter your A1111 (port 7860) or ComfyUI (port 8188) address.'
@@ -1258,7 +1273,7 @@ export default function App() {
     enterBusy();
     setResult('Synthesizing high-detail avatar render…');
     try {
-      const r = await generateWithFallback(genRequest(compiledPrompt), provider);
+      const r = await generateWithFallback(genRequest(compiledPrompt), engine);
       const isRealRenderer = r.provider !== 'local';
       if (r.assetUrl) {
         if (isRealRenderer) {
@@ -1273,8 +1288,8 @@ export default function App() {
         } else {
           // Local procedural preview -> gallery only, keep the HD photo in the viewport
           showToast(
-            provider !== 'local'
-              ? `LOCAL engine used (${provider.toUpperCase()} is not configured) — render saved to gallery`
+            engine !== 'local'
+              ? `LOCAL engine used (${engine.toUpperCase()} is not configured) — render saved to gallery`
               : 'Local preview render added to gallery — tap 🖥 on a gallery card to set it as the viewport image'
           );
         }
@@ -2843,6 +2858,16 @@ export default function App() {
         </div>
 
       {/* 5. BOTTOM MASTER FOOTER BAR (Matching Picture 2) */}
+      <button
+        type="button"
+        className="mobile-create-image"
+        disabled={busy}
+        onClick={() => void handleGenerate('sdlocal')}
+        title="Generate a real image with the phone-local Stable Diffusion engine"
+      >
+        {busy ? 'RENDERING…' : '🖼 CREATE REAL IMAGE'}
+      </button>
+
       <footer className="master-footer">
         <div className="footer-left">
           <div className="avatar-id-tag">

@@ -5,8 +5,10 @@ import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDele
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
-import { setSdEnabled, sdStatus } from './services/sdLocal';
+import { setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
+import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
+import { openNativeHdAvatar } from './nativeAvatarBridge';
 import { DEFAULT_MENU, loadMenuXml, MenuItem, menuSection } from './services/menuXml';
 import {
   DEFAULT_AVATAR_DEFINITION,
@@ -747,6 +749,8 @@ export default function App() {
       case 'settings': setIsSettingsOpen(true); break;
     }
   };
+  const [hy3dBusy, setHy3dBusy] = useState(false);
+  const [hy3dStatus, setHy3dStatus] = useState('');
   const [hdRendering, setHdRendering] = useState(false);
   const [hdProgress, setHdProgress] = useState(0);
   // renderer.HDRenderer — configure(RenderConfig).loadScene(scene).render()

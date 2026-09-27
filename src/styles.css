@@ -4364,3 +4364,36 @@ a.btn-generate-media:hover {
     bottom: calc(env(safe-area-inset-bottom, 0px) + 48px);
   }
 }
+
+
+/* Real 3D worker controls. These are functional actions, not preview/toast buttons. */
+.native-3d-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.native-3d-test {
+  border-color: #7b3fe4;
+  color: #d8c2ff;
+}
+.native-3d-generate {
+  border-color: #20b77a;
+  color: #b8ffe0;
+}
+.more-3d-status {
+  margin: 0 2px 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #10101c;
+  border: 1px solid #30304a;
+  color: #cfd3dd;
+  font: 600 10px/1.45 ui-monospace, monospace;
+  word-break: break-word;
+}
+.more-3d-test {
+  border-color: rgba(144,78,221,.55);
+}
+.more-3d-generate {
+  border-color: rgba(32,183,122,.55);
+}

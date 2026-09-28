@@ -971,7 +971,7 @@
     position: fixed !important;
     left: 14px !important;
     right: 14px !important;
-    bottom: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom, 0px) + 18px) !important;
+    bottom: calc(var(--mobile-nav-h) + env(safe-area-inset-bottom, 0px) + 78px) !important;
     min-height: 48px !important;
     z-index: 2050 !important;
     border: 1px solid rgba(127,240,189,.65) !important;

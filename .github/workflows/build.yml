@@ -235,8 +235,22 @@ jobs:
           arch: x86_64
           profile: pixel_2
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
+          force-avd-creation: true
+          wipe-data: true
+          cores: 2
+          ram-size: 4096M
+          disk-size: 6G
+          emulator-boot-timeout: 600
           disable-animations: true
-          script: cd android && ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+          script: |
+            adb wait-for-device
+            until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+              sleep 2
+            done
+            adb shell settings put global window_animation_scale 0
+            adb shell settings put global transition_animation_scale 0
+            adb shell settings put global animator_duration_scale 0
+            cd android && ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
       - name: Upload Phase 8 reports
         if: always()
         uses: actions/upload-artifact@v4

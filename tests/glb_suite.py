@@ -229,8 +229,9 @@ with sync_playwright() as p:
     info = pg.evaluate("() => window.__hdAvatar.glbInfo()")
     chk("glb render: glbInfo morphTargets=2 joints=0",
         info and info.get("morphTargets") == 2 and info.get("joints") == 0, str(info))
+    morph_delta = info.get("morphMaxDelta", 0) if isinstance(info, dict) else 0
     chk("glb render: morph delta data nonzero (max |delta| > 0)",
-        bool(info) and info.get("morphMaxDelta", 0) > 0, str(info.get("morphMaxDelta")))
+        bool(info) and morph_delta > 0, str(morph_delta))
 
     # --- MorphBoxTest: GPU morph blend responds to weights (visual) ---
     ok = load_asset("morphbox")

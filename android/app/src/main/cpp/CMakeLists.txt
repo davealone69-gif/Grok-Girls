@@ -23,7 +23,7 @@ if(NOT vknn_POPULATED)
     # which was introduced in CMake 3.24. Patch that one expression in the fetched
     # source so the Android SDK's stable CMake 3.22 can still configure it.
     file(READ "${vknn_SOURCE_DIR}/CMakeLists.txt" VKNN_CMAKE)
-    string(REPLACE ""$<LINK_LIBRARY:WHOLE_ARCHIVE,vknn>"" "vknn" VKNN_CMAKE "${VKNN_CMAKE}")
+    string(REPLACE "$<LINK_LIBRARY:WHOLE_ARCHIVE,vknn>" "vknn" VKNN_CMAKE "${VKNN_CMAKE}")
     file(WRITE "${vknn_SOURCE_DIR}/CMakeLists.txt" "${VKNN_CMAKE}")
     add_subdirectory(${vknn_SOURCE_DIR} ${vknn_BINARY_DIR})
 endif()
@@ -36,7 +36,7 @@ target_include_directories(grok_vknn PRIVATE
     ${vknn_SOURCE_DIR}/examples/splatting
 )
 target_link_libraries(grok_vknn PRIVATE
-    "$<LINK_LIBRARY:WHOLE_ARCHIVE,vknn>"
+    vknn
     log android vulkan
 )
 target_link_options(grok_vknn PRIVATE

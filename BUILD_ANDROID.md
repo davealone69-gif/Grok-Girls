@@ -55,7 +55,7 @@ grep -rli hermes /tmp/apkchk/assets/public/   # must return nothing
 - Gradle's `~/.gradle/caches` will blow the inotify limit and crash vite; that's
   why `vite.config.ts` ignores `**/.gradle/**` and `**/artifacts/**`.
 - Package id is `ai.grokgirls.studio`. The `native/` Compose project is a
-  separate app (`com.aura.avatarstudio`) that also compiles during this build.
+  separate app (`ai.grokgirls.studio`) that also compiles during this build.
 
 ## The two local servers
 

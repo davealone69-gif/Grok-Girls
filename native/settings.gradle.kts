@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AvatarStudio"
+rootProject.name = "GrokGirlsNative"
 include(":app")

@@ -28,7 +28,7 @@ if(NOT vknn_POPULATED)
     string(REPLACE "$<LINK_LIBRARY:WHOLE_ARCHIVE,vknn>" "vknn" VKNN_CMAKE "${VKNN_CMAKE}")
     file(WRITE "${vknn_SOURCE_DIR}/CMakeLists.txt" "${VKNN_CMAKE}")
 
-    # Android Vulkan exposes newer entry points through vkGetInstanceProcAddr.
+    # Android Vulkan exposes newer entry points through vkGetInstanceProcAddr; keep the loader path portable across API levels.
     file(READ "${vknn_SOURCE_DIR}/src/backend/vulkan/vk_context.h" VKNN_CTX_H)
     string(REPLACE
         "        PFN_vkCmdPipelineBarrier2KHR cmdPipelineBarrier2 = nullptr;"

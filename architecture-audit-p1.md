@@ -30,7 +30,7 @@ grok-girls (web app — the product)
 │  ├─ models/       5 files — avatar/scene story data models
 │  ├─ services/    19 files — generation providers, storage, chat, adult content
 │  └─ renderer/    32 files — live 3D avatar renderer + offline renderer + GLB path
-├─ android/         Capacitor 8 wrapper (MainActivity.java, AvatarStudioPlugin.kt,
+├─ android/         Capacitor 8 wrapper (MainActivity.java, GrokGirlsPlugin.kt,
 │                   NativeAvatarActivity.kt) — produces the APK
 ├─ native/          6.9 k LOC / 47 Kotlin files — standalone Android Studio engine
 │                   mirror (ai.grokgirls.studio) + headless-test tools

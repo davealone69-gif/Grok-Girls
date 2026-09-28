@@ -10,8 +10,8 @@ import android.opengl.GLES30
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
-import com.aura.avatarstudio.renderer.GltfAvatarLoader
-import com.aura.avatarstudio.renderer.HdAvatarRenderer
+import ai.grokgirls.studio.renderer.GltfAvatarLoader
+import ai.grokgirls.studio.renderer.HdAvatarRenderer
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall

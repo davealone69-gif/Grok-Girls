@@ -1,4 +1,4 @@
-package com.aura.avatarstudio.renderer
+package ai.grokgirls.studio.renderer
 
 /** Skybox program: renders the prefiltered environment cube. */
 object SkyboxShaders {

@@ -9,8 +9,8 @@ import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
-import com.aura.avatarstudio.renderer.GltfAvatarLoader
-import com.aura.avatarstudio.renderer.HdAvatarRenderer
+import ai.grokgirls.studio.renderer.GltfAvatarLoader
+import ai.grokgirls.studio.renderer.HdAvatarRenderer
 
 /** Fullscreen interactive native GLES3 HD avatar viewport. */
 class NativeAvatarActivity : Activity() {

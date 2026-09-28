@@ -123,6 +123,8 @@ with sync_playwright() as p:
     pg.evaluate("() => { const bt = [...document.querySelectorAll('.hud-btn')].find(x => x.textContent.includes('3D')); if (bt) bt.click(); }")
     pg.wait_for_timeout(2000)
     chk("glb render: 3D overlay open", pg.locator(".hd-cube-overlay").count() == 1)
+    if pg.locator(".hd-cube-overlay").count():
+        pg.locator(".hd3d-canvas").wait_for(state="attached", timeout=5000)
 
     def pause_and_strip(nx=0.5):
         pg.evaluate("() => window.__hdAvatar.pause()")
@@ -138,7 +140,9 @@ with sync_playwright() as p:
     def gl_errors():
         return pg.evaluate("""() => {
           const c = document.querySelector('.hd3d-canvas');
+          if (!c) return -1;
           const gl = c.getContext('webgl2');
+          if (!gl) return -1;
           let n = 0;
           while (gl.getError() !== gl.NO_ERROR && n < 50) n++;
           return n;

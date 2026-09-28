@@ -95,19 +95,15 @@ class Photo3DLocalPlugin : Plugin() {
                 bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                     ?: throw IllegalArgumentException("The supplied image could not be decoded.")
                 val silhouette = SilhouetteExtractor.extract(bitmap)
-                val usable = silhouette.coverage in 0.02f..0.985f
-                val width: Int
-                val height: Int
-                val mask: BooleanArray
-                if (usable) {
-                    mask = silhouette.mask
-                    width = silhouette.width
-                    height = silhouette.height
-                } else {
-                    width = 128
-                    height = 192
-                    mask = ovalMask(width, height)
+                if (silhouette.coverage !in 0.02f..0.985f) {
+                    throw IllegalStateException(
+                        "Foreground segmentation was not reliable (coverage=" + silhouette.coverage + "). " +
+                            "Use a clearer subject/background image; no synthetic fallback mesh is used."
+                    )
                 }
+                val width = silhouette.width
+                val height = silhouette.height
+                val mask = silhouette.mask
                 val depth = (call.getDouble("depth") ?: 0.22).toFloat().coerceIn(0.05f, 0.5f)
                 val mesh = PhotoMeshBuilder.build(
                     mask, width, height, PhotoMeshBuilder.Options(depth = depth)
@@ -136,7 +132,7 @@ class Photo3DLocalPlugin : Plugin() {
                 result.put("bytes", file.length())
                 result.put("triangles", mesh.triangleCount)
                 result.put("vertices", mesh.vertexCount)
-                result.put("usedSilhouette", usable)
+                result.put("usedSilhouette", true)
                 call.resolve(result)
             } catch (t: Throwable) {
                 call.resolve(error(t.message ?: t.javaClass.simpleName))
@@ -151,17 +147,5 @@ class Photo3DLocalPlugin : Plugin() {
         put("error", message)
     }
 
-    private fun ovalMask(width: Int, height: Int): BooleanArray {
-        val cx = width / 2f
-        val cy = height / 2f
-        val rx = width * 0.42f
-        val ry = height * 0.47f
-        return BooleanArray(width * height) { i ->
-            val x = i % width
-            val y = i / width
-            val dx = (x + 0.5f - cx) / rx
-            val dy = (y + 0.5f - cy) / ry
-            dx * dx + dy * dy <= 1f
-        }
-    }
+
 }

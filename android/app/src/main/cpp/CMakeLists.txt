@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24.1)
+cmake_minimum_required(VERSION 3.22)
 project(grok_vknn LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,7 +16,17 @@ set(VKNN_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(VKNN_ENABLE_VULKAN ON CACHE BOOL "" FORCE)
 set(VKNN_ENABLE_NEON ON CACHE BOOL "" FORCE)
 set(VKNN_SANITIZE OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(vknn)
+FetchContent_GetProperties(vknn)
+if(NOT vknn_POPULATED)
+    FetchContent_Populate(vknn)
+    # VKNN currently uses CMake's LINK_LIBRARY/WHOLE_ARCHIVE generator expression,
+    # which was introduced in CMake 3.24. Patch that one expression in the fetched
+    # source so the Android SDK's stable CMake 3.22 can still configure it.
+    file(READ "${vknn_SOURCE_DIR}/CMakeLists.txt" VKNN_CMAKE)
+    string(REPLACE ""$<LINK_LIBRARY:WHOLE_ARCHIVE,vknn>"" "vknn" VKNN_CMAKE "${VKNN_CMAKE}")
+    file(WRITE "${vknn_SOURCE_DIR}/CMakeLists.txt" "${VKNN_CMAKE}")
+    add_subdirectory(${vknn_SOURCE_DIR} ${vknn_BINARY_DIR})
+endif()
 
 add_library(grok_vknn SHARED
     vknn_jni.cpp

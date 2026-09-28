@@ -1,4 +1,4 @@
-package com.aura.avatarstudio.renderer
+package ai.grokgirls.studio.renderer
 
 import org.json.JSONArray
 import org.json.JSONObject

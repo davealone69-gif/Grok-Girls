@@ -10,6 +10,10 @@ object VknnNative {
     @Volatile private var loaded = false
 
     fun ensureLoaded(): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < 24) {
+            loadError = "VKNN Vulkan backend requires Android 7.0 (API 24) or newer"
+            return false
+        }
         if (loaded) return true
         synchronized(this) {
             if (loaded) return true

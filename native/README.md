@@ -1,4 +1,4 @@
-# Aura Avatar Studio — dependency-free GLB avatar renderer (Android / OpenGL ES 3.0)
+# Grok Girls — dependency-free GLB avatar renderer (Android / OpenGL ES 3.0)
 
 A zero-dependency HD avatar pipeline: GLB 2.0 loading, PBR materials,
 skinning, morph targets, animation, runtime-generated IBL environment
@@ -62,11 +62,11 @@ The engine is compiled directly into the app (`android/` module) via
 - `ai.grokgirls.studio.NativeAvatarActivity` — fullscreen GL viewport:
   drag to orbit, pinch to zoom, loads `avatars/my_avatar.glb` from assets
   (override via the `avatar` intent extra)
-- `ai.grokgirls.studio.AvatarStudioPlugin` — Capacitor bridge so the web
+- `ai.grokgirls.studio.GrokGirlsPlugin` — Capacitor bridge so the web
   app can launch the native viewport:
 
 ```js
-await Capacitor.Plugins.AvatarStudio.openViewport({ avatar: 'avatars/my_avatar.glb' });
+await Capacitor.Plugins.GrokGirls.openViewport({ avatar: 'avatars/my_avatar.glb' });
 ```
 
 - `android/app/src/main/assets/avatars/my_avatar.glb` — the test avatar

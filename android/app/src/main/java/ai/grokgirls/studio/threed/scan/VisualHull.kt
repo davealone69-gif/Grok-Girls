@@ -114,8 +114,11 @@ class VisualHull(
                             normals.add(nx); normals.add(ny); normals.add(nz)
                             uvs.add(uFor(p[0])); uvs.add(vFor(p[1]))
                         }
-                        val flip = dir[0] + dir[1] + dir[2] < 0
-                        if (flip) {
+                        // The quad construction is not uniformly wound for all six
+                        // directions. Reverse the triangles exactly when the raw order
+                        // points inward so GL_CULL_FACE sees the outside as front-facing.
+                        val reverse = dir[0] > 0 || dir[1] > 0 || dir[2] < 0
+                        if (reverse) {
                             indices.add(base + 0); indices.add(base + 2); indices.add(base + 1)
                             indices.add(base + 0); indices.add(base + 3); indices.add(base + 2)
                         } else {

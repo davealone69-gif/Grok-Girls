@@ -37,9 +37,15 @@ add_library(grok_vknn SHARED
 target_include_directories(grok_vknn PRIVATE
     ${vknn_SOURCE_DIR}/examples/splatting
 )
+find_library(ANDROID_LOG_LIB log REQUIRED)
+find_library(ANDROID_LIB android REQUIRED)
+find_library(ANDROID_VULKAN_LIB vulkan REQUIRED)
+
 target_link_libraries(grok_vknn PRIVATE
     vknn
-    log android vulkan
+    ${ANDROID_LOG_LIB}
+    ${ANDROID_LIB}
+    ${ANDROID_VULKAN_LIB}
 )
 target_link_options(grok_vknn PRIVATE
     "-Wl,-z,max-page-size=16384"

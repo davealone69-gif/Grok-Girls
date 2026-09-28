@@ -854,12 +854,17 @@ export default function App() {
       }
 
       setHy3dStatus('Generating the real source image with local Stable Diffusion...');
+      // Android/Termux SD.cpp is CPU/RAM constrained. Keep the real 3D
+      // source render inside the tested phone-safe envelope. The previous
+      // 512x768 request could kill sd-server during generation even though
+      // the server and model loaded correctly. 256x256/12 is verified on
+      // the target device and is deliberately used for the source image.
       const image = await sdTxt2Img(
         {
           prompt: compiledPrompt,
-          width: 512,
-          height: 768,
-          steps: Math.min(Number(stepsInput) || 12, 16),
+          width: 256,
+          height: 256,
+          steps: Math.min(Number(stepsInput) || 12, 12),
           cfgScale: Number(cfgInput) || 6
         },
         { autoStart: true, timeoutMs: 600000 }

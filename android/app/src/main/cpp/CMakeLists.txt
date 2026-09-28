@@ -27,6 +27,41 @@ if(NOT vknn_POPULATED)
     file(READ "${vknn_SOURCE_DIR}/CMakeLists.txt" VKNN_CMAKE)
     string(REPLACE "$<LINK_LIBRARY:WHOLE_ARCHIVE,vknn>" "vknn" VKNN_CMAKE "${VKNN_CMAKE}")
     file(WRITE "${vknn_SOURCE_DIR}/CMakeLists.txt" "${VKNN_CMAKE}")
+
+    # Android Vulkan exposes newer entry points through vkGetInstanceProcAddr.
+    file(READ "${vknn_SOURCE_DIR}/src/backend/vulkan/vk_context.h" VKNN_CTX_H)
+    string(REPLACE
+        "        PFN_vkCmdPipelineBarrier2KHR cmdPipelineBarrier2 = nullptr;"
+        "        PFN_vkCmdPipelineBarrier2KHR cmdPipelineBarrier2 = nullptr;
+        PFN_vkGetPhysicalDeviceProperties2 getPhysicalDeviceProperties2 = nullptr;
+        PFN_vkGetPhysicalDeviceFeatures2 getPhysicalDeviceFeatures2 = nullptr;
+        PFN_vkGetPhysicalDeviceQueueFamilyProperties2 getPhysicalDeviceQueueFamilyProperties2 = nullptr;
+        PFN_vkGetPhysicalDeviceMemoryProperties2 getPhysicalDeviceMemoryProperties2 = nullptr;"
+        VKNN_CTX_H "${VKNN_CTX_H}")
+    file(WRITE "${vknn_SOURCE_DIR}/src/backend/vulkan/vk_context.h" "${VKNN_CTX_H}")
+
+    file(READ "${vknn_SOURCE_DIR}/src/backend/vulkan/vk_context.cpp" VKNN_CTX_CPP)
+    string(REPLACE
+        "            VK_CHECK(vkCreateInstance(&ci, nullptr, &instance_));"
+        "            VK_CHECK(vkCreateInstance(&ci, nullptr, &instance_));
+            getPhysicalDeviceProperties2 = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties2>(vkGetInstanceProcAddr(instance_, \"vkGetPhysicalDeviceProperties2\"));
+            getPhysicalDeviceFeatures2 = reinterpret_cast<PFN_vkGetPhysicalDeviceFeatures2>(vkGetInstanceProcAddr(instance_, \"vkGetPhysicalDeviceFeatures2\"));
+            getPhysicalDeviceQueueFamilyProperties2 = reinterpret_cast<PFN_vkGetPhysicalDeviceQueueFamilyProperties2>(vkGetInstanceProcAddr(instance_, \"vkGetPhysicalDeviceQueueFamilyProperties2\"));
+            getPhysicalDeviceMemoryProperties2 = reinterpret_cast<PFN_vkGetPhysicalDeviceMemoryProperties2>(vkGetInstanceProcAddr(instance_, \"vkGetPhysicalDeviceMemoryProperties2\"));
+            if (!getPhysicalDeviceProperties2 || !getPhysicalDeviceFeatures2 || !getPhysicalDeviceQueueFamilyProperties2 || !getPhysicalDeviceMemoryProperties2) {
+                throw Error(Status::Unsupported, \"required Vulkan 1.1 physical-device entry points are unavailable\");
+            }"
+        VKNN_CTX_CPP "${VKNN_CTX_CPP}")
+    string(REPLACE "vkGetPhysicalDeviceProperties2(phys_, &props2)" "getPhysicalDeviceProperties2(phys_, &props2)" VKNN_CTX_CPP "${VKNN_CTX_CPP}")
+    string(REPLACE "vkGetPhysicalDeviceFeatures2(phys_, &feats2)" "getPhysicalDeviceFeatures2(phys_, &feats2)" VKNN_CTX_CPP "${VKNN_CTX_CPP}")
+    string(REPLACE "vkGetPhysicalDeviceQueueFamilyProperties2(phys_, &familyCount, nullptr)" "getPhysicalDeviceQueueFamilyProperties2(phys_, &familyCount, nullptr)" VKNN_CTX_CPP "${VKNN_CTX_CPP}")
+    string(REPLACE "vkGetPhysicalDeviceQueueFamilyProperties2(phys_, &familyCount, familyProps.data())" "getPhysicalDeviceQueueFamilyProperties2(phys_, &familyCount, familyProps.data())" VKNN_CTX_CPP "${VKNN_CTX_CPP}")
+    file(WRITE "${vknn_SOURCE_DIR}/src/backend/vulkan/vk_context.cpp" "${VKNN_CTX_CPP}")
+
+    file(READ "${vknn_SOURCE_DIR}/src/backend/vulkan/vk_buffer.cpp" VKNN_BUFFER_CPP)
+    string(REPLACE "vkGetPhysicalDeviceMemoryProperties2(ctx_.physicalDevice(), &props)" "ctx_.getPhysicalDeviceMemoryProperties2(ctx_.physicalDevice(), &props)" VKNN_BUFFER_CPP "${VKNN_BUFFER_CPP}")
+    file(WRITE "${vknn_SOURCE_DIR}/src/backend/vulkan/vk_buffer.cpp" "${VKNN_BUFFER_CPP}")
+
     add_subdirectory(${vknn_SOURCE_DIR} ${vknn_BINARY_DIR})
 endif()
 

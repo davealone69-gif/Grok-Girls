@@ -184,9 +184,9 @@ export const DEFAULT_SETTINGS: SettingsState = {
     base: 'http://127.0.0.1:1234',
     enabled: false,
     autoStart: true,
-    steps: 24,
+    steps: 12,
     cfgScale: 7,
-    size: 512,
+    size: 256,
     negative: '',
     lastTest: null
   }

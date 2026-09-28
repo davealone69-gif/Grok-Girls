@@ -33,7 +33,7 @@ grok-girls (web app — the product)
 ├─ android/         Capacitor 8 wrapper (MainActivity.java, AvatarStudioPlugin.kt,
 │                   NativeAvatarActivity.kt) — produces the APK
 ├─ native/          6.9 k LOC / 47 Kotlin files — standalone Android Studio engine
-│                   mirror (com.aura.avatarstudio) + headless-test tools
+│                   mirror (ai.grokgirls.studio) + headless-test tools
 ├─ public/          menu.xml (nav layout), glb test assets, icons, sw.js, manifest
 └─ tests/           audit_suite, glb_suite, stress_suite, ci_runner, mocks/, fixtures/
 ```

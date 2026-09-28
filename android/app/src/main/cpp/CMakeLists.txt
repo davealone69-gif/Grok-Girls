@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 project(grok_vknn LANGUAGES C CXX)
 # VKNN uses Vulkan; Android Vulkan is available from API 24.
-set(ANDROID_PLATFORM android-24 CACHE STRING "Android API level for native Vulkan" FORCE)
+set(ANDROID_PLATFORM android-26 CACHE STRING "Android API level for native Vulkan" FORCE)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 

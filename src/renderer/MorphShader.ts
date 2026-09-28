@@ -51,8 +51,15 @@ in vec3 vWorldNormal;
 in vec2 vTexCoord;
 layout(location = 0) out vec4 outColor;
 void main() {
-  // Placeholder — pair this program with the skin fragment in production.
-  outColor = vec4(1.0);
+  vec3 n = normalize(vWorldNormal);
+  vec3 lightDir = normalize(vec3(0.35, 0.8, 0.55));
+  vec3 viewDir = normalize(-vWorldPosition);
+  vec3 halfDir = normalize(lightDir + viewDir);
+  float diffuse = max(dot(n, lightDir), 0.0);
+  float specular = pow(max(dot(n, halfDir), 0.0), 48.0);
+  vec3 base = vec3(0.72, 0.52, 0.46);
+  vec3 color = base * (0.16 + diffuse * 0.84) + vec3(0.9) * specular * 0.18;
+  outColor = vec4(color, 1.0);
 }`;
 
 function compileShader(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {

@@ -1,4 +1,4 @@
-package com.aura.avatarstudio.renderer
+package ai.grokgirls.studio.renderer
 
 import android.content.Context
 import android.opengl.GLES30

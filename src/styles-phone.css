@@ -989,3 +989,44 @@
 
 
 @media (max-width: 900px) { .app-container.mobile .native-3d-controls { display: none !important; } .app-container.mobile .more-3d-status { max-height: 84px; overflow-y: auto; } }
+
+
+/* Phase 8 hit-target guard: fixed mobile footer must not overlap overlay controls.
+ * The footer is intentionally interactive, so do not disable its pointer events.
+ * Instead constrain chat/preset/import overlays to the space above the footer. */
+@media (max-width: 900px) {
+  .app-container.mobile .companion-overlay-dock {
+    top: 0 !important;
+    bottom: calc(
+      var(--mobile-nav-h) +
+      env(safe-area-inset-bottom, 0px) +
+      18px +
+      62px
+    ) !important;
+    height: auto !important;
+    padding-bottom: 8px !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  .app-container.mobile .companion-log {
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+
+  .app-container.mobile .companion-input-row {
+    position: relative !important;
+    z-index: 2 !important;
+    flex-shrink: 0 !important;
+  }
+
+  .app-container.mobile .companion-input-row .btn-send-chat {
+    pointer-events: auto !important;
+  }
+
+  .app-container.mobile .save-main-btn,
+  .app-container.mobile .btn-send-chat {
+    position: relative;
+    z-index: 2;
+  }
+}

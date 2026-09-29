@@ -120,7 +120,7 @@ with sync_playwright() as p:
         str(struct["box"]))
 
     # ---------- 2) RENDERER: overlay + isolated GLB draw ----------
-    pg.evaluate("() => { const bt = document.querySelector('.hud-btn[title="Interactive 3D avatar viewport"]'); if (bt) bt.click(); }")
+    pg.evaluate("() => { const bt = document.querySelector('.hud-btn[title=\"Interactive 3D avatar viewport\"]'); if (bt) bt.click(); }")
     pg.wait_for_timeout(2000)
     chk("glb render: 3D overlay open", pg.locator(".hd-cube-overlay").count() == 1)
     if pg.locator(".hd-cube-overlay").count():

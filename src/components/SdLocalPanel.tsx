@@ -30,11 +30,9 @@ const dot = (state: SdServerState): { color: string; label: string } => {
   }
 };
 
-/** Phone-friendly render presets: a 512 square is the realistic ceiling on CPU. */
+/** Current verified phone-safe SD.cpp envelope: 256x256 / 8 steps. */
 const PRESETS = [
-  { label: 'FAST', steps: 16, size: 384, note: 'quickest preview' },
-  { label: 'BALANCED', steps: 24, size: 512, note: 'recommended on phone' },
-  { label: 'QUALITY', steps: 36, size: 640, note: 'slow on CPU' }
+  { label: 'SAFE', steps: 8, size: 256, note: 'verified phone-safe envelope' }
 ];
 
 export interface SdLocalPanelProps {
@@ -252,7 +250,7 @@ export default function SdLocalPanel({ onNotice }: SdLocalPanelProps) {
         <input
           type="range"
           min={1}
-          max={60}
+          max={8}
           step={1}
           value={steps}
           onChange={e => setSteps(Number(e.target.value))}
@@ -260,7 +258,7 @@ export default function SdLocalPanel({ onNotice }: SdLocalPanelProps) {
           onTouchEnd={() => persist({ steps })}
           onBlur={() => persist({ steps })}
         />
-        <em>More steps means more detail and a longer render. 16–24 is sane on a phone CPU.</em>
+        <em>More steps means more detail and a longer render. 8 steps is the current verified phone-safe limit on this device.</em>
       </label>
 
       <label className="settings-field">
@@ -284,7 +282,7 @@ export default function SdLocalPanel({ onNotice }: SdLocalPanelProps) {
         <input
           type="range"
           min={256}
-          max={1024}
+          max={256}
           step={64}
           value={size}
           onChange={e => setSize(Number(e.target.value))}
@@ -292,7 +290,7 @@ export default function SdLocalPanel({ onNotice }: SdLocalPanelProps) {
           onTouchEnd={() => persist({ size })}
           onBlur={() => persist({ size })}
         />
-        <em>Memory use grows with the square of this number — 512 is the practical phone ceiling.</em>
+        <em>Memory use grows with the square of this number — 256px is the current verified phone-safe ceiling; higher sizes are disabled until the native path is re-verified.</em>
       </label>
 
       <label className="settings-field">
@@ -359,7 +357,7 @@ export default function SdLocalPanel({ onNotice }: SdLocalPanelProps) {
       <p className="settings-note" style={{ marginTop: 10 }}>
         <strong>Setup in Termux:</strong> install an sd-server build that exposes the A1111 API, then
         either put it on your PATH as <code>sd-server</code> or create <code>~/sd-server.sh</code> that
-        launches it. The app runs it with <code>--port 1234</code> bound to loopback. A phone render
+        launches it. The app runs it with <code>--listen-ip 127.0.0.1 --listen-port 1234</code> bound to loopback. The Android path currently forces CPU/offload mode and clamps renders to the verified safe envelope. A phone render
         takes tens of seconds to minutes depending on steps and size.
       </p>
     </div>

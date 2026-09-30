@@ -50,6 +50,7 @@ class SdLocalPlugin : Plugin() {
     private val pool = Executors.newCachedThreadPool()
     private val cancelled = ConcurrentHashMap<String, AtomicBoolean>()
     private val liveConnections = ConcurrentHashMap<String, HttpURLConnection>()
+    private val renderLock = AtomicBoolean(false)
 
     companion object {
         private const val DEFAULT_BASE = "http://127.0.0.1:1234"
@@ -206,9 +207,12 @@ class SdLocalPlugin : Plugin() {
             return
         }
         val negative = call.getString("negativePrompt") ?: ""
-        val steps = call.getInt("steps") ?: 24
-        val width = call.getInt("width") ?: 512
-        val height = call.getInt("height") ?: 512
+        // Phone safety guard: the on-device SD1.5 path is currently validated only
+        // at 256x256 / 8 steps. Never let a UI/settings value accidentally turn
+        // one native request into a multi-gigabyte allocation.
+        val steps = (call.getInt("steps") ?: 8).coerceIn(1, 8)
+        val width = (call.getInt("width") ?: 256).coerceIn(64, 256)
+        val height = (call.getInt("height") ?: 256).coerceIn(64, 256)
         val cfgScale = call.getDouble("cfgScale") ?: 7.0
         val seed = call.getInt("seed")
         val requestId = call.getString("requestId") ?: "sd-${System.currentTimeMillis()}"
@@ -216,6 +220,10 @@ class SdLocalPlugin : Plugin() {
         val timeout = call.getInt("timeoutMs") ?: 600000
 
         val flag = AtomicBoolean(false)
+        if (!renderLock.compareAndSet(false, true)) {
+            fail(call, "A local image render is already running. Wait for it to finish before starting another.")
+            return
+        }
         cancelled[requestId] = flag
 
         pool.execute {
@@ -322,6 +330,7 @@ class SdLocalPlugin : Plugin() {
             } finally {
                 liveConnections.remove(requestId)
                 cancelled.remove(requestId)
+                renderLock.set(false)
                 conn?.disconnect()
             }
         }

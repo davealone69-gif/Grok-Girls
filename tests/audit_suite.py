@@ -434,7 +434,7 @@ with sync_playwright() as p:
     chk("hd renderer: exactly one gallery item added (busy guard)", after_count == before_count + 1, f"{before_count} -> {after_count}")
     pg.keyboard.press("Escape")
     pg.wait_for_timeout(300)
-    pg.evaluate("() => { const b = document.querySelector('.hud-btn[title=\"Interactive 3D avatar viewport\"]'); if (b) b.click(); }")
+    pg.evaluate("""() => {\n      if (!document.querySelector('.hd-cube-overlay')) {\n        const b = document.querySelector('.hud-btn[title="Interactive 3D avatar viewport"]');\n        if (b) b.click();\n      }\n    }""")
     pg.wait_for_timeout(1500)
     chk("hd avatar: 3D overlay visible", pg.locator(".hd-cube-overlay").count() == 1)
     a1 = pg.evaluate("() => window.__hdAvatar.getAngle()")

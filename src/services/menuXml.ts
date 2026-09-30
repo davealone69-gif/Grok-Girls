@@ -90,7 +90,7 @@ function parseMenuXml(xml: string): MenuItem[] {
   if (!xml.trim()) throw new Error('empty menu XML');
   const doc = new DOMParser().parseFromString(xml, 'application/xml');
   if (doc.getElementsByTagName('parsererror').length || !doc.documentElement) throw new Error('malformed menu XML');
-  const controls = Array.from(doc.querySelectorAll('Button,CheckBox,EditText,TextView'));
+  const controls = (['Button', 'CheckBox', 'EditText', 'TextView'] as const).flatMap(tag => Array.from(doc.getElementsByTagName(tag)));
   const items: MenuItem[] = [];
   const seen = new Set<string>();
   for (const el of controls) {

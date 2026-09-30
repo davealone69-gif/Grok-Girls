@@ -406,7 +406,7 @@ class SdLocalPlugin : Plugin() {
                         "nohup \"\$HOME/sd-server.sh\" >\"\$HOME/sd-server.log\" 2>&1 & " +
                         "elif command -v sd-server >/dev/null 2>&1; then " +
                         "nohup sd-server --model \"\$HOME/models/v1-5-pruned-emaonly.safetensors\" " +
-                        "--listen-ip 127.0.0.1 --listen-port $port --backend cpu --offload-to-cpu --mmap " +
+                        "--listen-ip 127.0.0.1 --listen-port $port --backend cpu --rng cpu --sampler-rng cpu --offload-to-cpu --mmap " +
                         "--vae-tiling --threads 4 >\"\$HOME/sd-server.log\" 2>&1 & " +
                         "else exit 127; fi"
 

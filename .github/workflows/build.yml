@@ -237,7 +237,11 @@ jobs:
           emulator-boot-timeout: 900
           pre-emulator-launch-script: adb kill-server || true; adb start-server
           disable-animations: true
-          script: cd android && ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+          script: |
+            adb uninstall ai.grokgirls.studio || true
+            adb shell pm clear ai.grokgirls.studio || true
+            cd android
+            ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
       - name: Upload Phase 8 reports
         if: always()
         uses: actions/upload-artifact@v4

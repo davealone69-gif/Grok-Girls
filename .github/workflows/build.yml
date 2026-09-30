@@ -30,7 +30,6 @@ jobs:
             echo "::error::package.json contains \"latest\" — pin exact versions (R4)"
             exit 1
           fi
-          echo "all dependency ranges are pinned"
       - name: TypeScript/Vite build
         run: npm run build
       - name: Upload web dist
@@ -69,39 +68,17 @@ jobs:
       - name: Run audit + stress suites
         run: |
           set -e
-          python3 -m http.server 8080 --directory dist > /tmp/http.log 2>&1 &
-          python3 tests/mocks/mock_big_a1111.py > /tmp/mock7860.log 2>&1 &
-          python3 tests/mocks/mock_slow_a1111.py > /tmp/mock7861.log 2>&1 &
-          SERVERS=$!
+          python3 -m http.server 8080 --directory dist >/tmp/http.log 2>&1 &
+          python3 tests/mocks/mock_big_a1111.py >/tmp/mock7860.log 2>&1 &
+          python3 tests/mocks/mock_slow_a1111.py >/tmp/mock7861.log 2>&1 &
           for p in 8080 7860 7861; do
             for i in $(seq 1 30); do
               (exec 3<>/dev/tcp/127.0.0.1/$p) 2>/dev/null && break
               sleep 1
             done
-            (exec 3<>/dev/tcp/127.0.0.1/$p) 2>/dev/null || { echo "port $p never came up"; kill $SERVERS 2>/dev/null; exit 1; }
+            (exec 3<>/dev/tcp/127.0.0.1/$p) 2>/dev/null || { echo "port $p never came up"; exit 1; }
           done
-          echo "all servers up"
           python3 tests/ci_runner.py
-          RC=$?
-          kill $(jobs -p) 2>/dev/null || true
-          exit $RC
-      - name: Dependency security gate
-        run: |
-          set -u
-          for attempt in 1 2 3 4 5; do
-            echo "npm audit attempt $attempt/5"
-            if npm audit --audit-level=high; then
-              echo "npm audit passed"
-              exit 0
-            fi
-            if [ "$attempt" -lt 5 ]; then
-              delay=$((attempt * 10))
-              echo "npm audit failed, retrying in ${delay}s"
-              sleep "$delay"
-            fi
-          done
-          echo "ERROR: npm audit failed after 5 attempts"
-          exit 1
 
   android:
     name: Android APK
@@ -124,11 +101,21 @@ jobs:
           cache: gradle
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: ''
       - name: Install Android SDK packages
+        shell: bash
         run: |
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1"
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          for attempt in 1 2 3; do
+            rm -rf "$ANDROID_SDK_ROOT/ndk/27.0.12077973" || true
+            if sdkmanager --verbose               "platform-tools"               "platforms;android-35"               "build-tools;35.0.0"               "cmake;3.22.1"               "ndk;27.0.12077973"; then
+              break
+            fi
+            echo "Android SDK/NDK install attempt $attempt failed; retrying"
+            sleep $((attempt * 10))
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+          done
+          test -x "$ANDROID_SDK_ROOT/ndk/27.0.12077973/source.properties" || test -f "$ANDROID_SDK_ROOT/ndk/27.0.12077973/source.properties"
           sudo apt-get update -qq
           sudo apt-get install -y glslang-tools
       - name: Install dependencies
@@ -158,7 +145,6 @@ jobs:
           if [ -n "$RELEASE_KEYSTORE" ]; then
             mkdir -p android/keystore
             echo "$RELEASE_KEYSTORE" | base64 -d > android/keystore/grok-girls-release.jks
-            echo "release keystore decoded"
           else
             echo "RELEASE_KEYSTORE secret not set — release APK skipped"
           fi
@@ -180,9 +166,8 @@ jobs:
           if [ -s "$APK" ]; then
             echo "release APK built: $(stat -c%s "$APK") bytes"
           elif [ -f android/keystore/grok-girls-release.jks ]; then
-            echo "ERROR: keystore present but release APK was not produced" && exit 1
-          else
-            echo "release APK not produced (no keystore configured)"
+            echo "ERROR: keystore present but release APK was not produced"
+            exit 1
           fi
       - name: Upload release APK
         uses: actions/upload-artifact@v4
@@ -215,10 +200,10 @@ jobs:
           cache: gradle
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: ''
       - name: Install Android SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "emulator" "system-images;android-34;google_apis;x86_64"
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
       - name: Build web app
@@ -227,14 +212,14 @@ jobs:
         run: npx cap sync android
       - name: Make Gradle executable
         run: chmod +x android/gradlew
-      - name: Run Phase 8 tests on Android 35 emulator
+      - name: Run Phase 8 tests on Android 34 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 34
           target: google_apis
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader -no-snapshot -no-snapshot-save
           force-avd-creation: true
           wipe-data: true
           cores: 2

@@ -15,7 +15,7 @@ with sync_playwright() as p:
     page.goto("http://127.0.0.1:8080", wait_until="networkidle", timeout=60000)
 
     # enable the 3D viewport like the audit suite does
-    page.evaluate("() => { const b = document.querySelector('.hud-btn[title=\"Interactive 3D avatar viewport\"]'); if (b) b.click(); }")
+    page.evaluate("""() => {\n      if (!document.querySelector('.hd-cube-overlay')) {\n        const b = document.querySelector('.hud-btn[title="Interactive 3D avatar viewport"]');\n        if (b) b.click();\n      }\n    }""")
     page.wait_for_timeout(2500)
 
     overlay = page.locator(".hd-cube-overlay").count()

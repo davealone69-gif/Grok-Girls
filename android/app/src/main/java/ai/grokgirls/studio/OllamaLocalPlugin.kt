@@ -400,22 +400,20 @@ class OllamaLocalPlugin : Plugin() {
                 intent.putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/bash")
                 intent.putExtra(
                     "com.termux.RUN_COMMAND_ARGUMENTS",
-                    arrayOf("-lc", "pgrep -f 'ollama serve' >/dev/null 2>&1 || (OLLAMA_HOST=127.0.0.1:11434 nohup ollama serve >/dev/null 2>&1 &)")
+                    arrayOf("-lc", "pgrep -f '[o]llama serve' >/dev/null 2>&1 || (nohup env OLLAMA_HOST=127.0.0.1:11434 ollama serve >\"\$HOME/ollama-server.log\" 2>&1 </dev/null &)")
                 )
                 intent.putExtra("com.termux.RUN_COMMAND_WORKDIR", "/data/data/com.termux/files/home")
                 intent.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true)
                 intent.putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0")
 
-                // startForegroundService is API 26+; minSdk here is 23.
+                // Termux's documented RUN_COMMAND path uses startService().
+                // RunCommandService handles its own foreground-service transition.
+                // Starting it directly as a foreground service from Grok-Girls can
+                // prevent dispatch on some Android/Termux combinations.
                 val launched = runCatching {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        ctx.startForegroundService(intent)
-                    } else {
-                        ctx.startService(intent)
-                    }
+                    ctx.startService(intent)
                     true
-                }.recoverCatching { ctx.startService(intent); true }
-                    .getOrDefault(false)
+                }.getOrDefault(false)
 
                 if (!launched) {
                     val r = JSObject()

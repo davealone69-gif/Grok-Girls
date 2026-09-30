@@ -86,8 +86,34 @@ function sectionFor(el: Element): MenuItem['section'] | null {
   if (ancestors.includes('optionspanel') || ancestors.includes('optionscontainer')) return 'options';
   return null;
 }
+function validateXmlStructure(xml: string): void {
+  const source = xml
+    .replace(/<!--(?:.|[\\r\\n])*?-->/g, '')
+    .replace(/<\\?(?:.|[\\r\\n])*?\\?>/g, '')
+    .replace(/<!DOCTYPE(?:.|[\\r\\n])*?>/gi, '')
+    .trim();
+  const tokenRe = /<\\/?([A-Za-z_][\\w:.-]*)(?:\\s[^<>]*?)?\\/?>/g;
+  const stack: string[] = [];
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = tokenRe.exec(source))) {
+    if (source.slice(cursor, match.index).includes('<')) {
+      throw new Error('malformed menu XML');
+    }
+    cursor = tokenRe.lastIndex;
+    const token = match[0];
+    if (token.startsWith('</')) {
+      if (stack.pop() !== match[1]) throw new Error('malformed menu XML');
+    } else if (!token.endsWith('/>')) {
+      stack.push(match[1]);
+    }
+  }
+  if (source.slice(cursor).includes('<') || stack.length) throw new Error('malformed menu XML');
+}
+
 function parseMenuXml(xml: string): MenuItem[] {
   if (!xml.trim()) throw new Error('empty menu XML');
+  validateXmlStructure(xml);
   const doc = new DOMParser().parseFromString(xml, 'application/xml');
   if (doc.getElementsByTagName('parsererror').length || !doc.documentElement) throw new Error('malformed menu XML');
   const controls = (['Button', 'CheckBox', 'EditText', 'TextView'] as const).flatMap(tag => Array.from(doc.getElementsByTagName(tag)));

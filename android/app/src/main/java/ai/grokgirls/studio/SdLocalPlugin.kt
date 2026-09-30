@@ -401,7 +401,7 @@ class SdLocalPlugin : Plugin() {
                 }
 
                 val script =
-                    "pgrep -f 'sd-server' >/dev/null 2>&1 && exit 0; " +
+                    "pgrep -f '[s]d-server' >/dev/null 2>&1 && exit 0; " +
                         "if [ -x \"\$HOME/sd-server.sh\" ]; then " +
                         "nohup \"\$HOME/sd-server.sh\" >\"\$HOME/sd-server.log\" 2>&1 & " +
                         "elif command -v sd-server >/dev/null 2>&1; then " +
@@ -419,16 +419,14 @@ class SdLocalPlugin : Plugin() {
                 intent.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true)
                 intent.putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0")
 
-                // startForegroundService is API 26+; minSdk here is 23.
+                // Termux's documented RUN_COMMAND path uses startService().
+                // RunCommandService handles its own foreground-service transition.
+                // Starting it directly as a foreground service from Grok-Girls can
+                // prevent dispatch on some Android/Termux combinations.
                 val launched = runCatching {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        ctx.startForegroundService(intent)
-                    } else {
-                        ctx.startService(intent)
-                    }
+                    ctx.startService(intent)
                     true
-                }.recoverCatching { ctx.startService(intent); true }
-                    .getOrDefault(false)
+                }.getOrDefault(false)
 
                 if (!launched) {
                     val r = JSObject()

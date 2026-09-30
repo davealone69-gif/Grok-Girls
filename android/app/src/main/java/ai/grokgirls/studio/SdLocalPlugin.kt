@@ -403,9 +403,11 @@ class SdLocalPlugin : Plugin() {
                 val script =
                     "pgrep -f 'sd-server' >/dev/null 2>&1 && exit 0; " +
                         "if [ -x \"\$HOME/sd-server.sh\" ]; then " +
-                        "nohup \"\$HOME/sd-server.sh\" --port $port >\"\$HOME/sd-server.log\" 2>&1 & " +
+                        "nohup \"\$HOME/sd-server.sh\" >\"\$HOME/sd-server.log\" 2>&1 & " +
                         "elif command -v sd-server >/dev/null 2>&1; then " +
-                        "nohup sd-server --host 127.0.0.1 --port $port >\"\$HOME/sd-server.log\" 2>&1 & " +
+                        "nohup sd-server --model \"\$HOME/models/v1-5-pruned-emaonly.safetensors\" " +
+                        "--listen-ip 127.0.0.1 --listen-port $port --backend cpu --offload-to-cpu --mmap " +
+                        "--vae-tiling --threads 4 >\"\$HOME/sd-server.log\" 2>&1 & " +
                         "else exit 127; fi"
 
                 val intent = android.content.Intent()

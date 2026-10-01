@@ -366,9 +366,9 @@ void main() {
         val count = minOf(morphCount, 3)
         val sb = StringBuilder()
         for (i in 0 until count) {
-            sb.append("in vec3 aMorph").append(i).append(";\n")
-            sb.append("in vec3 aMorphN").append(i).append(";\n")
-            sb.append("in vec3 aMorphT").append(i).append(";\n")
+            sb.append("layout(location = ").append(6 + i).append(") in vec3 aMorph").append(i).append(";\n")
+            sb.append("layout(location = ").append(9 + i).append(") in vec3 aMorphN").append(i).append(";\n")
+            sb.append("layout(location = ").append(12 + i).append(") in vec3 aMorphT").append(i).append(";\n")
         }
         val morphCode = if (count == 0) {
             "    /* no morph targets */\n"

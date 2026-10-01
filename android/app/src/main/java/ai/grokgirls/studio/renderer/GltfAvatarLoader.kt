@@ -767,6 +767,8 @@ class GltfAvatarLoader(
 
     companion object {
 
+        private const val TAG = "GltfAvatarLoader"
+
         private const val GLB_MAGIC =
             0x46546C67
 

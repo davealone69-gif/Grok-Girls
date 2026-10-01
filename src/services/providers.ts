@@ -12,6 +12,16 @@ import {
 } from './settingsState';
 
 export type ProviderName = 'local' | 'sdlocal' | 'openrouter' | 'gemini' | 'custom' | 'selfhosted' | 'ollama';
+
+/**
+ * Keyless image endpoint used when no custom endpoint is configured.
+ *
+ * No API key required, but it IS rate limited: throttled requests come back as
+ * HTTP 402 (or 429) and are surfaced verbatim rather than quietly falling back
+ * to the procedural placeholder engine. Point 'custom' at a keyed endpoint in
+ * Settings when you want guaranteed throughput.
+ */
+export const KEYLESS_IMAGE_ENDPOINT = 'https://image.pollinations.ai';
 export type Mode = 'image' | 'video';
 export type ProviderMode = Mode | 'chat';
 
@@ -640,7 +650,14 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
   }
   const key = getSavedApiKey(p);
   const model = env()[`VITE_${p.toUpperCase()}_${r.mode.toUpperCase()}_MODEL`] ?? env()[`VITE_${p.toUpperCase()}_MODEL`] ?? defaultModel(p, r.mode);
-  const endpoint = getSavedEndpoint(p, r.mode) || (p === 'custom' ? '' : defaultEndpoint(p, r.mode, model));
+  // Keyless fallback: a 'custom' image request with no endpoint configured goes
+  // to Pollinations' public image host. Non-image modes keep '' so they still
+  // report "not configured" instead of hitting an image endpoint.
+  const endpoint =
+    getSavedEndpoint(p, r.mode) ||
+    (p === 'custom'
+      ? (r.mode === 'image' ? KEYLESS_IMAGE_ENDPOINT : '')
+      : defaultEndpoint(p, r.mode, model));
   // Custom endpoints may be keyless; OpenRouter and Gemini always need a key.
   const missingKey = p !== 'custom' && !key;
   if (missingKey || !endpoint) {
@@ -661,10 +678,21 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
     headers['X-Title'] = 'Grok Girls';
   }
   // Pollinations image URL API returns image bytes directly.
-  const isPollinationsImage =
-    p === 'custom' &&
-    r.mode === 'image' &&
-    /(^|\.)gen\.pollinations\.ai\/image\/?$/i.test(endpoint.replace(/\/+$/, ''));
+    // Accept bare or scheme-qualified endpoints on either host:
+    //   https://image.pollinations.ai          keyless, rate limited
+    //   https://image.pollinations.ai/prompt   same, explicit path form
+    //   https://gen.pollinations.ai/image      key required
+    // The old pattern anchored on (^|\.) so a normal https:// endpoint never
+    // matched: configured Pollinations endpoints silently fell through to the
+    // JSON POST path and failed. Normalise the scheme away before testing.
+    const epNorm = endpoint
+      .replace(/\/+$/, '')
+      .replace(/^https?:\/\//i, '')
+      .replace(/^www\./i, '');
+    const isPollinationsImage =
+      p === 'custom' &&
+      r.mode === 'image' &&
+      /^(image|gen)\.pollinations\.ai(\/(image|prompt))?$/i.test(epNorm);
 
   if (isPollinationsImage) {
     const params = new URLSearchParams();
@@ -673,7 +701,7 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
     if (r.height) params.set('height', String(Math.round(r.height)));
     if (r.seed != null) params.set('seed', String(r.seed));
     if (key) params.set('key', key);
-    const imageUrl = `${endpoint.replace(/\\/+$/, '')}/${encodeURIComponent(r.prompt)}?${params.toString()}`;
+    const imageUrl = `${endpoint.replace(/\/+$/, '')}/${encodeURIComponent(r.prompt)}?${params.toString()}`;
     const response = await fetchWithTimeout(imageUrl, { method: 'GET' }, 120000);
     if (!response.ok) {
       const errText = await response.text().catch(() => '');

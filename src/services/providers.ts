@@ -664,7 +664,7 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
   const isPollinationsImage =
     p === 'custom' &&
     r.mode === 'image' &&
-    /(^|\\.)gen\\.pollinations\\.ai\\/image\\/?$/i.test(endpoint.replace(/\\/+$/, ''));
+    /(^|\.)gen\.pollinations\.ai\/image\/?$/i.test(endpoint.replace(/\/+$/, ''));
 
   if (isPollinationsImage) {
     const params = new URLSearchParams();

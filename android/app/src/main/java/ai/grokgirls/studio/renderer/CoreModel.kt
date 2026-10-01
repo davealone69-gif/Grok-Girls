@@ -325,8 +325,8 @@ object Mat4 {
 
 
 object GltfNodeTransforms {
-    fun worldMatrix(document: GltfDocument, nodeIndex: Int): FloatArray {
-        if (nodeIndex !in document.nodes.indices) return Mat4.identity()
+    fun worldMatrix(document: GltfDocument?, nodeIndex: Int): FloatArray {
+        if (document == null || nodeIndex !in document.nodes.indices) return Mat4.identity()
         val parent = findParent(document, nodeIndex)
         val node = document.nodes[nodeIndex]
         val local = Mat4.fromTrs(node.translation, node.rotation, node.scale)

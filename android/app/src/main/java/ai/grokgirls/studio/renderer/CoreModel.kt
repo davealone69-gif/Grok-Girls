@@ -280,9 +280,9 @@ object Mat4 {
         val xx = 2f * x * x; val yy = 2f * y * y; val zz = 2f * z * z
         val xy = 2f * x * y; val xz = 2f * x * z; val yz = 2f * y * z
         val wx = 2f * w * x; val wy = 2f * w * y; val wz = 2f * w * z
-        val m00 = 1f - yy - zz; val m01 = xy + wz; val m02 = xz - wy
-        val m10 = xy - wz; val m11 = 1f - xx - zz; val m12 = yz + wx
-        val m20 = xz + wy; val m21 = yz - wx; val m22 = 1f - xx - yy
+        val m00 = 1f - yy - zz; val m01 = xy - wz; val m02 = xz + wy
+        val m10 = xy + wz; val m11 = 1f - xx - zz; val m12 = yz - wx
+        val m20 = xz - wy; val m21 = yz + wx; val m22 = 1f - xx - yy
         return floatArrayOf(
             m00 * s[0], m10 * s[0], m20 * s[0], 0f,
             m01 * s[1], m11 * s[1], m21 * s[1], 0f,

@@ -92,7 +92,7 @@ object PbrPipeline {
     private const val ATTR_JOINTS = 4
     private const val ATTR_WEIGHTS = 5
     private const val ATTR_MORPH_BASE = 6
-    private const val MAX_MORPH = 8
+    private const val MAX_MORPH = 3
 
     fun upload(avatar: HdAvatar) {
         val jointCount = avatar.jointMatrices?.size?.div(16) ?: 0

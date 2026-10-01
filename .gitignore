@@ -41,3 +41,10 @@ artifacts/
 .vite/
 
 artifacts/
+tools/ui-audit/shots/
+tools/ui-audit/sysroot/
+tools/ui-audit/debs/
+tools/ui-audit/.chrome/
+tools/ui-audit/node_modules/
+tools/ui-audit/package.json
+tools/ui-audit/package-lock.json

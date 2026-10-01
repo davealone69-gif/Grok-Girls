@@ -155,7 +155,7 @@ object PbrPipeline {
         blend.sortByDescending { distSq(it.first) }
 
         for (mesh in opaque) drawMesh(mesh.second, mesh.first,
-            GltfNodeTransforms.worldMatrix(avatar.gltf ?: return, mesh.first.nodeIndex), modelMatrix, viewMatrix,
+            GltfNodeTransforms.worldMatrix(avatar.gltf ?: GltfDocument(0, emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList()), mesh.first.nodeIndex), modelMatrix, viewMatrix,
             projMatrix, cameraPos, lights, lightCount, exposure, iblIntensity, timeSeconds,
             jointCount, false)
         for (mesh in blend) drawMesh(mesh.second, mesh.first,

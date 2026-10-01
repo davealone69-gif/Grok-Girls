@@ -52,8 +52,10 @@ object PbrPipeline {
         val uOcclusionTex = loc(program, "uOcclusionTex")
         val uEmissiveTex = loc(program, "uEmissiveTex")
         val uCameraPos = loc(program, "uCameraPos")
-        val uLights = loc(program, "uLights")
         val uLightCount = loc(program, "uLightCount")
+        val uLightPositions = Array(4) { i -> loc(program, "uLights[$i].position") }
+        val uLightColors = Array(4) { i -> loc(program, "uLights[$i].color") }
+        val uLightIntensities = Array(4) { i -> loc(program, "uLights[$i].intensity") }
         val uExposure = loc(program, "uExposure")
         val uIBLIntensity = loc(program, "uIBLIntensity")
         val uIrrMap = loc(program, "uIrrMap")
@@ -90,7 +92,14 @@ object PbrPipeline {
     private const val ATTR_JOINTS = 4
     private const val ATTR_WEIGHTS = 5
     private const val ATTR_MORPH_BASE = 6
-    private const val MAX_MORPH = 8
+    private const val MAX_MORPH = 3
+
+    /** Discards GL-context-owned state without issuing deletes against a lost context. */
+    fun resetForContext() {
+        meshResources.clear()
+        programs.clear()
+        locs.clear()
+    }
 
     fun upload(avatar: HdAvatar) {
         val jointCount = avatar.jointMatrices?.size?.div(16) ?: 0
@@ -152,10 +161,12 @@ object PbrPipeline {
         opaque.sortBy { distSq(it.first) }
         blend.sortByDescending { distSq(it.first) }
 
-        for (mesh in opaque) drawMesh(mesh.second, mesh.first, modelMatrix, viewMatrix,
+        for (mesh in opaque) drawMesh(mesh.second, mesh.first,
+            GltfNodeTransforms.worldMatrix(avatar.gltf ?: GltfDocument(0, emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList()), mesh.first.nodeIndex), modelMatrix, viewMatrix,
             projMatrix, cameraPos, lights, lightCount, exposure, iblIntensity, timeSeconds,
             jointCount, false)
-        for (mesh in blend) drawMesh(mesh.second, mesh.first, modelMatrix, viewMatrix,
+        for (mesh in blend) drawMesh(mesh.second, mesh.first,
+            GltfNodeTransforms.worldMatrix(avatar.gltf ?: return, mesh.first.nodeIndex), modelMatrix, viewMatrix,
             projMatrix, cameraPos, lights, lightCount, exposure, iblIntensity, timeSeconds,
             jointCount, true)
 
@@ -166,6 +177,7 @@ object PbrPipeline {
     private fun drawMesh(
         gpu: MeshGpu,
         mesh: GpuMesh,
+        nodeMatrix: FloatArray,
         model: FloatArray,
         view: FloatArray,
         proj: FloatArray,
@@ -182,7 +194,8 @@ object PbrPipeline {
         GLES30.glUseProgram(program)
         val l = gpu.locs
 
-        GLES30.glUniformMatrix4fv(l.uModel, 1, false, model, 0)
+        val effectiveModel = Mat4.multiply(model, nodeMatrix)
+        GLES30.glUniformMatrix4fv(l.uModel, 1, false, effectiveModel, 0)
         GLES30.glUniformMatrix4fv(l.uView, 1, false, view, 0)
         GLES30.glUniformMatrix4fv(l.uProj, 1, false, proj, 0)
         GLES30.glUniform3f(l.uCameraPos, cameraPos[0], cameraPos[1], cameraPos[2])
@@ -246,12 +259,14 @@ object PbrPipeline {
             GLES30.glUniform1i(l.uBrdfLut, 7)
         }
 
-        if (lights.isNotEmpty() && lightCount > 0) {
-            GLES30.glUniform4fv(l.uLights, lightCount * 2, lights, 0)
-            GLES30.glUniform1i(l.uLightCount, lightCount)
-        } else {
-            GLES30.glUniform1i(l.uLightCount, 0)
+        val safeLightCount = lightCount.coerceIn(0, minOf(4, lights.size / 8))
+        for (i in 0 until safeLightCount) {
+            val o = i * 8
+            if (l.uLightPositions[i] >= 0) GLES30.glUniform4fv(l.uLightPositions[i], 1, lights, o)
+            if (l.uLightColors[i] >= 0) GLES30.glUniform3f(l.uLightColors[i], lights[o + 4], lights[o + 5], lights[o + 6])
+            if (l.uLightIntensities[i] >= 0) GLES30.glUniform1f(l.uLightIntensities[i], lights[o + 7])
         }
+        GLES30.glUniform1i(l.uLightCount, safeLightCount)
         GLES30.glUniform1f(l.uExposure, exposure)
         GLES30.glUniform1f(l.uIBLIntensity, iblIntensity)
 
@@ -405,8 +420,7 @@ object PbrPipeline {
 
         val indexBuffer: Int
         var indexCount = mesh.positions.size / 3
-        val hasIndices = mesh.indices.isNotEmpty() &&
-            mesh.indices.size < mesh.positions.size / 3
+        val hasIndices = mesh.indices.isNotEmpty()
         if (hasIndices) {
             indexCount = mesh.indices.size
             val ibo = intArrayOf(0)

@@ -97,8 +97,8 @@ class HdAvatarRenderer(
             }
             avatar = newAvatar
             fitAvatar(newAvatar)
-            PbrPipeline.upload(newAvatar)
             GltfTextures.resolve(newAvatar)
+            PbrPipeline.upload(newAvatar)
             skeletonRuntime = newAvatar.gltf?.let { doc ->
                 newAvatar.gltfBinary?.let { binary ->
                     SkeletonMatrices.buildRuntime(doc, binary)
@@ -143,6 +143,8 @@ class HdAvatarRenderer(
     // ====================================================================
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
+        PbrPipeline.resetForContext()
+        IblEnvironment.resetForContext()
         GLES30.glClearColor(0.02f, 0.02f, 0.03f, 1f)
         GLES30.glEnable(GLES30.GL_DEPTH_TEST)
         GLES30.glDepthFunc(GLES30.GL_LESS)
@@ -154,6 +156,10 @@ class HdAvatarRenderer(
         }
         buildGrid()
         buildBillboard()
+        avatar?.let {
+            GltfTextures.resolve(it)
+            PbrPipeline.upload(it)
+        }
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
@@ -285,7 +291,7 @@ class HdAvatarRenderer(
         val cx = (minX + maxX) * 0.5f
         val cz = (minZ + maxZ) * 0.5f
         fitOffset = floatArrayOf(-cx, -minY, -cz)
-        cameraTarget = floatArrayOf(0f, 0.85f * fitScale, 0f)
+        cameraTarget = floatArrayOf(0f, 0.825f, 0f)
         cameraDistance = 2.6f
     }
 

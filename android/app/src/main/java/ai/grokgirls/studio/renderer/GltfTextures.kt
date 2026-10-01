@@ -57,7 +57,19 @@ object GltfTextures {
             }
 
             if (bytes == null) return null
-            return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+            val maxDimension = 4096
+            val maxPixels = 16 * 1024 * 1024
+            var sample = 1
+            while (bounds.outWidth / sample > maxDimension ||
+                bounds.outHeight / sample > maxDimension ||
+                (bounds.outWidth / sample).toLong() * (bounds.outHeight / sample) > maxPixels) {
+                sample *= 2
+            }
+            val options = BitmapFactory.Options().apply { inSampleSize = sample }
+            return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
         }
 
         fun uploadImage(

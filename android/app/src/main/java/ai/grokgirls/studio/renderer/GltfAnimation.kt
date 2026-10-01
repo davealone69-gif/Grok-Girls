@@ -45,7 +45,9 @@ class GltfAnimation(
     private fun parseAnimations(animations: JSONArray): Float {
         var maxTime = 0f
 
-        for (a in 0 until animations.length()) {
+        // A glTF file may contain idle/walk/run clips. This runtime exposes one
+        // active clip at a time; use the first clip rather than composing them.
+        for (a in 0 until minOf(1, animations.length())) {
             val anim = animations.getJSONObject(a)
             val samplers = anim.optJSONArray("samplers")
             val channelsJson = anim.optJSONArray("channels")

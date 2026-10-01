@@ -1,6 +1,7 @@
 package ai.grokgirls.studio.renderer
 
 import android.content.Context
+import android.util.Log
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -207,6 +208,7 @@ class GltfAvatarLoader(
                         document,
                         binary
                     )
+                gpuMesh.nodeIndex = nodeIndex
 
                 // glTF "mesh.weights": default morph weights for this mesh.
                 if (
@@ -468,25 +470,23 @@ class GltfAvatarLoader(
             if (buffer?.uri == null) {
                 binary
             } else {
-                decodeDataUri(
-                    buffer.uri
-                )
+                decodeDataUri(buffer.uri)
             }
 
         val baseOffset =
             (view?.byteOffset ?: 0) +
                 (accessor.byteOffset ?: 0)
 
-        val componentSize =
-            accessor.componentTypeSize()
-
-        val packedStride =
-            components *
-                componentSize
-
-        val stride =
-            view?.byteStride
-                ?: packedStride
+        val componentSize = accessor.componentTypeSize()
+        val packedStride = components * componentSize
+        val stride = view?.byteStride ?: packedStride
+        val lastByteExclusive = if (count <= 0) baseOffset.toLong()
+        else baseOffset.toLong() + (count - 1L) * stride + packedStride
+        if (count < 0 || stride < packedStride || baseOffset < 0 ||
+            lastByteExclusive > source.size.toLong()) {
+            Log.w(TAG, "Invalid glTF accessor bounds; skipping attribute")
+            return FloatArray(0)
+        }
 
         for (i in 0 until count) {
 

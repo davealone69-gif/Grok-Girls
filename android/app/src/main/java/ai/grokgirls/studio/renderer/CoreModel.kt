@@ -46,7 +46,9 @@ data class GpuMesh(
     /** Default morph weights from the glTF mesh (0.0 when unset). Animatable. */
     var morphWeights: FloatArray = FloatArray(0),
     /** Per-mesh joint skinning matrices, recomputed per frame by the renderer. */
-    var skinningMatrices: FloatArray? = null
+    var skinningMatrices: FloatArray? = null,
+    /** Source glTF node. Used to preserve node and parent transforms at draw time. */
+    var nodeIndex: Int = -1
 )
 
 /**
@@ -318,5 +320,21 @@ object Mat4 {
         } else {
             floatArrayOf(0f, 0f, 1f)
         }
+    }
+}
+
+
+object GltfNodeTransforms {
+    fun worldMatrix(document: GltfDocument, nodeIndex: Int): FloatArray {
+        if (nodeIndex !in document.nodes.indices) return Mat4.identity()
+        val parent = findParent(document, nodeIndex)
+        val node = document.nodes[nodeIndex]
+        val local = Mat4.fromTrs(node.translation, node.rotation, node.scale)
+        return if (parent >= 0) Mat4.multiply(worldMatrix(document, parent), local) else local
+    }
+
+    private fun findParent(document: GltfDocument, child: Int): Int {
+        for (i in document.nodes.indices) if (document.nodes[i].children.contains(child)) return i
+        return -1
     }
 }

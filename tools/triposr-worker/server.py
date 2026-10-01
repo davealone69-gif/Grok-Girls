@@ -95,6 +95,9 @@ class Handler(BaseHTTPRequestHandler):
             work = Path(tempfile.mkdtemp(prefix="grokgirls-3d-"))
             image_path = work / "input.png"
             output_dir = work / "output"
+            # TripoSR run.py exports to <output-dir>/0/mesh.glb but does not create that directory itself.
+            # Create it here so the real on-device exporter cannot fail at the final write step.
+            (output_dir / "0").mkdir(parents=True, exist_ok=True)
             image_path.write_bytes(image_bytes)
             cmd = [
                 PYTHON, str(RUN_PY), str(image_path),

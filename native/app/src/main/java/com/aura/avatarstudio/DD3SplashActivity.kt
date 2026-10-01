@@ -53,6 +53,8 @@ class DD3SplashActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_dd3_splash)
+        // Intro plays edge to edge — no navigation bar over the bottom of it.
+        ImmersiveMode.enter(this)
 
         video = findViewById(R.id.splash_video)
         poster = findViewById(R.id.splash_poster)
@@ -132,6 +134,12 @@ class DD3SplashActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (pausedBeforeHandoff && !handedOff.get()) goToMain()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Sticky immersive is dropped whenever another surface takes focus.
+        if (hasFocus) ImmersiveMode.enter(this)
     }
 
     override fun onDestroy() {

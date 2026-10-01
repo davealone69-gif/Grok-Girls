@@ -143,3 +143,39 @@
     padding: 5px 7px !important;
   }
 }
+
+/* ==========================================================================
+   ONE CONTROL, ONE PLACE
+   The phone layout used to stack several floating layers on top of each other,
+   so the same action showed up two or three times at once (the HUD column over
+   the MORE sheet, dock tabs duplicating the sheet's own entries, SAVE AVATAR
+   in both the identity strip and the footer). Everything that floats gets out
+   of the way the moment a sheet or panel is open.
+   ========================================================================== */
+@media (max-width: 900px) {
+  /* Nothing floats over the MORE sheet or the inspector panel. These were
+     technically behind the backdrop, but the backdrop is translucent, so they
+     ghosted straight through it and looked like duplicated controls. */
+  .app-container.mobile.more-open .viewport-hud,
+  .app-container.mobile.more-open .viewport-lighting-bar,
+  .app-container.mobile.more-open .lower-dock,
+  .app-container.mobile.inspector-open .viewport-hud,
+  .app-container.mobile.inspector-open .viewport-lighting-bar,
+  .app-container.mobile.more-open .hd-cube-overlay,
+  .app-container.mobile.inspector-open .hd-cube-overlay {
+    display: none !important;
+  }
+
+  /* The sheet's backdrop has to actually hide what is behind it. */
+  .app-container.mobile .more-backdrop {
+    background: rgba(4, 4, 10, 0.88) !important;
+    backdrop-filter: blur(6px) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
+  }
+
+  /* SAVE AVATAR appeared twice: identity strip and master footer. The footer
+     one keeps the split menu (the ▼), so the strip copy goes. */
+  .app-container.mobile .identity-strip .identity-btn.identity-save {
+    display: none !important;
+  }
+}

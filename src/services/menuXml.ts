@@ -68,9 +68,11 @@ export function canonicalMenuId(id: string): string {
 function attr(el: Element, name: string): string {
   return el.getAttribute(`android:${name}`) ?? el.getAttribute(name) ?? '';
 }
+
 function cleanId(value: string): string {
   return value.replace(/^@\+?id\//, '').trim();
 }
+
 function sectionFor(el: Element): MenuItem['section'] | null {
   const id = cleanId(attr(el, 'id')).toLowerCase();
   const ancestors: string[] = [];
@@ -86,17 +88,20 @@ function sectionFor(el: Element): MenuItem['section'] | null {
   if (ancestors.includes('optionspanel') || ancestors.includes('optionscontainer')) return 'options';
   return null;
 }
+
 function validateXmlStructure(xml: string): void {
   const source = xml
-    .replace(/<!--(?:.|[\\r\\n])*?-->/g, '')
-    .replace(/<\\?(?:.|[\\r\\n])*?\\?>/g, '')
-    .replace(/<!DOCTYPE(?:.|[\\r\\n])*?>/gi, '')
-    .trim();
     .replace(/<!--(?:.|[\r\n])*?-->/g, '')
     .replace(/<\?(?:.|[\r\n])*?\?>/g, '')
     .replace(/<!DOCTYPE(?:.|[\r\n])*?>/gi, '')
+    .trim();
+
+  const tokenRe = /<\/?([A-Za-z_][\w:.-]*)(?:\s[^<>]*?)?\/?\s*>/g;
+  const stack: string[] = [];
   let match: RegExpExecArray | null;
-  const tokenRe = /<\/?([A-Za-z_][\w:.-]*)(?:\s[^<>]*?)?\/?>/g;
+  let cursor = 0;
+
+  while ((match = tokenRe.exec(source)) !== null) {
     if (source.slice(cursor, match.index).includes('<')) {
       throw new Error('malformed menu XML');
     }
@@ -108,7 +113,10 @@ function validateXmlStructure(xml: string): void {
       stack.push(match[1]);
     }
   }
-  if (source.slice(cursor).includes('<') || stack.length) throw new Error('malformed menu XML');
+
+  if (source.slice(cursor).includes('<') || stack.length) {
+    throw new Error('malformed menu XML');
+  }
 }
 
 function parseMenuXml(xml: string): MenuItem[] {
@@ -125,8 +133,6 @@ function parseMenuXml(xml: string): MenuItem[] {
     const id = canonicalMenuId(rawId);
     const section = sectionFor(el);
     if (!section) continue;
-    // XML is an override, not a second copy of the same control. Canonical
-    // IDs keep old cat* aliases from producing duplicate dock tabs.
     if (seen.has(id)) continue;
     seen.add(id);
     const kind = el.tagName as MenuItem['kind'];
@@ -153,10 +159,12 @@ export function menuLabel(items: MenuItem[], id: string): string {
   const canonicalId = canonicalMenuId(id);
   return items.find(i => i.id === canonicalId)?.label ?? DEFAULT_MENU.find(i => i.id === canonicalId)?.label ?? canonicalId;
 }
+
 export function menuTitle(items: MenuItem[], id: string): string {
   const canonicalId = canonicalMenuId(id);
   return items.find(i => i.id === canonicalId)?.title ?? DEFAULT_MENU.find(i => i.id === canonicalId)?.title ?? '';
 }
+
 export function menuSection(items: MenuItem[], section: MenuItem['section']): MenuItem[] {
   return items.filter(i => i.section === section);
 }

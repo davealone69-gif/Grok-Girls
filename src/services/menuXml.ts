@@ -29,6 +29,7 @@ export const DEFAULT_MENU: MenuItem[] = [
   { id: 'premium', kind: 'Button', section: 'rail', label: 'Premium', title: 'Premium & Upgrades' },
   { id: 'help', kind: 'Button', section: 'rail', label: '?', title: 'Help & Shortcuts' },
   { id: 'settings', kind: 'Button', section: 'rail', label: '⚙', title: 'AI Provider Settings' },
+  { id: 'stats', kind: 'Button', section: 'rail', label: 'STATS', title: 'Persona Statistics' },
   { id: 'header_title', kind: 'TextView', section: 'header', label: 'AVATAR DESIGNER' },
   { id: 'generate', kind: 'Button', section: 'header', label: 'GENERATE RENDER', title: 'Generate high-detail render' },
   { id: 'hd_render', kind: 'Button', section: 'header', label: 'HD RENDER', title: 'On-device HD renderer' },

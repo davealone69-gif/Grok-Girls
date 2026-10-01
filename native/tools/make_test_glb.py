@@ -682,10 +682,11 @@ def preview(gltf):
     ax.set_xlim(-0.5, 0.5); ax.set_ylim(-0.5, 0.5); ax.set_zlim(-0.6, 1.9)
     ax.view_init(elev=12, azim=-55)
     ax.set_axis_off()
-    out_png = os.path.join(os.path.dirname(OUT), "avatar_preview.png")
     plt.tight_layout(pad=0)
-    plt.savefig(out_png, facecolor="#14161c", bbox_inches="tight")
-    print("preview ->", out_png)
+    # No avatar_preview.png any more: that flat 619x619 matplotlib render was
+    # never loaded by the app (MainActivity renders the GLB in GLES3), it only
+    # sat in assets/ and shipped in the APK. Show it instead of saving it.
+    plt.show()
 
 
 if __name__ == "__main__":

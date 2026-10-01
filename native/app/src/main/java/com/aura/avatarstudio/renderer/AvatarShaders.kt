@@ -1,4 +1,4 @@
-package ai.grokgirls.studio.renderer
+package com.aura.avatarstudio.renderer
 
 /**
  * GLSL ES 3.00 shader sources. No external dependencies, no includes —

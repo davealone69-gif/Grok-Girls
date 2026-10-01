@@ -1,4 +1,4 @@
-package ai.grokgirls.studio.renderer.hd
+package com.aura.avatarstudio.renderer.hd
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -34,8 +34,8 @@ data class HdTexture(
  *
  * This is the manager layer for textures that live OUTSIDE the GLB
  * (environment maps, UI overlays, generated maps). Textures embedded in the
- * GLB are uploaded by [ai.grokgirls.studio.renderer.GltfTextures]; the
- * single-shot asset helper is [ai.grokgirls.studio.renderer.PbrTexture].
+ * GLB are uploaded by [com.aura.avatarstudio.renderer.GltfTextures]; the
+ * single-shot asset helper is [com.aura.avatarstudio.renderer.PbrTexture].
  *
  * ES 3.0: GLES32 calls in the reference spec map 1:1 onto GLES30.
  * Anisotropic filtering is an optional extension — applied when present,

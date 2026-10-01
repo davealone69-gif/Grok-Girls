@@ -1,4 +1,4 @@
-package ai.grokgirls.studio.renderer
+package com.aura.avatarstudio.renderer
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory

@@ -1,4 +1,4 @@
-package ai.grokgirls.studio.renderer.hd
+package com.aura.avatarstudio.renderer.hd
 
 /**
  * PBR texture slot bundle — the five glTF-standard maps as loaded by

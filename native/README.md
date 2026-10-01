@@ -59,10 +59,10 @@ The engine is compiled directly into the app (`android/` module) via
 
 - `android/app/build.gradle` pulls `native/app/src/main/java/.../renderer`
   into the app build (Kotlin plugin 1.9.24, jvmTarget 17)
-- `ai.grokgirls.studio.NativeAvatarActivity` — fullscreen GL viewport:
+- `com.aura.avatarstudio.NativeAvatarActivity` — fullscreen GL viewport:
   drag to orbit, pinch to zoom, loads `avatars/my_avatar.glb` from assets
   (override via the `avatar` intent extra)
-- `ai.grokgirls.studio.GrokGirlsPlugin` — Capacitor bridge so the web
+- `com.aura.avatarstudio.GrokGirlsPlugin` — Capacitor bridge so the web
   app can launch the native viewport:
 
 ```js

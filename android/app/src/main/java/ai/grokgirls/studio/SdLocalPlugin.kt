@@ -360,8 +360,8 @@ class SdLocalPlugin : Plugin() {
      * and allow-external-apps=true in ~/.termux/termux.properties.
      *
      * The launcher tries, in order: a user-provided ~/sd-server.sh hook, then
-     * an `sd-server` binary on PATH. Both are run with --port 1234 bound to
-     * loopback. Whichever exists first wins; if neither does, the user gets
+     * the known Termux build path, `~/stable-diffusion.cpp/build-android/bin/sd-server`.
+     * Both are run bound to loopback. Whichever exists first wins; if neither does, the user gets
      * an actionable message rather than a silent failure.
      */
     @PluginMethod
@@ -404,7 +404,7 @@ class SdLocalPlugin : Plugin() {
                     "pgrep -f '[s]d-server' >/dev/null 2>&1 && exit 0; " +
                         "if [ -x \"\$HOME/sd-server.sh\" ]; then " +
                         "nohup \"\$HOME/sd-server.sh\" >\"\$HOME/sd-server.log\" 2>&1 & " +
-                        "elif command -v sd-server >/dev/null 2>&1; then " +
+                        "elif [ -x "$HOME/stable-diffusion.cpp/build-android/bin/sd-server" ]; then " +
                         "nohup sd-server --model \"\$HOME/models/v1-5-pruned-emaonly.safetensors\" " +
                         "--listen-ip 127.0.0.1 --listen-port $port --backend cpu --rng cpu --sampler-rng cpu --offload-to-cpu --mmap " +
                         "--vae-tiling --threads 4 >\"\$HOME/sd-server.log\" 2>&1 & " +
@@ -473,7 +473,7 @@ class SdLocalPlugin : Plugin() {
                     "message",
                     "Start command sent to Termux but $base did not come up within ${timeout / 1000}s. " +
                         "Open Termux and check ~/sd-server.log — the model may still be loading, or " +
-                        "sd-server may not be installed (create ~/sd-server.sh to point at your build)."
+                        "the expected local sd-server binary is missing, and no ~/sd-server.sh hook exists)."
                 )
                 call.resolve(r)
             } catch (e: Exception) {

@@ -92,11 +92,11 @@ function validateXmlStructure(xml: string): void {
     .replace(/<\\?(?:.|[\\r\\n])*?\\?>/g, '')
     .replace(/<!DOCTYPE(?:.|[\\r\\n])*?>/gi, '')
     .trim();
-  const tokenRe = /<\\/?([A-Za-z_][\\w:.-]*)(?:\\s[^<>]*?)?\\/?>/g;
-  const stack: string[] = [];
-  let cursor = 0;
+    .replace(/<!--(?:.|[\r\n])*?-->/g, '')
+    .replace(/<\?(?:.|[\r\n])*?\?>/g, '')
+    .replace(/<!DOCTYPE(?:.|[\r\n])*?>/gi, '')
   let match: RegExpExecArray | null;
-  while ((match = tokenRe.exec(source))) {
+  const tokenRe = /<\/?([A-Za-z_][\w:.-]*)(?:\s[^<>]*?)?\/?>/g;
     if (source.slice(cursor, match.index).includes('<')) {
       throw new Error('malformed menu XML');
     }

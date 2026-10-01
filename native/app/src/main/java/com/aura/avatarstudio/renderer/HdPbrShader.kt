@@ -1,7 +1,7 @@
-package ai.grokgirls.studio.renderer
+package com.aura.avatarstudio.renderer
 
 import android.opengl.GLES30
-import ai.grokgirls.studio.renderer.hd.HdPbrTextures
+import com.aura.avatarstudio.renderer.hd.HdPbrTextures
 
 /**
  * Single-program PBR shader with uniform-flag texture handling

@@ -854,12 +854,20 @@ export async function generateWithFallback(
   r: GenerationRequest,
   preferred: ProviderName = 'local'
 ): Promise<GenerationResult> {
-  const all = providers();
+  // The `local` engine only ever draws a procedural placeholder — it is NOT a
+  // real generator. It is honoured when the user explicitly selects it (some
+  // people use it as an offline mock), but it must never be used as a silent
+  // fallback for a real engine that failed: that swaps a fixable error message
+  // for a fake picture and makes real misconfiguration impossible to diagnose.
+  //
+  // So: keep `local` in the candidate list only when it was asked for directly.
+  const explicitLocal = preferred === 'local';
+  const all = providers().filter(p => p.name !== 'local' || explicitLocal);
   for (const p of [...all.filter(x => x.name === preferred), ...all.filter(x => x.name !== preferred)]) {
-    if (!p.available() && p.name !== 'local') continue;
+    if (!p.available()) continue;
     try {
       const out = await p.generate(r);
-      if (out.status === 'ready' || out.status === 'queued' || p.name === 'local') return out;
+      if (out.status === 'ready' || out.status === 'queued' || (explicitLocal && p.name === 'local')) return out;
     } catch (e) {
       if (p.name === preferred && preferred !== 'local') {
         return {
@@ -872,10 +880,14 @@ export async function generateWithFallback(
       }
     }
   }
+  // Nothing produced a real asset and we did NOT quietly return a placeholder
+  // instead. Say plainly what to do about it.
   return {
-    provider: 'local',
+    provider: preferred,
     status: 'fallback',
-    warning: 'No configured generation provider.',
+    warning: r.mode === 'image'
+      ? 'No image engine is configured, and the one selected could not be reached. Open Settings and set an image endpoint (Pollinations works keyless), or check the error above — this app no longer substitutes a placeholder image for a failed generation.'
+      : 'No generation provider is configured for this mode. Open Settings and add an API key or endpoint.',
     assetUrl: undefined,
     text: undefined
   };

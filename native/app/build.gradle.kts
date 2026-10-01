@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "ai.grokgirls.studio"
+    namespace = "com.aura.avatarstudio"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "ai.grokgirls.studio"
+        applicationId = "com.aura.avatarstudio"
         minSdk = 24
         targetSdk = 35
         versionCode = 1

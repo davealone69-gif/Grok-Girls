@@ -1,7 +1,7 @@
-import ai.grokgirls.studio.renderer.AvatarShaders
-import ai.grokgirls.studio.renderer.DemoShaders
-import ai.grokgirls.studio.renderer.IblEnvironment
-import ai.grokgirls.studio.renderer.SkyboxShaders
+import com.aura.avatarstudio.renderer.AvatarShaders
+import com.aura.avatarstudio.renderer.DemoShaders
+import com.aura.avatarstudio.renderer.IblEnvironment
+import com.aura.avatarstudio.renderer.SkyboxShaders
 import java.io.File
 
 /** Dumps every shader variant the pipeline can generate, for glslang. */

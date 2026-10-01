@@ -1,4 +1,4 @@
-package ai.grokgirls.studio.renderer
+package com.aura.avatarstudio.renderer
 
 import android.opengl.GLES30
 import android.util.Log

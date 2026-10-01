@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DD3 splash layering, deliberately:
+     VideoView is a SurfaceView, whose surface is composited BELOW window content.
+     The ImageView is declared last so it sits on top and is visible from the first
+     layout pass. It is only faded out once a genuine video frame has rendered,
+     which is what stops the dreaded black-screen launch. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/splash_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:keepScreenOn="true">
+
+    <VideoView
+        android:id="@+id/splash_video"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center" />
+
+    <ImageView
+        android:id="@+id/splash_poster"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:visibility="visible"
+        android:src="@drawable/dd3_splash_poster"
+        android:contentDescription="@string/splash_poster_description" />
+
+</FrameLayout>

@@ -1,5 +1,5 @@
-import ai.grokgirls.studio.renderer.*
-import ai.grokgirls.studio.renderer.hd.*
+import com.aura.avatarstudio.renderer.*
+import com.aura.avatarstudio.renderer.hd.*
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.sqrt

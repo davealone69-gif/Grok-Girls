@@ -1,4 +1,4 @@
-package ai.grokgirls.studio
+package com.aura.avatarstudio
 
 import android.app.Activity
 import android.os.Bundle

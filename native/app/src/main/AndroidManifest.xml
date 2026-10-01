@@ -5,16 +5,29 @@
         android:label="Avatar Studio"
         android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
 
+        <!-- DD3 cinematic intro. This is the launcher now: it plays the intro
+             video and hands off to MainActivity on completion OR timeout. The
+             MAIN/LAUNCHER filter was moved off MainActivity so the device does
+             not show two launcher icons. -->
         <activity
-            android:name=".MainActivity"
-            android:exported="true"
+            android:name=".DD3SplashActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"
-            android:screenOrientation="portrait">
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.DD3.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- GLES3 GLTF avatar viewport. Still the app's real entry point,
+             just no longer the launcher. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:screenOrientation="portrait" />
     </application>
 
 </manifest>

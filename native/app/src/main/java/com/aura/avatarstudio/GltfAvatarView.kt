@@ -1,10 +1,10 @@
-package ai.grokgirls.studio
+package com.aura.avatarstudio
 
 import android.content.Context
 import android.opengl.GLSurfaceView
 import android.view.MotionEvent
-import ai.grokgirls.studio.renderer.GltfAvatarLoader
-import ai.grokgirls.studio.renderer.HdAvatarRenderer
+import com.aura.avatarstudio.renderer.GltfAvatarLoader
+import com.aura.avatarstudio.renderer.HdAvatarRenderer
 
 /**
  * Touch-wired GL view. Loads the avatar from assets once the GL context

@@ -94,6 +94,13 @@ object PbrPipeline {
     private const val ATTR_MORPH_BASE = 6
     private const val MAX_MORPH = 3
 
+    /** Discards GL-context-owned state without issuing deletes against a lost context. */
+    fun resetForContext() {
+        meshResources.clear()
+        programs.clear()
+        locs.clear()
+    }
+
     fun upload(avatar: HdAvatar) {
         val jointCount = avatar.jointMatrices?.size?.div(16) ?: 0
         for (mesh in avatar.meshes) {

@@ -1,6 +1,8 @@
 package ai.grokgirls.studio;
 
 import android.content.Intent;
+import android.util.Base64;
+import java.io.InputStream;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -25,6 +27,69 @@ public class TripoSRLocalPlugin extends Plugin {
       int code = c.getResponseCode(); c.disconnect();
       return code == 200;
     } catch (Exception e) { return false; }
+  }
+
+  @PluginMethod
+  public void generate(PluginCall call) {
+    pool.execute(() -> {
+      HttpURLConnection c = null;
+      try {
+        String image = call.getString("image", "");
+        if (image == null || image.trim().isEmpty()) {
+          JSObject r = new JSObject(); r.put("ok", false); r.put("error", "A real image data URL is required."); call.resolve(r); return;
+        }
+        if (image.startsWith("data:") && image.contains(",")) {
+          image = image.substring(image.indexOf(',') + 1);
+        }
+        org.json.JSONObject body = new org.json.JSONObject();
+        body.put("image", image);
+        body.put("remove_background", call.getBoolean("removeBackground", true));
+        body.put("texture", call.getBoolean("texture", false));
+        body.put("mc_resolution", call.getInt("mcResolution", 192));
+
+        c = (HttpURLConnection) new URL(BASE + "/generate").openConnection();
+        c.setRequestMethod("POST");
+        c.setConnectTimeout(5000);
+        c.setReadTimeout(call.getInt("timeoutMs", 1800000));
+        c.setDoOutput(true);
+        c.setRequestProperty("Content-Type", "application/json");
+        byte[] request = body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        c.setFixedLengthStreamingMode(request.length);
+        c.getOutputStream().write(request);
+
+        int code = c.getResponseCode();
+        InputStream stream = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
+        byte[] response = stream == null ? new byte[0] : readAll(stream);
+        if (code < 200 || code >= 300) {
+          String detail = new String(response, java.nio.charset.StandardCharsets.UTF_8);
+          JSObject r = new JSObject(); r.put("ok", false);
+          r.put("error", "TripoSR worker HTTP " + code + ": " + detail); call.resolve(r); return;
+        }
+        if (response.length < 4 || response[0] != 'g' || response[1] != 'l' || response[2] != 'T' || response[3] != 'F') {
+          JSObject r = new JSObject(); r.put("ok", false); r.put("error", "TripoSR returned an invalid GLB."); call.resolve(r); return;
+        }
+        JSObject r = new JSObject(); r.put("ok", true);
+        r.put("glbBase64", Base64.encodeToString(response, Base64.NO_WRAP));
+        r.put("bytes", response.length);
+        r.put("engine", "triposr");
+        r.put("seconds", c.getHeaderField("X-GrokGirls-Seconds"));
+        call.resolve(r);
+      } catch (Exception e) {
+        JSObject r = new JSObject(); r.put("ok", false);
+        r.put("error", e.getMessage() == null ? "Could not reach the TripoSR worker." : e.getMessage());
+        call.resolve(r);
+      } finally {
+        if (c != null) c.disconnect();
+      }
+    });
+  }
+
+  private static byte[] readAll(InputStream input) throws java.io.IOException {
+    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+    byte[] buf = new byte[8192];
+    int n;
+    while ((n = input.read(buf)) != -1) out.write(buf, 0, n);
+    return out.toByteArray();
   }
 
   @PluginMethod

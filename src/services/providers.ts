@@ -660,6 +660,37 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
     headers['HTTP-Referer'] = typeof location !== 'undefined' ? location.origin : 'http://localhost';
     headers['X-Title'] = 'Grok Girls';
   }
+  // Pollinations image URL API returns image bytes directly.
+  const isPollinationsImage =
+    p === 'custom' &&
+    r.mode === 'image' &&
+    /(^|\\.)gen\\.pollinations\\.ai\\/image\\/?$/i.test(endpoint.replace(/\\/+$/, ''));
+
+  if (isPollinationsImage) {
+    const params = new URLSearchParams();
+    params.set('model', model || 'flux');
+    if (r.width) params.set('width', String(Math.round(r.width)));
+    if (r.height) params.set('height', String(Math.round(r.height)));
+    if (r.seed != null) params.set('seed', String(r.seed));
+    if (key) params.set('key', key);
+    const imageUrl = `${endpoint.replace(/\\/+$/, '')}/${encodeURIComponent(r.prompt)}?${params.toString()}`;
+    const response = await fetchWithTimeout(imageUrl, { method: 'GET' }, 120000);
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      throw new Error(`custom Pollinations HTTP ${response.status}${errText ? ` — ${errText.slice(0, 160)}` : ''}`);
+    }
+    const blob = await response.blob();
+    if (!blob.type.startsWith('image/')) {
+      throw new Error(`custom Pollinations returned ${blob.type || 'non-image data'}`);
+    }
+    return {
+      provider: p,
+      status: 'ready',
+      assetUrl: URL.createObjectURL(blob),
+      text: `Pollinations ${model || 'flux'} image generated successfully.`
+    };
+  }
+
   const url = p === 'gemini' ? `${endpoint}${endpoint.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}` : endpoint;
 
   let body: any;

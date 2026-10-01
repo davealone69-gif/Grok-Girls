@@ -404,7 +404,7 @@ class SdLocalPlugin : Plugin() {
                     "pgrep -f '[s]d-server' >/dev/null 2>&1 && exit 0; " +
                         "if [ -x \"\$HOME/sd-server.sh\" ]; then " +
                         "nohup \"\$HOME/sd-server.sh\" >\"\$HOME/sd-server.log\" 2>&1 & " +
-                        "elif [ -x "$HOME/stable-diffusion.cpp/build-android/bin/sd-server" ]; then " +
+                        "elif [ -x \"\$HOME/stable-diffusion.cpp/build-android/bin/sd-server\" ]; then " +
                         "nohup sd-server --model \"\$HOME/models/v1-5-pruned-emaonly.safetensors\" " +
                         "--listen-ip 127.0.0.1 --listen-port $port --backend cpu --rng cpu --sampler-rng cpu --offload-to-cpu --mmap " +
                         "--vae-tiling --threads 4 >\"\$HOME/sd-server.log\" 2>&1 & " +

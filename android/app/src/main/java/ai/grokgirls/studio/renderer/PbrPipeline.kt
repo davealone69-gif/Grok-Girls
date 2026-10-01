@@ -52,8 +52,10 @@ object PbrPipeline {
         val uOcclusionTex = loc(program, "uOcclusionTex")
         val uEmissiveTex = loc(program, "uEmissiveTex")
         val uCameraPos = loc(program, "uCameraPos")
-        val uLights = loc(program, "uLights")
         val uLightCount = loc(program, "uLightCount")
+        val uLightPositions = Array(4) { i -> loc(program, "uLights[$i].position") }
+        val uLightColors = Array(4) { i -> loc(program, "uLights[$i].color") }
+        val uLightIntensities = Array(4) { i -> loc(program, "uLights[$i].intensity") }
         val uExposure = loc(program, "uExposure")
         val uIBLIntensity = loc(program, "uIBLIntensity")
         val uIrrMap = loc(program, "uIrrMap")
@@ -246,12 +248,14 @@ object PbrPipeline {
             GLES30.glUniform1i(l.uBrdfLut, 7)
         }
 
-        if (lights.isNotEmpty() && lightCount > 0) {
-            GLES30.glUniform4fv(l.uLights, lightCount * 2, lights, 0)
-            GLES30.glUniform1i(l.uLightCount, lightCount)
-        } else {
-            GLES30.glUniform1i(l.uLightCount, 0)
+        val safeLightCount = lightCount.coerceIn(0, minOf(4, lights.size / 8))
+        for (i in 0 until safeLightCount) {
+            val o = i * 8
+            if (l.uLightPositions[i] >= 0) GLES30.glUniform4fv(l.uLightPositions[i], 1, lights, o)
+            if (l.uLightColors[i] >= 0) GLES30.glUniform3f(l.uLightColors[i], lights[o + 4], lights[o + 5], lights[o + 6])
+            if (l.uLightIntensities[i] >= 0) GLES30.glUniform1f(l.uLightIntensities[i], lights[o + 7])
         }
+        GLES30.glUniform1i(l.uLightCount, safeLightCount)
         GLES30.glUniform1f(l.uExposure, exposure)
         GLES30.glUniform1f(l.uIBLIntensity, iblIntensity)
 
@@ -405,8 +409,7 @@ object PbrPipeline {
 
         val indexBuffer: Int
         var indexCount = mesh.positions.size / 3
-        val hasIndices = mesh.indices.isNotEmpty() &&
-            mesh.indices.size < mesh.positions.size / 3
+        val hasIndices = mesh.indices.isNotEmpty()
         if (hasIndices) {
             indexCount = mesh.indices.size
             val ibo = intArrayOf(0)

@@ -666,6 +666,73 @@ export class HdAvatarRenderer {
   readCenterPixel(): [number, number, number, number] {
     return this.readPixelAt(0.5, 0.5);
   }
+  /**
+   * Render the current 3D avatar into the real off-screen HD target and
+   * return the result as a normal 2D image. This is not a screenshot of
+   * the UI: it is a raster export of the WebGL-rendered 3D scene.
+   */
+  renderToImage(options: { width?: number; height?: number; mimeType?: 'image/png' | 'image/jpeg'; quality?: number } = {}): string {
+    const gl = this.gl;
+    const canvas = gl.canvas as HTMLCanvasElement;
+    const width = Math.max(1, Math.floor(options.width ?? 1920));
+    const height = Math.max(1, Math.floor(options.height ?? 1080));
+    const mimeType = options.mimeType ?? 'image/png';
+    const quality = Math.min(1, Math.max(0, options.quality ?? 0.95));
+
+    // Render into a temporary framebuffer so export resolution is independent
+    // of the visible viewport and does not depend on the browser UI.
+    const color = gl.createTexture();
+    const depth = gl.createRenderbuffer();
+    const framebuffer = gl.createFramebuffer();
+    if (!color || !depth || !framebuffer) throw new Error('Unable to create 2D render target');
+
+    try {
+      gl.bindTexture(gl.TEXTURE_2D, color);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+      gl.bindRenderbuffer(gl.RENDERBUFFER, depth);
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, width, height);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, color, 0);
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+        throw new Error('2D render framebuffer is incomplete');
+      }
+
+      this.renderShadowPass();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+      gl.viewport(0, 0, width, height);
+      gl.clearColor(0.015, 0.018, 0.024, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      this.renderScene(width, height, false);
+
+      // Read pixels and flip vertically because WebGL's origin is bottom-left.
+      const pixels = new Uint8Array(width * height * 4);
+      gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = width;
+      exportCanvas.height = height;
+      const ctx = exportCanvas.getContext('2d');
+      if (!ctx) throw new Error('2D canvas context unavailable for image export');
+      const flipped = new Uint8ClampedArray(pixels.length);
+      const rowBytes = width * 4;
+      for (let y = 0; y < height; y++) {
+        flipped.set(pixels.subarray(y * rowBytes, (y + 1) * rowBytes), (height - 1 - y) * rowBytes);
+      }
+      ctx.putImageData(new ImageData(flipped, width, height), 0, 0);
+      return exportCanvas.toDataURL(mimeType, mimeType === 'image/jpeg' ? quality : undefined);
+    } finally {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.deleteFramebuffer(framebuffer);
+      gl.deleteRenderbuffer(depth);
+      gl.deleteTexture(color);
+    }
+  }
+
   /** read a pixel at normalized (0..1) coords, y measured from the top */
   readPixelAt(nx: number, ny: number): [number, number, number, number] {
     const canvas = this.gl.canvas as HTMLCanvasElement;

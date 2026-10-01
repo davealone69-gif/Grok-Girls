@@ -34,7 +34,7 @@ public class TripoSRLocalPlugin extends Plugin {
     pool.execute(() -> {
       HttpURLConnection c = null;
       try {
-        String image = call.getString("image", "");
+        String image = call.getString("image");
         if (image == null || image.trim().isEmpty()) {
           JSObject r = new JSObject(); r.put("ok", false); r.put("error", "A real image data URL is required."); call.resolve(r); return;
         }
@@ -43,14 +43,18 @@ public class TripoSRLocalPlugin extends Plugin {
         }
         org.json.JSONObject body = new org.json.JSONObject();
         body.put("image", image);
-        body.put("remove_background", call.getBoolean("removeBackground", true));
-        body.put("texture", call.getBoolean("texture", false));
-        body.put("mc_resolution", call.getInt("mcResolution", 192));
+        Boolean removeBackground = call.getBoolean("removeBackground");
+        Boolean texture = call.getBoolean("texture");
+        Integer mcResolution = call.getInt("mcResolution");
+        body.put("remove_background", removeBackground == null || removeBackground);
+        body.put("texture", texture != null && texture);
+        body.put("mc_resolution", mcResolution == null ? 192 : mcResolution);
 
         c = (HttpURLConnection) new URL(BASE + "/generate").openConnection();
         c.setRequestMethod("POST");
         c.setConnectTimeout(5000);
-        c.setReadTimeout(call.getInt("timeoutMs", 1800000));
+        Integer timeoutMs = call.getInt("timeoutMs");
+        c.setReadTimeout(timeoutMs == null ? 1800000 : timeoutMs);
         c.setDoOutput(true);
         c.setRequestProperty("Content-Type", "application/json");
         byte[] request = body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);

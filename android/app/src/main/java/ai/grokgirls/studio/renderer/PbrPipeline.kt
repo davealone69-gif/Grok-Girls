@@ -154,10 +154,12 @@ object PbrPipeline {
         opaque.sortBy { distSq(it.first) }
         blend.sortByDescending { distSq(it.first) }
 
-        for (mesh in opaque) drawMesh(mesh.second, mesh.first, modelMatrix, viewMatrix,
+        for (mesh in opaque) drawMesh(mesh.second, mesh.first,
+            GltfNodeTransforms.worldMatrix(avatar.gltf ?: return, mesh.first.nodeIndex), modelMatrix, viewMatrix,
             projMatrix, cameraPos, lights, lightCount, exposure, iblIntensity, timeSeconds,
             jointCount, false)
-        for (mesh in blend) drawMesh(mesh.second, mesh.first, modelMatrix, viewMatrix,
+        for (mesh in blend) drawMesh(mesh.second, mesh.first,
+            GltfNodeTransforms.worldMatrix(avatar.gltf ?: return, mesh.first.nodeIndex), modelMatrix, viewMatrix,
             projMatrix, cameraPos, lights, lightCount, exposure, iblIntensity, timeSeconds,
             jointCount, true)
 
@@ -168,6 +170,7 @@ object PbrPipeline {
     private fun drawMesh(
         gpu: MeshGpu,
         mesh: GpuMesh,
+        nodeMatrix: FloatArray,
         model: FloatArray,
         view: FloatArray,
         proj: FloatArray,
@@ -184,7 +187,8 @@ object PbrPipeline {
         GLES30.glUseProgram(program)
         val l = gpu.locs
 
-        GLES30.glUniformMatrix4fv(l.uModel, 1, false, model, 0)
+        val effectiveModel = Mat4.multiply(model, nodeMatrix)
+        GLES30.glUniformMatrix4fv(l.uModel, 1, false, effectiveModel, 0)
         GLES30.glUniformMatrix4fv(l.uView, 1, false, view, 0)
         GLES30.glUniformMatrix4fv(l.uProj, 1, false, proj, 0)
         GLES30.glUniform3f(l.uCameraPos, cameraPos[0], cameraPos[1], cameraPos[2])

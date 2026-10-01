@@ -82,6 +82,27 @@ object IblEnvironment {
         groundColor = ground.copyOf()
     }
 
+    /** Discards handles owned by a previous EGL context. */
+    fun resetForContext() {
+        radianceCube = 0
+        irradianceCube = 0
+        prefilterCube = 0
+        brdfLut = 0
+        isBuilt = false
+        skyRadianceProgram = 0
+        irradianceProgram = 0
+        prefilterProgram = 0
+        brdfProgram = 0
+        skyboxProgram = 0
+        quadVao = 0
+        quadVbo = 0
+        cubeVao = 0
+        cubeVbo = 0
+        sunLoc.clear(); faceBasisLoc.clear(); radianceCubeLoc.clear(); roughnessLoc.clear()
+        viewRotLoc.clear(); projLoc.clear(); exposureLoc.clear(); skyboxLoc.clear()
+        sunDirLoc.clear(); zenithLoc.clear(); horizonLoc.clear(); groundLoc.clear()
+    }
+
     /** Must run on the GL thread with a current context. Idempotent. */
     fun build() {
         if (isBuilt) return

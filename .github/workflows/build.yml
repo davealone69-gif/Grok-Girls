@@ -2,7 +2,7 @@ name: Build Grok Girls Android
 
 on:
   push:
-    branches: [main, renderer/native-engine]
+    branches: [main, renderer/native-engine, fix/android-capacitor-build, fix/renderer-greptile-p1]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -113,7 +113,7 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           for attempt in 1 2 3; do
             rm -rf "$ANDROID_SDK_ROOT/ndk/27.0.12077973" || true
-            if sdkmanager --verbose               "platform-tools"               "platforms;android-35"               "build-tools;35.0.0"               "cmake;3.22.1"               "ndk;27.0.12077973"; then
+            if sdkmanager --verbose "platform-tools" "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" "ndk;27.0.12077973"; then
               break
             fi
             echo "Android SDK/NDK install attempt $attempt failed; retrying"

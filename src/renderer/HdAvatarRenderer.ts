@@ -767,9 +767,9 @@ export class HdAvatarRenderer {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
     const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
-    if (_canvas.width !== w || _canvas.height !== h) {
-      _canvas.width = w;
-      _canvas.height = h;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
     }
 
     // ---- 1. shadow depth pass (once per frame) ----

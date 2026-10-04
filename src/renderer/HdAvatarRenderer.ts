@@ -668,17 +668,17 @@ export class HdAvatarRenderer {
   }
   /** read a pixel at normalized (0..1) coords, y measured from the top */
   readPixelAt(nx: number, ny: number): [number, number, number, number] {
-    const canvas = this.gl.canvas as HTMLCanvasElement;
+    const _canvas = this.gl.canvas as HTMLCanvasElement;
     const px = new Uint8Array(4);
-    this.gl.readPixels(Math.floor(canvas.width * nx), Math.floor(canvas.height * (1 - ny)), 1, 1, this.gl.RGBA, this.gl.UNSIGNED_BYTE, px);
+    this.gl.readPixels(Math.floor(_canvas.width * nx), Math.floor(_canvas.height * (1 - ny)), 1, 1, this.gl.RGBA, this.gl.UNSIGNED_BYTE, px);
     return [px[0], px[1], px[2], px[3]];
   }
   /** max RGB across a vertical strip at nx — proves the figure is lit */
   maxStrip(nx: number): [number, number, number] {
-    const canvas = this.gl.canvas as HTMLCanvasElement;
+    const _canvas = this.gl.canvas as HTMLCanvasElement;
     let mr = 0, mg = 0, mb = 0;
-    const px = new Uint8Array(4 * canvas.height);
-    this.gl.readPixels(Math.floor(canvas.width * nx), 0, 1, canvas.height, this.gl.RGBA, this.gl.UNSIGNED_BYTE, px);
+    const px = new Uint8Array(4 * _canvas.height);
+    this.gl.readPixels(Math.floor(_canvas.width * nx), 0, 1, _canvas.height, this.gl.RGBA, this.gl.UNSIGNED_BYTE, px);
     for (let i = 0; i < px.length; i += 4) {
       mr = Math.max(mr, px[i]);
       mg = Math.max(mg, px[i + 1]);

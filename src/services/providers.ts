@@ -673,7 +673,7 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
     if (r.height) params.set('height', String(Math.round(r.height)));
     if (r.seed != null) params.set('seed', String(r.seed));
     if (key) params.set('key', key);
-    const imageUrl = `${endpoint.replace(/\\/+$/, '')}/${encodeURIComponent(r.prompt)}?${params.toString()}`;
+    const imageUrl = `${endpoint.replace(/\/+$/, '')}/${encodeURIComponent(r.prompt)}?${params.toString()}`;
     const response = await fetchWithTimeout(imageUrl, { method: 'GET' }, 120000);
     if (!response.ok) {
       const errText = await response.text().catch(() => '');

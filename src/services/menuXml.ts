@@ -11,7 +11,7 @@ export interface MenuItem {
 
 export const DEFAULT_MENU: MenuItem[] = [
   { id: 'rail_header', kind: 'TextView', section: 'rail', label: 'BUILD' },
-  { id: 'appearance', kind: 'Button', section: 'rail', label: 'Builder', title: 'Appearance Studio' },
+  { id: 'appearance', kind: 'Button', section: 'rail', label: 'Studio', title: 'Appearance Studio' },
   { id: 'presets', kind: 'Button', section: 'rail', label: 'Presets', title: 'Preset Identities' },
   { id: 'import', kind: 'Button', section: 'rail', label: 'Import', title: 'Import & Data' },
   { id: 'body', kind: 'Button', section: 'rail', label: 'Body', title: 'Body & Build' },
@@ -22,7 +22,7 @@ export const DEFAULT_MENU: MenuItem[] = [
   { id: 'accessories', kind: 'Button', section: 'rail', label: 'Accessories', title: 'Accessories' },
   { id: 'augments', kind: 'Button', section: 'rail', label: 'Augments', title: 'Augments' },
   { id: 'tattoos', kind: 'Button', section: 'rail', label: 'Tattoos', title: 'Tattoos & Lace' },
-  { id: 'animations', kind: 'Button', section: 'rail', label: 'Animations', title: 'Video & Animation Studio' },
+  { id: 'animations', kind: 'Button', section: 'rail', label: 'Video', title: 'Video & Animation Studio' },
   { id: 'story', kind: 'Button', section: 'rail', label: 'Story', title: 'Story Campaign' },
   { id: 'gallery', kind: 'Button', section: 'rail', label: 'Gallery', title: 'Generation Archive' },
   { id: 'chat', kind: 'Button', section: 'rail', label: 'Chat', title: 'Interactive Dialogue' },

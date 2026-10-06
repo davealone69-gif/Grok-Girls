@@ -2365,8 +2365,8 @@ export default function App() {
             >
               −
             </button>
-            <button className="icon-tool-btn" onClick={() => setIsSettingsOpen(true)} title="Provider Settings">
-              ⋮
+            <button className="icon-tool-btn settings-gear-btn" onClick={() => setIsSettingsOpen(true)} title="Settings">
+              ⚙
             </button>
           </div>
         </header>
@@ -4525,7 +4525,18 @@ export default function App() {
       )}
 
       {/* SETTINGS MODAL */}
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        adultEnabled={adult}
+        onAdultToggle={() => {
+          if (!adult && !isAgeConfirmed()) {
+            setAgeGateOpen(true);
+          } else {
+            setAdult(v => !v);
+          }
+        }}
+      />
 
       {/* TOAST */}
       {toast && <div className="toast">{toast}</div>}

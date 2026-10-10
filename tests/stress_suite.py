@@ -146,6 +146,9 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
     pg.evaluate("""
       () => {
+        // Ensure the legacy keys are imported instead of being shadowed by
+        // the canonical settings record created during initial app boot.
+        localStorage.removeItem('grok-girls-settings-v1');
         localStorage.setItem('grok-girls-selfhosted-base', 'http://localhost:7861');
         localStorage.setItem('grok-girls-selfhosted-type', 'a1111');
         localStorage.setItem('grok-girls-provider-v1', 'selfhosted');

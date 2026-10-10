@@ -129,13 +129,6 @@ jobs:
         run: npm run build
       - name: Sync Capacitor Android
         run: npx cap sync android
-      - name: Restore Gradle wrapper after Capacitor sync
-        run: |
-          set -euo pipefail
-          git checkout -- android/gradlew android/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/gradle-wrapper.properties
-          test -f android/gradlew
-          test -f android/gradle/wrapper/gradle-wrapper.jar
-          chmod +x android/gradlew
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
@@ -225,13 +218,6 @@ jobs:
         run: npm run build
       - name: Sync Capacitor Android
         run: npx cap sync android
-      - name: Restore Gradle wrapper after Capacitor sync
-        run: |
-          set -euo pipefail
-          git checkout -- android/gradlew android/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/gradle-wrapper.properties
-          test -f android/gradlew
-          test -f android/gradle/wrapper/gradle-wrapper.jar
-          chmod +x android/gradlew
       - name: Run Phase 8 tests on Android 34 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -250,8 +236,7 @@ jobs:
           script: |
             adb uninstall ai.grokgirls.studio || true
             adb shell pm clear ai.grokgirls.studio || true
-            cd android
-            ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+            ./android/gradlew -p android connectedDebugAndroidTest --no-daemon --stacktrace
       - name: Upload Phase 8 reports
         if: always()
         uses: actions/upload-artifact@v4

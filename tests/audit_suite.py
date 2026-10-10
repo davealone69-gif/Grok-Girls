@@ -94,6 +94,9 @@ with sync_playwright() as p:
     pg.wait_for_timeout(500)
     pg.evaluate("""
       () => {
+        // Remove the canonical record so this test's legacy provider keys
+        // are migrated instead of being correctly overridden by stale settings.
+        localStorage.removeItem('grok-girls-settings-v1');
         localStorage.setItem('quota-filler', 'x'.repeat(1024*1024*4));
         localStorage.setItem('grok-girls-selfhosted-base', 'http://localhost:7860');
         localStorage.setItem('grok-girls-selfhosted-type', 'a1111');

@@ -27,11 +27,6 @@ android {
     kotlinOptions {
         jvmTarget = '21'
     }
-    // Native avatar engine (Kotlin/GLES3) lives at repo root in native/ —
-    // compile it straight into the app, single source of truth (no copies).
-    sourceSets {
-        main.java.srcDirs += ['../../native/app/src/main/java/com/aura/avatarstudio/renderer']
-    }
     externalNativeBuild {
         cmake {
             path file('src/main/cpp/CMakeLists.txt')

@@ -33,6 +33,8 @@ import {
 export interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  adultEnabled?: boolean;
+  onAdultToggle?: () => void;
 }
 
 function Field({
@@ -59,7 +61,7 @@ function Field({
   );
 }
 
-export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+export default function SettingsModal({ isOpen, onClose, adultEnabled = false, onAdultToggle }: SettingsModalProps) {
   /* cloud providers */
   const [openRouterKey, setOpenRouterKey] = useState(() => getSavedApiKey('openrouter'));
   const [openRouterImageModel, setOpenRouterImageModel] = useState(() => getSavedModel('openrouter', 'image'));
@@ -217,6 +219,23 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         )}
 
         <div className="settings-sections">
+          {/* ADULT MODE — controlled from the central settings hub */}
+          <div className="settings-section adult-settings-section">
+            <div className="settings-section-title">🔞 ADULT 18+ MODE</div>
+            <p className="settings-note">
+              Adult features are available only after confirming that you are 18 or older. The setting is stored on this device.
+            </p>
+            <button
+              type="button"
+              className={`settings-adult-toggle ${adultEnabled ? 'active' : ''}`}
+              onClick={() => onAdultToggle?.()}
+              aria-pressed={adultEnabled}
+            >
+              <span>{adultEnabled ? '✓' : '○'}</span>
+              <span>{adultEnabled ? '18+ MODE ENABLED' : 'ENABLE ADULT 18+ MODE'}</span>
+            </button>
+          </div>
+
           {/* OLLAMA — phone-local on-device LLM (first-class) */}
           <OllamaPanel onNotice={msg => { setSavedStatus(msg); window.setTimeout(() => setSavedStatus(''), 4000); }} />
 

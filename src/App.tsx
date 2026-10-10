@@ -186,7 +186,7 @@ type DockTab = 'style' | 'color' | 'makeup' | 'eyebrows' | 'scene' | 'categories
 
 /** Phone top-level destinations pinned in the bottom bar (5th slot = More).
  *  Every other rail action stays reachable through the More sheet. */
-const MOBILE_PRIMARY: string[] = ['appearance', 'presets', 'gallery', 'chat'];
+const MOBILE_PRIMARY: string[] = ['appearance', 'presets', 'chat', 'story', 'gallery'];
 
 /** Rail ids that open a builder edit section (accordion) on the phone. */
 const MOBILE_SECTION: Record<string, InspectorSection> = {
@@ -2387,8 +2387,8 @@ export default function App() {
             >
               −
             </button>
-            <button className="icon-tool-btn" onClick={() => setIsSettingsOpen(true)} title="Provider Settings">
-              ⋮
+            <button className="icon-tool-btn settings-gear-btn" onClick={() => setIsSettingsOpen(true)} title="Settings">
+              ⚙
             </button>
           </div>
         </header>
@@ -4547,7 +4547,18 @@ export default function App() {
       )}
 
       {/* SETTINGS MODAL */}
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        adultEnabled={adult}
+        onAdultToggle={() => {
+          if (!adult && !isAgeConfirmed()) {
+            setAgeGateOpen(true);
+          } else {
+            setAdult(v => !v);
+          }
+        }}
+      />
 
       {/* TOAST */}
       {toast && <div className="toast">{toast}</div>}

@@ -236,8 +236,7 @@ jobs:
           script: |
             adb uninstall ai.grokgirls.studio || true
             adb shell pm clear ai.grokgirls.studio || true
-            cd android
-            ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+            ./android/gradlew -p android connectedDebugAndroidTest --no-daemon --stacktrace
       - name: Upload Phase 8 reports
         if: always()
         uses: actions/upload-artifact@v4

@@ -19,6 +19,15 @@ class GltfAvatarLoader(
 
     companion object {
         private const val TAG = "GltfAvatarLoader"
+        private const val GLB_MAGIC = 0x46546C67
+        private const val JSON_CHUNK = 0x4E4F534A
+        private const val BIN_CHUNK = 0x004E4942
+        private const val COMPONENT_BYTE = 5120
+        private const val COMPONENT_UNSIGNED_BYTE = 5121
+        private const val COMPONENT_SHORT = 5122
+        private const val COMPONENT_UNSIGNED_SHORT = 5123
+        private const val COMPONENT_UNSIGNED_INT = 5125
+        private const val COMPONENT_FLOAT = 5126
     }
 
     fun loadFromFile(filePath: String): HdAvatar {
@@ -769,33 +778,5 @@ class GltfAvatarLoader(
         )
     }
 
-    companion object {
 
-        private const val GLB_MAGIC =
-            0x46546C67
-
-        private const val JSON_CHUNK =
-            0x4E4F534A
-
-        private const val BIN_CHUNK =
-            0x004E4942
-
-        private const val COMPONENT_BYTE =
-            5120
-
-        private const val COMPONENT_UNSIGNED_BYTE =
-            5121
-
-        private const val COMPONENT_SHORT =
-            5122
-
-        private const val COMPONENT_UNSIGNED_SHORT =
-            5123
-
-        private const val COMPONENT_UNSIGNED_INT =
-            5125
-
-        private const val COMPONENT_FLOAT =
-            5126
-    }
 }

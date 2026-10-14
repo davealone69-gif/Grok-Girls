@@ -198,6 +198,18 @@ with sync_playwright() as p:
     if pg.locator("text=I AM 18+").count():
         pg.locator("text=I AM 18+").click()
         pg.wait_for_timeout(250)
+    # Explicitly enable adult mode in the canonical settings record. Age-gate
+    # confirmation alone does not enable the adult-content flag.
+    pg.evaluate("""() => {
+      const key = 'grok-girls-settings-v1';
+      const settings = JSON.parse(localStorage.getItem(key) || '{}');
+      settings.contentGate = { ...(settings.contentGate || {}), ageConfirmed: true, adult: true };
+      localStorage.setItem(key, JSON.stringify(settings));
+      localStorage.setItem('grok-girls-adult-v1', '1');
+      localStorage.setItem('grok-girls-age-confirmed-v1', '1');
+    }""")
+    pg.reload(wait_until="networkidle")
+    pg.wait_for_timeout(400)
     pg.locator(".rail-btn[title='Interactive Dialogue']").click()
     pg.wait_for_timeout(300)
     pg.locator(".mini-provider-select").first.select_option("openrouter")
@@ -205,9 +217,10 @@ with sync_playwright() as p:
     pg.locator(".btn-send-chat").click()
     seen = []
     for _ in range(6):
-        pg.wait_for_timeout(300)
-        if pg.locator(".toast").count():
-            seen.append(pg.locator(".toast").inner_text())
+        pg.wait_for_timeout(200)
+        # Toasts can disappear between count() and inner_text(); use the
+        # non-waiting bulk read so a transient toast never crashes the suite.
+        seen.extend(pg.locator(".toast").all_inner_texts())
     toasts = " | ".join(seen)
     chk("M5 adult chat pinned to LOCAL", "pinned to LOCAL" in toasts or "cloud chat" in toasts, toasts[:100])
     chk("M5 pinned chat still replies", pg.locator(".chat-bubble.assistant").count() >= 2)

@@ -985,17 +985,36 @@ export default function App() {
   useEffect(() => {
     if (chatProvider !== 'ollama') return;
     let alive = true;
+    let starting = false;
+
     const tick = async () => {
       const st = await ollamaStatus();
-      if (alive) setOllamaState(st.state);
+      if (!alive) return;
+      setOllamaState(st.state);
+
+      // Start only when Ollama is actually needed (selected as the chat
+      // provider). Never spawn a second server when the probe says it is up.
+      if (st.state !== 'running' && !starting) {
+        starting = true;
+        setOllamaState('starting');
+        const result = await ensureOllamaRunning(undefined, {
+          onState: state => { if (alive) setOllamaState(state); }
+        });
+        if (alive) {
+          setOllamaState(result.ok ? 'running' : 'stopped');
+          if (!result.ok) showToast(result.message);
+        }
+        starting = false;
+      }
     };
+
     void tick();
-    const id = window.setInterval(tick, 15000);
+    const id = window.setInterval(() => { void tick(); }, 15000);
     return () => {
       alive = false;
       window.clearInterval(id);
     };
-  }, [chatProvider]);
+  }, [chatProvider, showToast]);
 
   const startOllamaFromChat = useCallback(async () => {
     setOllamaState('starting');

@@ -75,6 +75,13 @@ function cleanId(value: string): string {
 
 function sectionFor(el: Element): MenuItem['section'] | null {
   const id = cleanId(attr(el, 'id')).toLowerCase();
+  // Some valid Android menu XML files identify controls by btn* ids and omit
+  // layout metadata. Classify canonical header actions by id as a fallback so
+  // a custom header cannot silently lose all its actions.
+  const normalizedId = id.replace(/^(btn|button)/, '').replace(/_/g, '');
+  if (['headertitle', 'generate', 'hdrender', 'random', 'rotate', 'zoom'].includes(normalizedId)) {
+    return 'header';
+  }
   const ancestors: string[] = [];
   let p: Element | null = el;
   while (p) {

@@ -14,6 +14,14 @@ MAX_INPUT_BYTES = int(os.environ.get("TRIPOSR_MAX_INPUT_BYTES", str(12 * 1024 * 
 MAX_JOB_SECONDS = int(os.environ.get("TRIPOSR_MAX_JOB_SECONDS", "1800"))
 MIN_AVAILABLE_MB = int(os.environ.get("TRIPOSR_MIN_AVAILABLE_MB", "1800"))
 JOB_LOCK = threading.Lock()
+JOB_STATE_LOCK = threading.Lock()
+LAST_JOB = {
+    "status": "not_tested",
+    "at": None,
+    "seconds": None,
+    "output_bytes": 0,
+    "error": None,
+}
 
 def available_memory_mb():
     try:
@@ -27,6 +35,17 @@ def available_memory_mb():
         return 0
 
 def json_error(handler, code, message):
+    # A live HTTP server is not proof that its expensive generation pipeline works.
+    # Record real /generate failures separately from the health endpoint.
+    if getattr(handler, "path", "") == "/generate" and code != 409:
+        with JOB_STATE_LOCK:
+            LAST_JOB.update({
+                "status": "failed",
+                "at": int(time.time()),
+                "seconds": None,
+                "output_bytes": 0,
+                "error": message[:1000],
+            })
     body = json.dumps({"ok": False, "error": message}).encode("utf-8")
     handler.send_response(code)
     handler.send_header("Content-Type", "application/json")
@@ -45,14 +64,30 @@ class Handler(BaseHTTPRequestHandler):
             json_error(self, 404, "Not found")
             return
         ready = RUN_PY.is_file() and TRIPOSR_HOME.is_dir()
+        with JOB_STATE_LOCK:
+            last_job = dict(LAST_JOB)
+        if not ready:
+            message = "TripoSR installation not found"
+        elif last_job["status"] == "verified":
+            message = "Worker responding; a real 3D generation job completed successfully."
+        elif last_job["status"] == "failed":
+            message = "Worker responding; the last real 3D generation job failed."
+        else:
+            message = "Worker responding; generation has NOT been verified by a completed real job."
         payload = {
             "ok": ready,
+            "responding": True,
             "engine": "triposr",
             "worker": "grokgirls-3d",
             "busy": JOB_LOCK.locked(),
             "available_memory_mb": available_memory_mb(),
             "run_py": str(RUN_PY),
-            "message": "TripoSR worker ready" if ready else "TripoSR installation not found",
+            "generation_status": last_job["status"],
+            "last_job_at": last_job["at"],
+            "last_job_seconds": last_job["seconds"],
+            "last_output_bytes": last_job["output_bytes"],
+            "last_error": last_job["error"],
+            "message": message,
         }
         body = json.dumps(payload).encode("utf-8")
         self.send_response(200 if ready else 503)
@@ -126,6 +161,14 @@ class Handler(BaseHTTPRequestHandler):
             if data[:4] != b"glTF":
                 json_error(self, 500, "TripoSR returned an invalid GLB.")
                 return
+            with JOB_STATE_LOCK:
+                LAST_JOB.update({
+                    "status": "verified",
+                    "at": int(time.time()),
+                    "seconds": round(elapsed, 1),
+                    "output_bytes": len(data),
+                    "error": None,
+                })
             self.send_response(200)
             self.send_header("Content-Type", "model/gltf-binary")
             self.send_header("Content-Length", str(len(data)))

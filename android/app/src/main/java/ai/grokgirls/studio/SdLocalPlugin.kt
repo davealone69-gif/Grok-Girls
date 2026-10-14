@@ -57,6 +57,7 @@ class SdLocalPlugin : Plugin() {
         private const val DEFAULT_PORT = 1234
         private const val TXT2IMG_PATH = "/sdapi/v1/txt2img"
         private const val TERMUX_PACKAGE = "com.termux"
+        private const val TERMUX_PERMISSION = "com.termux.permission.RUN_COMMAND"
         private const val TERMUX_RUN_COMMAND = "com.termux.RUN_COMMAND"
         private const val TERMUX_SERVICE = "com.termux.app.RunCommandService"
     }

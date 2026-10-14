@@ -846,15 +846,22 @@ export default function App() {
     setHy3dStatus('Checking available real 3D workers...');
     try {
       let workerReady = false;
+      let workerCapabilityNote = '3D worker unavailable; using the on-device mesh pipeline.';
       try {
         const worker = await hunyuan3dStatus();
         workerReady = worker.ok;
-        if (!workerReady) setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
+        workerCapabilityNote = !workerReady
+          ? '3D worker unavailable; using the on-device mesh pipeline.'
+          : worker.generationVerified
+            ? '3D worker responds and a previous real generation completed successfully.'
+            : '3D worker responds, but no successful real 3D job has verified generation yet.';
+        setHy3dStatus(workerCapabilityNote);
       } catch {
-        setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
+        workerCapabilityNote = '3D worker check failed; using the on-device mesh pipeline.';
+        setHy3dStatus(workerCapabilityNote);
       }
 
-      setHy3dStatus('Generating the real source image with local Stable Diffusion...');
+      setHy3dStatus('Generating the real source image with local Stable Diffusion. ' + workerCapabilityNote);
       // Android/Termux SD.cpp is CPU/RAM constrained. Keep the real 3D
       // source render inside the tested phone-safe envelope. The previous
       // 512x768 request could kill sd-server during generation even though

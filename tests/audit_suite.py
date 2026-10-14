@@ -95,6 +95,11 @@ with sync_playwright() as p:
     pg.evaluate("""
       () => {
         localStorage.setItem('quota-filler', 'x'.repeat(1024*1024*4));
+        const key = 'grok-girls-settings-v1';
+        const settings = JSON.parse(localStorage.getItem(key) || '{}');
+        settings.provider = { ...(settings.provider || {}), image: 'selfhosted' };
+        settings.selfHost = { ...(settings.selfHost || {}), base: 'http://localhost:7860', type: 'a1111' };
+        localStorage.setItem(key, JSON.stringify(settings));
         localStorage.setItem('grok-girls-selfhosted-base', 'http://localhost:7860');
         localStorage.setItem('grok-girls-selfhosted-type', 'a1111');
         localStorage.setItem('grok-girls-provider-v1', 'selfhosted');

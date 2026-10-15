@@ -248,10 +248,19 @@ jobs:
           pre-emulator-launch-script: adb kill-server || true; adb start-server
           disable-animations: true
           script: |
+            adb uninstall ai.grokgirls.studio.debug || true
+            adb shell pm clear ai.grokgirls.studio.debug || true
             adb uninstall ai.grokgirls.studio || true
-            adb shell pm clear ai.grokgirls.studio || true
-            cd android
-            ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+            if [ -x ./gradlew ]; then
+              ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+            elif [ -x android/gradlew ]; then
+              (cd android && ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace)
+            else
+              echo "::error::Gradle wrapper not found from emulator runner working directory"
+              pwd
+              ls -la
+              exit 1
+            fi
       - name: Upload Phase 8 reports
         if: always()
         uses: actions/upload-artifact@v4

@@ -1048,7 +1048,7 @@ export default function App() {
     if (storageWarnRef.current) return;
     const fresh = achievements.filter(a => !a.test(prev) && a.test(next));
     if (fresh.length) {
-      window.setTimeout(() => showToast(`🏆 Achievement unlocked: ${fresh[0].name}`), 350);
+      window.setTimeout(() => showToast(`🏆 Achievement unlocked: ${fresh[0].name}`), 1600);
     }
   };
 

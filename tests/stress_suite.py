@@ -146,6 +146,9 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
     pg.evaluate("""
       () => {
+        // The test mutates legacy settings after first boot. Remove the
+        // canonical record so the next launch folds these test values in.
+        localStorage.removeItem('grok-girls-settings-v1');
         localStorage.setItem('grok-girls-selfhosted-base', 'http://localhost:7861');
         localStorage.setItem('grok-girls-selfhosted-type', 'a1111');
         localStorage.setItem('grok-girls-provider-v1', 'selfhosted');

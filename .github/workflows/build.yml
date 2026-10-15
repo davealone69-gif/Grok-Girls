@@ -2,7 +2,11 @@ name: Build Grok Girls Android
 
 on:
   push:
-    branches: [main, renderer/native-engine]
+    branches:
+      - main
+      - renderer/native-engine
+      - "fix/**"
+      - "feat/**"
   pull_request:
     branches: [main]
   workflow_dispatch:

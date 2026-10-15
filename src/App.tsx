@@ -5,7 +5,7 @@ import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDele
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
-import { ensureSdRunning, isNativeShell, setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
+import { ensureSdRunning, isNativeShell, isSdAutoStart, setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
 import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
 import { ensureTripoSRRunning } from './services/triposrLocal';
@@ -148,6 +148,7 @@ import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './servi
 import {
   enhancePromptWithOllama,
   ensureOllamaRunning,
+  isOllamaAutoStart,
   getOllamaModel,
   setOllamaEnabled,
   ollamaStatus,
@@ -1005,11 +1006,15 @@ export default function App() {
     if (!native) return;
     let cancelled = false;
     const boot = async () => {
-      const llm = await ensureOllamaRunning(undefined, { timeoutMs: 30000 });
+      const llm = isOllamaAutoStart()
+        ? await ensureOllamaRunning(undefined, { timeoutMs: 30000 })
+        : await ollamaStatus();
       if (cancelled) return;
       setOllamaState(llm.ok ? 'running' : 'stopped');
       if (!llm.ok) showToast('Ollama auto-start: ' + llm.message);
-      const image = await ensureSdRunning(undefined, { timeoutMs: 120000 });
+      const image = isSdAutoStart()
+        ? await ensureSdRunning(undefined, { timeoutMs: 120000 })
+        : await sdStatus();
       if (cancelled) return;
       if (image.ok) setSdEnabled(true);
 

@@ -788,27 +788,6 @@ export default function App() {
       setHdProgress(0);
     }
   };
-  const renderAvatarTo2D = async () => {
-    if (busyRef.current || !avatar3dRef.current) return;
-    enterBusy();
-    try {
-      const url = avatar3dRef.current.renderToImage({ width: 1920, height: 1080, mimeType: 'image/png' });
-      await addGalleryItem({
-        avatarId: girl.id,
-        mode: 'image',
-        prompt: `3D RENDER · ${girl.name} · 1920×1080`,
-        assetUrl: url,
-        provider: '3d-renderer'
-      });
-      void refreshGallery();
-      showToast('2D image rendered from the real 3D avatar · 1920×1080');
-    } catch (e) {
-      showToast(`2D 3D-render failed: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      exitBusy();
-    }
-  };
-
   const testVknn3D = async () => {
     if (vknnBusy || busyRef.current) return;
     setVknnBusy(true);
@@ -867,15 +846,22 @@ export default function App() {
     setHy3dStatus('Checking available real 3D workers...');
     try {
       let workerReady = false;
+      let workerCapabilityNote = '3D worker unavailable; using the on-device mesh pipeline.';
       try {
         const worker = await hunyuan3dStatus();
         workerReady = worker.ok;
-        if (!workerReady) setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
+        workerCapabilityNote = !workerReady
+          ? '3D worker unavailable; using the on-device mesh pipeline.'
+          : worker.generationVerified
+            ? '3D worker responds and a previous real generation completed successfully.'
+            : '3D worker responds, but no successful real 3D job has verified generation yet.';
+        setHy3dStatus(workerCapabilityNote);
       } catch {
-        setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
+        workerCapabilityNote = '3D worker check failed; using the on-device mesh pipeline.';
+        setHy3dStatus(workerCapabilityNote);
       }
 
-      setHy3dStatus('Generating the real source image with local Stable Diffusion...');
+      setHy3dStatus('Generating the real source image with local Stable Diffusion. ' + workerCapabilityNote);
       // Android/Termux SD.cpp is CPU/RAM constrained. Keep the real 3D
       // source render inside the tested phone-safe envelope. The previous
       // 512x768 request could kill sd-server during generation even though
@@ -985,17 +971,36 @@ export default function App() {
   useEffect(() => {
     if (chatProvider !== 'ollama') return;
     let alive = true;
+    let starting = false;
+
     const tick = async () => {
       const st = await ollamaStatus();
-      if (alive) setOllamaState(st.state);
+      if (!alive) return;
+      setOllamaState(st.state);
+
+      // Start only when Ollama is actually needed (selected as the chat
+      // provider). Never spawn a second server when the probe says it is up.
+      if (st.state !== 'running' && !starting) {
+        starting = true;
+        setOllamaState('starting');
+        const result = await ensureOllamaRunning(undefined, {
+          onState: state => { if (alive) setOllamaState(state); }
+        });
+        if (alive) {
+          setOllamaState(result.ok ? 'running' : 'stopped');
+          if (!result.ok) showToast(result.message);
+        }
+        starting = false;
+      }
     };
+
     void tick();
-    const id = window.setInterval(tick, 15000);
+    const id = window.setInterval(() => { void tick(); }, 15000);
     return () => {
       alive = false;
       window.clearInterval(id);
     };
-  }, [chatProvider]);
+  }, [chatProvider, showToast]);
 
   const startOllamaFromChat = useCallback(async () => {
     setOllamaState('starting');

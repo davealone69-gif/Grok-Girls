@@ -179,3 +179,8 @@ domain root. Root-only hosting is the documented, supported deployment.
 `npm ci && npm run build` then serve `dist/` on :8080 with `tests/mocks/mock_big_a1111.py` (:7860)
 and `tests/mocks/mock_slow_a1111.py` (:7861) running, and execute `python3 tests/ci_runner.py`.
 The same suites gate every CI push (job `Browser test suites`).
+
+
+## Local service verification states
+
+The app treats server startup, endpoint reachability, and completed work as separate states. A successful Termux command dispatch does not prove the service started. An HTTP response proves reachability only. Chat is verified only after a non-empty model response; image generation only after a decodable image is returned; 3D generation only after a generated GLB is validated and loaded. The browser cannot start Termux services by itself; Android must provide the native bridge and Termux RUN_COMMAND permission. Local Ollama (`127.0.0.1:11434`) is text-only; Stable Diffusion (`127.0.0.1:1234`) is a separate image service. Neither service is a substitute for a working 3D generation worker.

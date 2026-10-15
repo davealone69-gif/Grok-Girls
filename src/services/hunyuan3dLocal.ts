@@ -3,7 +3,7 @@ import { registerPlugin, Capacitor } from '@capacitor/core';
 export const HUNYUAN3D_DEFAULT_BASE = 'http://127.0.0.1:8081';
 
 interface HunyuanPlugin {
-  status(opts: { base: string; timeoutMs?: number }): Promise<{ ok?: boolean; message?: string }>;
+  status(opts: { base: string; timeoutMs?: number }): Promise<{ ok?: boolean; message?: string; generationStatus?: string; generationVerified?: boolean }>;
   generate(opts: {
     base: string;
     image: string;
@@ -21,6 +21,8 @@ export interface HunyuanStatus {
   ok: boolean;
   base: string;
   message: string;
+  generationStatus: 'not_tested' | 'verified' | 'failed' | 'unknown';
+  generationVerified: boolean;
 }
 
 function native(): boolean {
@@ -32,17 +34,32 @@ export async function hunyuan3dStatus(base = HUNYUAN3D_DEFAULT_BASE): Promise<Hu
     return {
       ok: false,
       base,
-      message: 'Hunyuan3D generation requires the Android app and a running Hunyuan3D-2.1 API worker.'
+      message: '3D worker status is unavailable in the browser. Android worker connectivity and real generation remain unverified.',
+      generationStatus: 'not_tested',
+      generationVerified: false
     };
   }
   try {
     const r = await Hunyuan3DLocal.status({ base });
-    return { ok: !!r.ok, base, message: r.message || (r.ok ? 'Hunyuan3D worker ready.' : 'Hunyuan3D worker unavailable.') };
+    const generationStatus = r.generationStatus === 'verified' || r.generationStatus === 'failed'
+      ? r.generationStatus
+      : r.generationStatus === 'not_tested' ? 'not_tested' : 'unknown';
+    return {
+      ok: !!r.ok,
+      base,
+      message: r.message || (r.ok
+        ? '3D worker responds; generation is not verified until a real job returns a valid GLB.'
+        : '3D worker unavailable.'),
+      generationStatus,
+      generationVerified: r.generationVerified === true && generationStatus === 'verified'
+    };
   } catch (e) {
     return {
       ok: false,
       base,
-      message: e instanceof Error ? e.message : String(e)
+      message: e instanceof Error ? e.message : String(e),
+      generationStatus: 'unknown',
+      generationVerified: false
     };
   }
 }

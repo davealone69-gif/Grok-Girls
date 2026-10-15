@@ -146,6 +146,12 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
     pg.evaluate("""
       () => {
+        const key = 'grok-girls-settings-v1';
+        const settings = JSON.parse(localStorage.getItem(key) || '{}');
+        settings.provider = { ...(settings.provider || {}), image: 'selfhosted' };
+        settings.selfHost = { ...(settings.selfHost || {}), base: 'http://localhost:7861', type: 'a1111' };
+        localStorage.setItem(key, JSON.stringify(settings));
+        // Keep legacy mirrors for code paths that still read pre-canonical keys.
         localStorage.setItem('grok-girls-selfhosted-base', 'http://localhost:7861');
         localStorage.setItem('grok-girls-selfhosted-type', 'a1111');
         localStorage.setItem('grok-girls-provider-v1', 'selfhosted');

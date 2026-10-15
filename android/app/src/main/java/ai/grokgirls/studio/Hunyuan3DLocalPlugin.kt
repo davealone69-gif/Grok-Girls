@@ -74,10 +74,23 @@ class Hunyuan3DLocalPlugin : Plugin() {
                 try {
                     val code = c.responseCode
                     val body = String(read(c), Charsets.UTF_8)
+                    val health = runCatching { JSONObject(body) }.getOrNull()
+                    val generationStatus = health?.optString("generation_status", "not_tested") ?: "not_tested"
+                    val lastError = health?.optString("last_error", "") ?: ""
+                    val healthReady = code in 200..299
+                    val message = when {
+                        !healthReady -> "3D worker responds, but its health check reports unavailable (HTTP " + code + ")."
+                        generationStatus == "verified" -> "3D worker responding; a real generation job previously completed and returned a GLB."
+                        generationStatus == "failed" -> "3D worker responding, but the last real generation job failed." + if (lastError.isNotBlank()) " " + lastError.take(300) else ""
+                        else -> "3D worker responding. Generation is NOT verified until a real job completes and returns a valid GLB."
+                    }
                     val r = JSObject()
-                    r.put("ok", code in 200..299)
+                    r.put("ok", healthReady)
+                    r.put("responding", true)
+                    r.put("generationStatus", generationStatus)
+                    r.put("generationVerified", generationStatus == "verified")
                     r.put("base", b)
-                    r.put("message", if (code in 200..299) "Hunyuan3D worker is ready at " + b else "Hunyuan3D worker returned HTTP " + code)
+                    r.put("message", message)
                     if (body.isNotBlank()) r.put("health", body.take(1000))
                     call.resolve(r)
                 } finally {

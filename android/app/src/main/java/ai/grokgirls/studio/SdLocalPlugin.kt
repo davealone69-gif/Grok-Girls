@@ -57,6 +57,7 @@ class SdLocalPlugin : Plugin() {
         private const val DEFAULT_PORT = 1234
         private const val TXT2IMG_PATH = "/sdapi/v1/txt2img"
         private const val TERMUX_PACKAGE = "com.termux"
+        private const val TERMUX_PERMISSION = "com.termux.permission.RUN_COMMAND"
         private const val TERMUX_RUN_COMMAND = "com.termux.RUN_COMMAND"
         private const val TERMUX_SERVICE = "com.termux.app.RunCommandService"
     }
@@ -400,6 +401,20 @@ class SdLocalPlugin : Plugin() {
                     return@execute
                 }
 
+                if (ctx.checkSelfPermission(TERMUX_PERMISSION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    val r = JSObject()
+                    r.put("started", false)
+                    r.put("method", "termux")
+                    r.put(
+                        "message",
+                        "Android has not granted com.termux.permission.RUN_COMMAND to Grok-Girls. " +
+                            "Grant the RUN_COMMAND permission to Grok-Girls in Android app settings, " +
+                            "then open Termux and set allow-external-apps=true in ~/.termux/termux.properties."
+                    )
+                    call.resolve(r)
+                    return@execute
+                }
+
                 val script =
                     "pgrep -f '[s]d-server' >/dev/null 2>&1 && exit 0; " +
                         "if [ -x \"\$HOME/sd-server.sh\" ]; then " +
@@ -423,9 +438,11 @@ class SdLocalPlugin : Plugin() {
                 // RunCommandService handles its own foreground-service transition.
                 // Starting it directly as a foreground service from Grok-Girls can
                 // prevent dispatch on some Android/Termux combinations.
+                // startService() can return null when Android cannot resolve the
+                // target service. Treat that as failure instead of pretending the
+                // command was dispatched and hiding the cause behind a long timeout.
                 val launched = runCatching {
-                    ctx.startService(intent)
-                    true
+                    ctx.startService(intent) != null
                 }.getOrDefault(false)
 
                 if (!launched) {

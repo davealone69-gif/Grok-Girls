@@ -17,10 +17,6 @@ class GltfAvatarLoader(
     private val context: Context
 ) {
 
-    companion object {
-        private const val TAG = "GltfAvatarLoader"
-    }
-
     fun loadFromFile(filePath: String): HdAvatar {
         val file = java.io.File(filePath)
         require(file.isFile) { "GLB file not found: $filePath" }
@@ -770,6 +766,8 @@ class GltfAvatarLoader(
     }
 
     companion object {
+
+        private const val TAG = "GltfAvatarLoader"
 
         private const val GLB_MAGIC =
             0x46546C67

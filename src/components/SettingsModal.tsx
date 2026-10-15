@@ -393,12 +393,12 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           <div className="settings-section">
             <div className="settings-section-title">⚡ CUSTOM PROVIDER (OpenAI-compatible / Replicate…)</div>
             <Field
-              label="API Key (optional)"
+              label="API Key (required for Pollinations)"
               value={customKey}
               onChange={setCustomKey}
               placeholder="Bearer token or API secret"
               type="password"
-              hint="Some endpoints need no key."
+              hint="Pollinations requires a key. Saved only in this app on this device; never commit it."
             />
             <Field
               label="Chat Endpoint"

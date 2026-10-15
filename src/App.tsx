@@ -5,7 +5,7 @@ import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDele
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
-import { setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
+import { ensureSdRunning, setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
 import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
 import { buildPhoto3D } from './services/photo3dLocal';
@@ -978,6 +978,36 @@ export default function App() {
     window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(null), 2800);
   }, []);
+
+  // Android startup: launch phone-local services through the native Termux
+  // bridge instead of asking the user to open Termux manually. Start in order:
+  // Ollama first, then SD. Do not launch ComfyUI at the same time as SD on a
+  // phone; both can load large models and exhaust RAM. ComfyUI starts when its
+  // workflow is requested from Server Manager.
+  useEffect(() => {
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string } }).Capacitor;
+    const native = cap?.isNativePlatform?.() ?? (cap?.getPlatform?.() === 'android');
+    if (!native) return;
+    let cancelled = false;
+    const boot = async () => {
+      const llm = await ensureOllamaRunning(undefined, { timeoutMs: 30000 });
+      if (cancelled) return;
+      setOllamaState(llm.ok ? 'running' : 'stopped');
+      if (!llm.ok) showToast('Ollama auto-start: ' + llm.message);
+      const image = await ensureSdRunning(undefined, { timeoutMs: 120000 });
+      if (cancelled) return;
+      if (image.ok) {
+        setSdEnabled(true);
+        showToast('Local servers ready: Ollama + Stable Diffusion');
+      } else {
+        showToast('Stable Diffusion auto-start: ' + image.message);
+      }
+    };
+    void boot().catch(error => {
+      if (!cancelled) showToast('Local server startup failed: ' + (error instanceof Error ? error.message : String(error)));
+    });
+    return () => { cancelled = true; };
+  }, [showToast]);
 
   /* ----------------------------------------------- on-device Ollama --- */
   // Live server state behind the chat header chip. Polled only while the

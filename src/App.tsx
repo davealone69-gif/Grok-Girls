@@ -996,11 +996,19 @@ export default function App() {
       if (!llm.ok) showToast('Ollama auto-start: ' + llm.message);
       const image = await ensureSdRunning(undefined, { timeoutMs: 120000 });
       if (cancelled) return;
-      if (image.ok) {
-        setSdEnabled(true);
-        showToast('Local servers ready: Ollama + Stable Diffusion');
+      if (image.ok) setSdEnabled(true);
+
+      // These probes establish API liveness only, not successful inference.
+      // Report each service independently so a successful SD probe cannot
+      // overwrite an Ollama failure or falsely claim both engines are ready.
+      if (llm.ok && image.ok) {
+        showToast('Ollama + Stable Diffusion APIs responding; generation still unverified');
+      } else if (llm.ok) {
+        showToast('Ollama API responding; Stable Diffusion failed: ' + image.message);
+      } else if (image.ok) {
+        showToast('Stable Diffusion API responding; Ollama failed: ' + llm.message);
       } else {
-        showToast('Stable Diffusion auto-start: ' + image.message);
+        showToast('Local server startup failed. Ollama: ' + llm.message + ' · Stable Diffusion: ' + image.message);
       }
     };
     void boot().catch(error => {

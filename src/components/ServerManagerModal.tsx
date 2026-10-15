@@ -49,7 +49,7 @@ export default function ServerManagerModal({ isOpen, onClose, onNotice }: Server
       const native = nativeComfyUi();
       if (!native) throw new Error('Android ComfyUI bridge unavailable in this build. Install the updated APK.');
       const result = await native.startServer({ base: 'http://127.0.0.1:8188', timeoutMs: 120000 });
-      setComfy({ running: Boolean(result.running || result.started), ...result });
+      setComfy({ ...result, running: Boolean(result.running || result.started) });
       setMessage(result.message);
       onNotice?.(result.message);
     } catch (e) {

@@ -359,8 +359,8 @@ class SdLocalPlugin : Plugin() {
      * until it answers. Requires the Termux app, its RUN_COMMAND permission,
      * and allow-external-apps=true in ~/.termux/termux.properties.
      *
-     * The launcher tries, in order: a user-provided ~/sd-server.sh hook, then
-     * the known Termux build path, `~/stable-diffusion.cpp/build-android/bin/sd-server`.
+     * The launcher tries a user-provided ~/sd-server.sh hook, then the actual
+     * Termux build/bin path, with build-android/bin retained for older checkouts.
      * Both are run bound to loopback. Whichever exists first wins; if neither does, the user gets
      * an actionable message rather than a silent failure.
      */
@@ -403,12 +403,15 @@ class SdLocalPlugin : Plugin() {
                 val script =
                     "pgrep -f '[s]d-server' >/dev/null 2>&1 && exit 0; " +
                         "if [ -x \"\$HOME/sd-server.sh\" ]; then " +
-                        "nohup \"\$HOME/sd-server.sh\" >\"\$HOME/sd-server.log\" 2>&1 & " +
+                        "nohup \"\$HOME/sd-server.sh\" >\"\$HOME/sd-server.log\" 2>&1 </dev/null & " +
+                        "elif [ -x \"\$HOME/stable-diffusion.cpp/build/bin/sd-server\" ]; then " +
+                        "if [ ! -r \"\$HOME/models/v1-5-pruned-emaonly.safetensors\" ]; then echo 'Missing model: ~/models/v1-5-pruned-emaonly.safetensors' >\"\$HOME/sd-server.log\"; exit 2; fi; " +
+                        "nohup \"\$HOME/stable-diffusion.cpp/build/bin/sd-server\" --model \"\$HOME/models/v1-5-pruned-emaonly.safetensors\" " +
+                        "--listen-ip 127.0.0.1 --listen-port $port >\"\$HOME/sd-server.log\" 2>&1 </dev/null & " +
                         "elif [ -x \"\$HOME/stable-diffusion.cpp/build-android/bin/sd-server\" ]; then " +
-                        "nohup sd-server --model \"\$HOME/models/v1-5-pruned-emaonly.safetensors\" " +
-                        "--listen-ip 127.0.0.1 --listen-port $port --backend cpu --rng cpu --sampler-rng cpu --offload-to-cpu --mmap " +
-                        "--vae-tiling --threads 4 >\"\$HOME/sd-server.log\" 2>&1 & " +
-                        "else exit 127; fi"
+                        "nohup \"\$HOME/stable-diffusion.cpp/build-android/bin/sd-server\" --model \"\$HOME/models/v1-5-pruned-emaonly.safetensors\" " +
+                        "--listen-ip 127.0.0.1 --listen-port $port >\"\$HOME/sd-server.log\" 2>&1 </dev/null & " +
+                        "else echo 'sd-server binary not found in ~/stable-diffusion.cpp/build/bin or build-android/bin; create ~/sd-server.sh if using another build.' >\"\$HOME/sd-server.log\"; exit 127; fi"
 
                 val intent = android.content.Intent()
                 intent.setClassName(TERMUX_PACKAGE, TERMUX_SERVICE)

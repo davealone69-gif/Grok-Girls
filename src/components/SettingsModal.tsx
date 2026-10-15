@@ -142,7 +142,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     saveEndpoint('custom', customVideoEndpoint, 'video');
     saveModel('custom', customModel);
     persistSelfHosted();
-    setSavedStatus('Configuration saved in browser storage!');
+    setSavedStatus('Settings saved on this device.');
     setTimeout(() => {
       setSavedStatus('');
       onClose();
@@ -223,6 +223,14 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           {/* STABLE DIFFUSION — phone-local on-device image engine (:1234) */}
           <SdLocalPanel onNotice={msg => { setSavedStatus(msg); window.setTimeout(() => setSavedStatus(''), 4000); }} />
 
+          <details
+            className="settings-advanced"
+            style={{ border: '1px solid rgba(255,255,255,.1)', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}
+          >
+            <summary style={{ cursor: 'pointer', color: '#b9b9d4', fontSize: 12, fontWeight: 700, letterSpacing: '.06em' }}>
+              ADVANCED · SELF-HOSTED, OPENROUTER & GEMINI
+            </summary>
+            <div style={{ marginTop: 12 }}>
           {/* SELF-HOSTED */}
           <div className="settings-section selfhosted-section">
             <div className="settings-section-title">🖥️ SELF-HOSTED SERVER — A1111 / ComfyUI</div>
@@ -389,16 +397,19 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             />
           </div>
 
-          {/* CUSTOM */}
+            </div>
+          </details>
+
+          {/* CUSTOM · Pollinations / compatible endpoint */}
           <div className="settings-section">
-            <div className="settings-section-title">⚡ CUSTOM PROVIDER (OpenAI-compatible / Replicate…)</div>
+            <div className="settings-section-title">⚡ IMAGE & API PROVIDER · POLLINATIONS</div>
             <Field
-              label="API Key (optional)"
+              label="Pollinations API Key"
               value={customKey}
               onChange={setCustomKey}
               placeholder="Bearer token or API secret"
               type="password"
-              hint="Some endpoints need no key."
+              hint="Used for online image generation. Saved in this app's local settings."
             />
             <Field
               label="Chat Endpoint"

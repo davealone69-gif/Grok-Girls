@@ -5,9 +5,10 @@ import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDele
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
-import { setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
+import { ensureSdRunning, isNativeShell, isSdAutoStart, setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
 import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
+import { ensureTripoSRRunning } from './services/triposrLocal';
 import { buildPhoto3D } from './services/photo3dLocal';
 import { downloadVknn3DModel, probeVknn3DModel, vknn3dStatus } from './services/vknn3dLocal';
 import { openNativeHdAvatar } from './nativeAvatarBridge';
@@ -147,6 +148,7 @@ import { ChatMessage, loadChat, reply, saveChat, QUICK_ACT_CHIPS } from './servi
 import {
   enhancePromptWithOllama,
   ensureOllamaRunning,
+  isOllamaAutoStart,
   getOllamaModel,
   setOllamaEnabled,
   ollamaStatus,
@@ -169,6 +171,7 @@ import { StylePreset, applyStylePreset, stylePresets } from './services/styles';
 import { StudioStats, achievements, bumpStat, loadStats } from './services/stats';
 import ColorWheel from './components/ColorWheel';
 import SettingsModal from './components/SettingsModal';
+import ServerManagerModal from './components/ServerManagerModal';
 import VideoExportPage from './pages/VideoExportPage';
 import './styles.css';
 
@@ -520,6 +523,7 @@ export default function App() {
   }, [chatProvider]);
   const adultChatPinWarnRef = useRef(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isServerManagerOpen, setIsServerManagerOpen] = useState(false);
   // Data-driven menu: labels/titles come from /menu.xml; a faulty file
   // falls back to DEFAULT_MENU (navigation can never break).
   const [menuItems, setMenuItems] = useState<MenuItem[]>(DEFAULT_MENU);
@@ -788,7 +792,7 @@ export default function App() {
       setHdProgress(0);
     }
   };
-  const renderAvatarTo2D = async () => {
+  const _renderAvatarTo2D = async () => {
     if (busyRef.current || !avatar3dRef.current) return;
     enterBusy();
     try {
@@ -866,13 +870,27 @@ export default function App() {
     setHy3dBusy(true);
     setHy3dStatus('Checking available real 3D workers...');
     try {
+      if (!isNativeShell()) {
+        throw new Error('Real 3D generation requires the Android app and its local 3D worker.');
+      }
+
       let workerReady = false;
+      let workerEngine = 'local 3D worker';
+      let workerMessage = '';
       try {
+        // Start the repository's TripoSR-compatible worker on demand. It
+        // shares the /health + /generate contract used by the native GLB bridge.
+        const start = await ensureTripoSRRunning();
+        workerMessage = start.message;
         const worker = await hunyuan3dStatus();
         workerReady = worker.ok;
-        if (!workerReady) setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
-      } catch {
-        setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
+        workerEngine = worker.engine === 'triposr' ? 'TripoSR' : (worker.engine || 'local 3D worker');
+        if (!workerReady) {
+          setHy3dStatus('Local 3D worker unavailable: ' + (worker.message || workerMessage) + '. Using the real on-device 3DDD mesh pipeline...');
+        }
+      } catch (e) {
+        workerMessage = e instanceof Error ? e.message : String(e);
+        setHy3dStatus('Local 3D worker unavailable: ' + workerMessage + '. Using the real on-device 3DDD mesh pipeline...');
       }
 
       setHy3dStatus('Generating the real source image with local Stable Diffusion...');
@@ -893,16 +911,16 @@ export default function App() {
       );
 
       if (workerReady) {
-        setHy3dStatus('Hunyuan3D is generating the GLB...');
+        setHy3dStatus(`${workerEngine} is generating the GLB...`);
         const glb = await generateHunyuan3D(image.dataUrl, {
           texture: true,
           seed: Number(seedInput) || 1234,
           octreeResolution: 256,
           steps: 5
         });
-        setHy3dStatus('Real Hunyuan3D GLB generated. Opening the native renderer...');
+        setHy3dStatus(`Real ${workerEngine} GLB generated. Opening the native renderer...`);
         await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), glb.file);
-        setHy3dStatus('REAL 3D READY · Hunyuan3D GLB loaded by the native GLES3 renderer.');
+        setHy3dStatus(`REAL 3D READY · ${workerEngine} GLB loaded by the native GLES3 renderer.`);
       } else {
         setHy3dStatus('Building a real closed 3D mesh from the generated image...');
         const mesh = await buildPhoto3D(image.dataUrl, girl.name || 'grok-girls-avatar');
@@ -977,6 +995,48 @@ export default function App() {
     toastTimer.current = window.setTimeout(() => setToast(null), 2800);
   }, []);
 
+  // Android startup: launch phone-local services through the native Termux
+  // bridge instead of asking the user to open Termux manually. Start in order:
+  // Ollama first, then SD. Do not launch ComfyUI at the same time as SD on a
+  // phone; both can load large models and exhaust RAM. ComfyUI starts when its
+  // workflow is requested from Server Manager.
+  useEffect(() => {
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string } }).Capacitor;
+    const native = cap?.isNativePlatform?.() ?? (cap?.getPlatform?.() === 'android');
+    if (!native) return;
+    let cancelled = false;
+    const boot = async () => {
+      const llm = isOllamaAutoStart()
+        ? await ensureOllamaRunning(undefined, { timeoutMs: 30000 })
+        : await ollamaStatus();
+      if (cancelled) return;
+      setOllamaState(llm.ok ? 'running' : 'stopped');
+      if (!llm.ok) showToast('Ollama auto-start: ' + llm.message);
+      const image = isSdAutoStart()
+        ? await ensureSdRunning(undefined, { timeoutMs: 120000 })
+        : await sdStatus();
+      if (cancelled) return;
+      if (image.ok) setSdEnabled(true);
+
+      // These probes establish API liveness only, not successful inference.
+      // Report each service independently so a successful SD probe cannot
+      // overwrite an Ollama failure or falsely claim both engines are ready.
+      if (llm.ok && image.ok) {
+        showToast('Ollama + Stable Diffusion APIs responding; generation still unverified');
+      } else if (llm.ok) {
+        showToast('Ollama API responding; Stable Diffusion failed: ' + image.message);
+      } else if (image.ok) {
+        showToast('Stable Diffusion API responding; Ollama failed: ' + llm.message);
+      } else {
+        showToast('Local server startup failed. Ollama: ' + llm.message + ' · Stable Diffusion: ' + image.message);
+      }
+    };
+    void boot().catch(error => {
+      if (!cancelled) showToast('Local server startup failed: ' + (error instanceof Error ? error.message : String(error)));
+    });
+    return () => { cancelled = true; };
+  }, [showToast]);
+
   /* ----------------------------------------------- on-device Ollama --- */
   // Live server state behind the chat header chip. Polled only while the
   // OLLAMA engine is actually selected, so it costs nothing otherwise.
@@ -1016,7 +1076,7 @@ export default function App() {
     if (storageWarnRef.current) return;
     const fresh = achievements.filter(a => !a.test(prev) && a.test(next));
     if (fresh.length) {
-      window.setTimeout(() => showToast(`🏆 Achievement unlocked: ${fresh[0].name}`), 350);
+      window.setTimeout(() => showToast(`🏆 Achievement unlocked: ${fresh[0].name}`), 1600);
     }
   };
 
@@ -1900,6 +1960,7 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsSettingsOpen(false);
+        setIsServerManagerOpen(false);
         setPremiumOpen(false);
         setHelpOpen(false);
         setOutfitOpen(false);
@@ -2281,6 +2342,8 @@ export default function App() {
             <h2>{menuLabel('header_title')}</h2>
           </div>
 
+          {/* Always-visible entry point for local server controls. */}
+          <button className="server-manager-launcher" onClick={() => setIsServerManagerOpen(true)} aria-label="Open Server Manager" title="Start and check local servers">⚙ <span>SERVERS</span></button>
           {/* Menu-driven header actions (wide screens; phones use the HUD + footer) */}
           {hdRendering && <span className="hd-progress-chip">HD RENDER {hdProgress}%</span>}
 
@@ -2301,7 +2364,7 @@ export default function App() {
           </div>
 
           <div className="native-3d-controls">
-            <button className="native-action native-3d-test" disabled={hy3dBusy} onClick={() => void openReal3D()} title="Open the real native GLES3 Hunyuan3D renderer">🧊 REAL 3D</button>
+            <button className="native-action native-3d-test" disabled={hy3dBusy} onClick={() => void openReal3D()} title="Open the bundled GLB test asset in the native GLES3 viewer">🧊 3D VIEWER TEST</button>
             <button className="native-action native-3d-generate" disabled={hy3dBusy} onClick={() => void generateReal3D()} title="Generate a real Hunyuan3D GLB and load it into the native renderer">🧬 {hy3dBusy ? '3D…' : 'MAKE 3D'}</button>
           </div>
           <div className="mode-pills">
@@ -4546,6 +4609,8 @@ export default function App() {
         </>
       )}
 
+      {/* SERVER MANAGER: separate from provider settings. */}
+      <ServerManagerModal isOpen={isServerManagerOpen} onClose={() => setIsServerManagerOpen(false)} onNotice={showToast} />
       {/* SETTINGS MODAL */}
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 

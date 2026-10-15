@@ -1,9 +1,9 @@
 /*
  * Replicates the patched Pollinations path in src/services/providers.ts and
- * exercises it live: host detection, URL construction, retry, throttle message.
+ * exercises it live when POLLINATIONS_API_KEY is set; otherwise checks routing only.
  * Run: node tools/verify-keyless.mjs
  */
-const KEYLESS_IMAGE_ENDPOINT = 'https://image.pollinations.ai';
+const POLLINATIONS_IMAGE_ENDPOINT = 'https://gen.pollinations.ai/image';
 
 function epNorm(endpoint) {
   return endpoint
@@ -15,7 +15,7 @@ function isPollinationsImage(p, mode, endpoint) {
   return (
     p === 'custom' &&
     mode === 'image' &&
-    /^(image|gen)\.pollinations\.ai(\/(image|prompt))?$/i.test(epNorm(endpoint))
+    /^gen\.pollinations\.ai(\/(image|prompt))?$/i.test(epNorm(endpoint))
   );
 }
 // the pattern this replaced, for comparison
@@ -24,11 +24,12 @@ function oldDetection(endpoint) {
 }
 
 const cases = [
-  ['https://image.pollinations.ai', true],
-  ['https://image.pollinations.ai/', true],
-  ['https://image.pollinations.ai/prompt', true],
   ['https://gen.pollinations.ai/image', true],
   ['https://gen.pollinations.ai/image/', true],
+  ['https://gen.pollinations.ai/image/prompt', true],
+  ['https://gen.pollinations.ai/image', true],
+  ['https://gen.pollinations.ai/image/', true],
+  ['https://image.pollinations.ai/prompt', false],
   ['http://localhost:7860', false],
   ['https://openrouter.ai/api/v1/chat/completions', false],
   ['https://generativelanguage.googleapis.com/v1beta/models/x:generateContent', false],
@@ -48,7 +49,7 @@ for (const [ep, want] of cases) {
 
 // endpoint fallback wiring
 const endpointFor = (saved, p, mode) =>
-  saved || (p === 'custom' ? (mode === 'image' ? KEYLESS_IMAGE_ENDPOINT : '') : '');
+  saved || (p === 'custom' ? (mode === 'image' ? POLLINATIONS_IMAGE_ENDPOINT : '') : '');
 console.log('\nendpoint resolution:');
 console.log(`  custom/image, nothing saved -> ${endpointFor('', 'custom', 'image')}`);
 console.log(`  custom/video, nothing saved -> "${endpointFor('', 'custom', 'video')}" (stays unconfigured)`);
@@ -63,10 +64,12 @@ async function tryGenerate(prompt, seed) {
   params.set('seed', String(seed));
   const endpoint = endpointFor('', 'custom', 'image');
   const imageUrl = `${endpoint.replace(/\/+$/, '')}/${encodeURIComponent(prompt)}?${params.toString()}`;
+  const apiKey = process.env.POLLINATIONS_API_KEY || '';
+  if (!apiKey) return { status: 0, bytes: 0, type: '', msg: 'Skipped live request: set POLLINATIONS_API_KEY to test authenticated generation.' };
   let status = 0;
   let body = null;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const r = await fetch(imageUrl, { method: 'GET' });
+    const r = await fetch(imageUrl, { method: 'GET', headers: { Authorization: `Bearer ${apiKey}` } });
     status = r.status;
     if (r.ok) {
       body = await r.arrayBuffer();
@@ -86,8 +89,8 @@ async function tryGenerate(prompt, seed) {
   return { status, bytes: body ? body.byteLength : 0, type: body ? Buffer.from(body.slice(0, 3)).toString('hex') : '', msg };
 }
 
-console.log('\nlive generation attempts (keyless):');
-for (const seed of [101, 202, 303]) {
+console.log(process.env.POLLINATIONS_API_KEY ? '\nlive generation attempts (authenticated):' : '\nlive generation skipped (no POLLINATIONS_API_KEY):');
+for (const seed of (process.env.POLLINATIONS_API_KEY ? [101, 202, 303] : [])) {
   const r = await tryGenerate('a simple red cube on a white background', seed);
   const jpeg = r.type.startsWith('ffd8');
   console.log(

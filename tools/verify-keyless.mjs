@@ -3,7 +3,7 @@
  * exercises it live: host detection, URL construction, retry, throttle message.
  * Run: node tools/verify-keyless.mjs
  */
-const KEYLESS_IMAGE_ENDPOINT = 'https://image.pollinations.ai';
+const POLLINATIONS_IMAGE_ENDPOINT = 'https://gen.pollinations.ai/image';
 
 function epNorm(endpoint) {
   return endpoint
@@ -24,9 +24,9 @@ function oldDetection(endpoint) {
 }
 
 const cases = [
-  ['https://image.pollinations.ai', true],
-  ['https://image.pollinations.ai/', true],
-  ['https://image.pollinations.ai/prompt', true],
+  ['https://gen.pollinations.ai/image', true],
+  ['https://gen.pollinations.ai/image/', true],
+  ['https://gen.pollinations.ai/image/prompt', true],
   ['https://gen.pollinations.ai/image', true],
   ['https://gen.pollinations.ai/image/', true],
   ['http://localhost:7860', false],
@@ -48,7 +48,7 @@ for (const [ep, want] of cases) {
 
 // endpoint fallback wiring
 const endpointFor = (saved, p, mode) =>
-  saved || (p === 'custom' ? (mode === 'image' ? KEYLESS_IMAGE_ENDPOINT : '') : '');
+  saved || (p === 'custom' ? (mode === 'image' ? POLLINATIONS_IMAGE_ENDPOINT : '') : '');
 console.log('\nendpoint resolution:');
 console.log(`  custom/image, nothing saved -> ${endpointFor('', 'custom', 'image')}`);
 console.log(`  custom/video, nothing saved -> "${endpointFor('', 'custom', 'video')}" (stays unconfigured)`);

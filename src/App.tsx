@@ -790,7 +790,7 @@ export default function App() {
       setHdProgress(0);
     }
   };
-  const renderAvatarTo2D = async () => {
+  const _renderAvatarTo2D = async () => {
     if (busyRef.current || !avatar3dRef.current) return;
     enterBusy();
     try {

@@ -181,3 +181,4 @@ and `tests/mocks/mock_slow_a1111.py` (:7861) running, and execute `python3 tests
 The same suites gate every CI push (job `Browser test suites`).
 # trigger
 # trigger2
+# trigger3

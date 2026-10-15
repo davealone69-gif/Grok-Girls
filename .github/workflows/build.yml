@@ -24,7 +24,7 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-- name: Dependency pin guard
+      - name: Dependency pin guard
         run: |
           node -e "
             const pkg = require('./package.json');
@@ -118,7 +118,12 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           for attempt in 1 2 3; do
             rm -rf "$ANDROID_SDK_ROOT/ndk/27.0.12077973" || true
-            if sdkmanager --verbose               "platform-tools"               "platforms;android-35"               "build-tools;35.0.0"               "cmake;3.22.1"               "ndk;27.0.12077973"; then
+            if sdkmanager --verbose
+              "platform-tools"
+              "platforms;android-35"
+              "build-tools;35.0.0"
+              "cmake;3.22.1"
+              "ndk;27.0.12077973"; then
               break
             fi
             echo "Android SDK/NDK install attempt $attempt failed; retrying"
@@ -236,7 +241,7 @@ jobs:
           set -euo pipefail
           git checkout -- android/gradlew android/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/gradle-wrapper.properties
           test -f android/gradlew
-          test -f android/gradle/wrapper/gradle-wrapper.jar
+          test -f android/gradle/wrapper/gradle-wrapper.properties
           chmod +x android/gradlew
       - name: Run Phase 8 tests on Android 34 emulator
         uses: reactivecircus/android-emulator-runner@v2

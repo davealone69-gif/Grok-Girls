@@ -5,6 +5,8 @@
 /* your content policy. The app just sends the prompt you compiled.    */
 /* ------------------------------------------------------------------ */
 
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
+
 export type SelfHostServerType = 'a1111' | 'comfy' | 'unknown';
 
 export interface LoraSlot {
@@ -99,8 +101,6 @@ export function saveLoraSlots(slots: LoraSlot[]) {
   shSetLoras(slots);
 }
 
-
-import { Capacitor, CapacitorHttp } from '@capacitor/core';
 
 /* Fetch with a hard timeout so an unreachable server can never leave the UI
    stuck "busy" (and GENERATE disabled) for minutes. On Android, local and

@@ -14,14 +14,11 @@ import {
 export type ProviderName = 'local' | 'sdlocal' | 'openrouter' | 'gemini' | 'custom' | 'selfhosted' | 'ollama';
 
 /**
- * Keyless image endpoint used when no custom endpoint is configured.
- *
- * No API key required, but it IS rate limited: throttled requests come back as
- * HTTP 402 (or 429) and are surfaced verbatim rather than quietly falling back
- * to the procedural placeholder engine. Point 'custom' at a keyed endpoint in
- * Settings when you want guaranteed throughput.
+ * Pollinations image endpoint used when no custom endpoint is configured.
+ * Generation requests are authenticated with the user's saved custom API key.
+ * Never bake secret keys into the APK or source repository.
  */
-export const KEYLESS_IMAGE_ENDPOINT = 'https://image.pollinations.ai';
+export const KEYLESS_IMAGE_ENDPOINT = 'https://gen.pollinations.ai/image';
 export type Mode = 'image' | 'video';
 export type ProviderMode = Mode | 'chat';
 
@@ -700,9 +697,11 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
     if (r.width) params.set('width', String(Math.round(r.width)));
     if (r.height) params.set('height', String(Math.round(r.height)));
     if (r.seed != null) params.set('seed', String(r.seed));
-    if (key) params.set('key', key);
     const imageUrl = `${endpoint.replace(/\/+$/, '')}/${encodeURIComponent(r.prompt)}?${params.toString()}`;
-    const response = await fetchWithTimeout(imageUrl, { method: 'GET' }, 120000);
+    const response = await fetchWithTimeout(imageUrl, {
+      method: 'GET',
+      headers: key ? { Authorization: `Bearer ${key}` } : {}
+    }, 120000);
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
       throw new Error(`custom Pollinations HTTP ${response.status}${errText ? ` — ${errText.slice(0, 160)}` : ''}`);

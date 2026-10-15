@@ -15,7 +15,7 @@ function isPollinationsImage(p, mode, endpoint) {
   return (
     p === 'custom' &&
     mode === 'image' &&
-    /^(image|gen)\.pollinations\.ai(\/(image|prompt))?$/i.test(epNorm(endpoint))
+    /^gen\.pollinations\.ai(\/(image|prompt))?$/i.test(epNorm(endpoint))
   );
 }
 // the pattern this replaced, for comparison
@@ -29,6 +29,7 @@ const cases = [
   ['https://gen.pollinations.ai/image/prompt', true],
   ['https://gen.pollinations.ai/image', true],
   ['https://gen.pollinations.ai/image/', true],
+  ['https://image.pollinations.ai/prompt', false],
   ['http://localhost:7860', false],
   ['https://openrouter.ai/api/v1/chat/completions', false],
   ['https://generativelanguage.googleapis.com/v1beta/models/x:generateContent', false],

@@ -100,9 +100,71 @@ export function saveLoraSlots(slots: LoraSlot[]) {
 }
 
 
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
+
 /* Fetch with a hard timeout so an unreachable server can never leave the UI
-   stuck "busy" (and GENERATE disabled) for minutes. */
-function fetchWithTimeout(url: string, init: RequestInit = {}, ms = 8000): Promise<Response> {
+   stuck "busy" (and GENERATE disabled) for minutes. On Android, local and
+   LAN HTTP server calls must use native networking: the bundled WebView is
+   HTTPS and mixed content is disabled. Keep this scoped to self-hosted calls
+   rather than patching global fetch, which the gallery also uses for data: URLs. */
+async function fetchWithTimeout(url: string, init: RequestInit = {}, ms = 8000): Promise<Response> {
+  if (Capacitor.isNativePlatform() && /^https?:\/\//i.test(url)) {
+    const headerMap: Record<string, string> = {};
+    new Headers(init.headers).forEach((value, key) => { headerMap[key] = value; });
+    let data: unknown = undefined;
+    if (typeof init.body === 'string') {
+      const contentType = headerMap['content-type'] || headerMap['Content-Type'] || '';
+      if (contentType.toLowerCase().includes('application/json')) {
+        try { data = JSON.parse(init.body); } catch { data = init.body; }
+      } else {
+        data = init.body;
+      }
+    } else if (init.body != null) {
+      data = init.body;
+    }
+
+    const wantsBlob = /\/view(?:\?|$)/i.test(url);
+    const nativeResponse = await CapacitorHttp.request({
+      url,
+      method: (init.method || 'GET').toUpperCase(),
+      headers: headerMap,
+      data,
+      connectTimeout: Math.min(ms, 15000),
+      readTimeout: ms,
+      responseType: wantsBlob ? 'blob' : 'json',
+      shouldEncodeUrlParams: false
+    } as any);
+
+    let payload: BodyInit | null = null;
+    const received = nativeResponse.data;
+    if (wantsBlob && received instanceof Blob) {
+      payload = received;
+    } else if (wantsBlob && received instanceof ArrayBuffer) {
+      payload = received;
+    } else if (wantsBlob && ArrayBuffer.isView(received)) {
+      payload = received as unknown as BodyInit;
+    } else if (wantsBlob && typeof received === 'string') {
+      const encoded = received.replace(/^data:[^,]*,/, '');
+      try {
+        const binary = atob(encoded);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        payload = bytes;
+      } catch {
+        payload = received;
+      }
+    } else if (typeof received === 'string') {
+      payload = received;
+    } else if (received != null) {
+      payload = JSON.stringify(received);
+    }
+
+    return new Response(payload, {
+      status: nativeResponse.status,
+      headers: nativeResponse.headers as HeadersInit
+    });
+  }
+
   const signal =
     typeof AbortSignal !== 'undefined' && typeof (AbortSignal as any).timeout === 'function'
       ? (AbortSignal as any).timeout(ms)

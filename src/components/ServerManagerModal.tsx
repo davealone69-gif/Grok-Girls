@@ -123,7 +123,7 @@ export default function ServerManagerModal({ isOpen, onClose, onNotice }: Server
           <div className="selfhosted-actions server-manager-actions">
             <button className="btn-test-server" disabled={busy !== ''} onClick={() => void checkComfyUi()}>{busy === 'check' ? 'CHECKING…' : 'CHECK COMFYUI'}</button>
             <button className="prompt-mini-btn" disabled={busy !== '' || comfy.running} onClick={() => void startComfyUi()}>{busy === 'start' ? 'STARTING…' : '▶ START COMFYUI'}</button>
-            <button className="prompt-mini-btn" disabled={busy !== '' || !comfy.running} onClick={() => void checkComfyUi()}>VERIFY API</button>
+            <button className="prompt-mini-btn" disabled={busy !== '' || !comfy.running} onClick={() => void checkComfyUi()}>RECHECK API</button>
           </div>
           <p className="settings-note">Starts the existing Termux checkout in ~/llama/llama.cpp/ComfyUI, applies the Python preload workaround, logs to ~/comfyui-crash.log, and waits for /system_stats. It avoids starting a duplicate process.</p>
         </section>

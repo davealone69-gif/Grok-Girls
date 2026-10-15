@@ -62,15 +62,28 @@ export function saveApiKey(p: string, key: string) {
 
 /** Saved endpoint for a provider+mode (mode-specific then generic). */
 export function getSavedEndpoint(p: string, m?: ProviderMode): string {
+  const normalize = (value: string): string => {
+    const trimmed = value.trim();
+    // Migrate saved legacy Pollinations URLs so existing installs stop calling
+    // the retired image host after the provider was moved to gen.pollinations.ai.
+    if (
+      p === 'custom' &&
+      m === 'image' &&
+      /^https?:\/\/image\.pollinations\.ai(?:\/prompt)?\/?$/i.test(trimmed)
+    ) {
+      return KEYLESS_IMAGE_ENDPOINT;
+    }
+    return trimmed;
+  };
   const modeKey = m ? getConnectionEndpoint(p, m) : '';
-  if (modeKey && modeKey.trim()) return modeKey.trim();
+  if (modeKey && modeKey.trim()) return normalize(modeKey);
   const genericKey = getConnectionEndpoint(p);
-  if (genericKey && genericKey.trim()) return genericKey.trim();
+  if (genericKey && genericKey.trim()) return normalize(genericKey);
   if (m) {
     const fromEnv = env()[`VITE_${p.toUpperCase()}_${m.toUpperCase()}_ENDPOINT`];
-    if (fromEnv) return fromEnv;
+    if (fromEnv) return normalize(fromEnv);
   }
-  return env()[`VITE_${p.toUpperCase()}_ENDPOINT`] ?? '';
+  return normalize(env()[`VITE_${p.toUpperCase()}_ENDPOINT`] ?? '');
 }
 
 export function saveEndpoint(p: string, url: string, m?: ProviderMode) {

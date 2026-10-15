@@ -27,25 +27,32 @@ class ComfyUiLocalPlugin : Plugin() {
         (call.getString("base") ?: DEFAULT_BASE).trim().trimEnd('/')
 
     private fun health(base: String, timeoutMs: Int): Pair<Boolean, String?> {
-        var connection: HttpURLConnection? = null
         return try {
-            connection = (URL("$base/system_stats").openConnection() as HttpURLConnection).apply {
+            val connection = (URL("$base/system_stats").openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = minOf(timeoutMs, 5000)
                 readTimeout = timeoutMs
                 setRequestProperty("Accept", "application/json")
             }
-            val code = connection.responseCode
-            if (code !in 200..299) return Pair(false, "ComfyUI returned HTTP $code at $base/system_stats")
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
-            val system = JSONObject(body).optJSONObject("system")
-                ?: return Pair(false, "ComfyUI answered but /system_stats had no system object.")
-            val version = system.optString("comfyui_version", "")
-            Pair(true, version.ifBlank { "unknown" })
+            try {
+                val code = connection.responseCode
+                if (code !in 200..299) {
+                    Pair(false, "ComfyUI returned HTTP $code at $base/system_stats")
+                } else {
+                    val body = connection.inputStream.bufferedReader().use { it.readText() }
+                    val system = JSONObject(body).optJSONObject("system")
+                    if (system == null) {
+                        Pair(false, "ComfyUI answered but /system_stats had no system object.")
+                    } else {
+                        val version = system.optString("comfyui_version", "")
+                        Pair(true, version.ifBlank { "unknown" })
+                    }
+                }
+            } finally {
+                connection.disconnect()
+            }
         } catch (e: Exception) {
             Pair(false, e.message ?: "ComfyUI API is not responding.")
-        } finally {
-            connection?.disconnect()
         }
     }
 

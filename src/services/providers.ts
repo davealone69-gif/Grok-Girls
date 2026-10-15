@@ -702,7 +702,7 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
     const isPollinationsImage =
       p === 'custom' &&
       r.mode === 'image' &&
-      /^(image|gen)\.pollinations\.ai(\/(image|prompt))?$/i.test(epNorm);
+      /^gen\.pollinations\.ai(\/(image|prompt))?$/i.test(epNorm);
 
   if (isPollinationsImage) {
     const params = new URLSearchParams();

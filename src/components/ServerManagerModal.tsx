@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import OllamaPanel from './OllamaPanel';
 import SdLocalPanel from './SdLocalPanel';
+import { ensureTripoSRRunning } from '../services/triposrLocal';
+import { hunyuan3dStatus } from '../services/hunyuan3dLocal';
 
 type ComfyUiStatus = { running: boolean; started?: boolean; version?: string; message: string; method?: string };
+type ThreeDStatus = { running: boolean; engine?: string; message: string };
 type NativeComfyUi = {
   status(opts?: { base?: string; timeoutMs?: number }): Promise<ComfyUiStatus>;
   startServer(opts?: { base?: string; timeoutMs?: number }): Promise<ComfyUiStatus>;
@@ -16,7 +19,8 @@ export interface ServerManagerModalProps { isOpen: boolean; onClose: () => void;
 
 export default function ServerManagerModal({ isOpen, onClose, onNotice }: ServerManagerModalProps) {
   const [comfy, setComfy] = useState<ComfyUiStatus>({ running: false, message: 'Not checked yet.' });
-  const [busy, setBusy] = useState<'check' | 'start' | ''>('');
+  const [busy, setBusy] = useState<'check' | 'start' | 'check-3d' | 'start-3d' | ''>('');
+  const [threeD, setThreeD] = useState<ThreeDStatus>({ running: false, message: 'Not checked yet.' });
   const [message, setMessage] = useState('');
 
   const checkComfyUi = useCallback(async () => {
@@ -60,7 +64,44 @@ export default function ServerManagerModal({ isOpen, onClose, onNotice }: Server
     } finally { setBusy(''); }
   }, [onNotice]);
 
-  useEffect(() => { if (isOpen) void checkComfyUi(); }, [isOpen, checkComfyUi]);
+  const checkThreeD = useCallback(async () => {
+    setBusy('check-3d');
+    try {
+      const status = await hunyuan3dStatus();
+      const message = status.ok
+        ? `${status.engine || 'Local 3D'} API responding. A real GLB job is still required to verify inference.`
+        : status.message;
+      setThreeD({ running: status.ok, engine: status.engine, message });
+    } catch (e) {
+      setThreeD({ running: false, message: e instanceof Error ? e.message : String(e) });
+    } finally { setBusy(''); }
+  }, []);
+
+  const startThreeD = useCallback(async () => {
+    setBusy('start-3d');
+    setThreeD({ running: false, message: 'Starting the local TripoSR-compatible worker through Termux…' });
+    try {
+      const started = await ensureTripoSRRunning();
+      const status = await hunyuan3dStatus();
+      const running = status.ok;
+      const message = running
+        ? `${status.engine || 'Local 3D'} API responding. Run MAKE 3D to verify a real GLB job.`
+        : `Worker start failed: ${started.message} · ${status.message}`;
+      setThreeD({ running, engine: status.engine, message });
+      onNotice?.(message);
+    } catch (e) {
+      const text = e instanceof Error ? e.message : String(e);
+      setThreeD({ running: false, message: text });
+      onNotice?.(text);
+    } finally { setBusy(''); }
+  }, [onNotice]);
+
+  useEffect(() => {
+    if (isOpen) {
+      void checkComfyUi();
+      void checkThreeD();
+    }
+  }, [isOpen, checkComfyUi, checkThreeD]);
   if (!isOpen) return null;
 
   return (
@@ -89,8 +130,18 @@ export default function ServerManagerModal({ isOpen, onClose, onNotice }: Server
         <OllamaPanel onNotice={onNotice} />
         <SdLocalPanel onNotice={onNotice} />
         <section className="settings-section selfhosted-section">
-          <div className="settings-section-title">🧊 HUNYUAN3D · WORKER</div>
-          <p className="settings-note">The current Hunyuan3D custom nodes report missing hy3dpaint, and a separate 3D worker on port 8081 is not verified. This screen will not claim 3D generation is ready until a real model job succeeds.</p>
+          <div className="settings-section-title">🧊 LOCAL 3D WORKER · 127.0.0.1:8081</div>
+          <div className="server-manager-status-row">
+            <span className={'server-manager-dot ' + (threeD.running ? 'is-running' : 'is-stopped')} />
+            <strong>{threeD.running ? 'API RESPONDING' : 'NOT READY'}</strong>
+            {threeD.engine && <span>{threeD.engine}</span>}
+          </div>
+          <p className="settings-note">{threeD.message}</p>
+          <div className="selfhosted-actions server-manager-actions">
+            <button className="btn-test-server" disabled={busy !== ''} onClick={() => void checkThreeD()}>{busy === 'check-3d' ? 'CHECKING…' : 'CHECK 3D WORKER'}</button>
+            <button className="prompt-mini-btn" disabled={busy !== '' || threeD.running} onClick={() => void startThreeD()}>{busy === 'start-3d' ? 'STARTING…' : '▶ START 3D WORKER'}</button>
+          </div>
+          <p className="settings-note">The bundled Termux wrapper expects the official TripoSR checkout at ~/TripoSR and this repo at ~/Grok-Girls. API health is not proof of generation; the MAKE 3D action must return a valid GLB. The ComfyUI Hunyuan3D custom-node path remains unavailable until its missing dependencies are installed.</p>
         </section>
       </div>
     </div>

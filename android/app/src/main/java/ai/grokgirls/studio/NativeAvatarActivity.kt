@@ -70,7 +70,7 @@ class NativeAvatarActivity : Activity() {
         root.addView(glView, FrameLayout.LayoutParams(-1, -1))
 
         val label = TextView(this).apply {
-            text = if (filePath != null) "HUNYUAN3D GLB · GENERATED" else "HUNYUAN3D GLB · TEST ASSET"
+            text = if (filePath != null) "GENERATED GLB · LOCAL 3D WORKER" else "HUNYUAN3D GLB · TEST ASSET"
             textSize = 11f
             setTextColor(0xffd9c7ff.toInt())
             setBackgroundColor(0xaa08080f.toInt())

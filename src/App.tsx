@@ -5,9 +5,10 @@ import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDele
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
-import { ensureSdRunning, setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
+import { ensureSdRunning, isNativeShell, setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
 import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
+import { ensureTripoSRRunning } from './services/triposrLocal';
 import { buildPhoto3D } from './services/photo3dLocal';
 import { downloadVknn3DModel, probeVknn3DModel, vknn3dStatus } from './services/vknn3dLocal';
 import { openNativeHdAvatar } from './nativeAvatarBridge';
@@ -868,13 +869,27 @@ export default function App() {
     setHy3dBusy(true);
     setHy3dStatus('Checking available real 3D workers...');
     try {
+      if (!isNativeShell()) {
+        throw new Error('Real 3D generation requires the Android app and its local 3D worker.');
+      }
+
       let workerReady = false;
+      let workerEngine = 'local 3D worker';
+      let workerMessage = '';
       try {
+        // Start the repository's TripoSR-compatible worker on demand. It
+        // shares the /health + /generate contract used by the native GLB bridge.
+        const start = await ensureTripoSRRunning();
+        workerMessage = start.message;
         const worker = await hunyuan3dStatus();
         workerReady = worker.ok;
-        if (!workerReady) setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
-      } catch {
-        setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
+        workerEngine = worker.engine === 'triposr' ? 'TripoSR' : (worker.engine || 'local 3D worker');
+        if (!workerReady) {
+          setHy3dStatus('Local 3D worker unavailable: ' + (worker.message || workerMessage) + '. Using the real on-device 3DDD mesh pipeline...');
+        }
+      } catch (e) {
+        workerMessage = e instanceof Error ? e.message : String(e);
+        setHy3dStatus('Local 3D worker unavailable: ' + workerMessage + '. Using the real on-device 3DDD mesh pipeline...');
       }
 
       setHy3dStatus('Generating the real source image with local Stable Diffusion...');
@@ -895,16 +910,16 @@ export default function App() {
       );
 
       if (workerReady) {
-        setHy3dStatus('Hunyuan3D is generating the GLB...');
+        setHy3dStatus(`${workerEngine} is generating the GLB...`);
         const glb = await generateHunyuan3D(image.dataUrl, {
           texture: true,
           seed: Number(seedInput) || 1234,
           octreeResolution: 256,
           steps: 5
         });
-        setHy3dStatus('Real Hunyuan3D GLB generated. Opening the native renderer...');
+        setHy3dStatus(`Real ${workerEngine} GLB generated. Opening the native renderer...`);
         await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), glb.file);
-        setHy3dStatus('REAL 3D READY · Hunyuan3D GLB loaded by the native GLES3 renderer.');
+        setHy3dStatus(`REAL 3D READY · ${workerEngine} GLB loaded by the native GLES3 renderer.`);
       } else {
         setHy3dStatus('Building a real closed 3D mesh from the generated image...');
         const mesh = await buildPhoto3D(image.dataUrl, girl.name || 'grok-girls-avatar');

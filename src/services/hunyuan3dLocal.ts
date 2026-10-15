@@ -3,7 +3,7 @@ import { registerPlugin, Capacitor } from '@capacitor/core';
 export const HUNYUAN3D_DEFAULT_BASE = 'http://127.0.0.1:8081';
 
 interface HunyuanPlugin {
-  status(opts: { base: string; timeoutMs?: number }): Promise<{ ok?: boolean; message?: string }>;
+  status(opts: { base: string; timeoutMs?: number }): Promise<{ ok?: boolean; message?: string; health?: string }>;
   generate(opts: {
     base: string;
     image: string;
@@ -21,6 +21,7 @@ export interface HunyuanStatus {
   ok: boolean;
   base: string;
   message: string;
+  engine?: string;
 }
 
 function native(): boolean {
@@ -37,7 +38,19 @@ export async function hunyuan3dStatus(base = HUNYUAN3D_DEFAULT_BASE): Promise<Hu
   }
   try {
     const r = await Hunyuan3DLocal.status({ base });
-    return { ok: !!r.ok, base, message: r.message || (r.ok ? 'Hunyuan3D worker ready.' : 'Hunyuan3D worker unavailable.') };
+    let engine: string | undefined;
+    try {
+      const health = r.health ? JSON.parse(r.health) as { engine?: string } : undefined;
+      engine = typeof health?.engine === 'string' ? health.engine : undefined;
+    } catch {
+      // Older compatible workers may return a non-JSON health payload.
+    }
+    return {
+      ok: !!r.ok,
+      base,
+      engine,
+      message: r.message || (r.ok ? 'Local 3D worker API responding.' : 'Local 3D worker unavailable.')
+    };
   } catch (e) {
     return {
       ok: false,

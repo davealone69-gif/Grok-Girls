@@ -179,3 +179,4 @@ domain root. Root-only hosting is the documented, supported deployment.
 `npm ci && npm run build` then serve `dist/` on :8080 with `tests/mocks/mock_big_a1111.py` (:7860)
 and `tests/mocks/mock_slow_a1111.py` (:7861) running, and execute `python3 tests/ci_runner.py`.
 The same suites gate every CI push (job `Browser test suites`).
+# trigger

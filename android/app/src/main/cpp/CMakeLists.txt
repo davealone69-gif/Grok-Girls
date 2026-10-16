@@ -25,7 +25,11 @@ if(NOT vknn_POPULATED)
     # which was introduced in CMake 3.24. Patch that one expression in the fetched
     # source so the Android SDK's stable CMake 3.22 can still configure it.
     file(READ "${vknn_SOURCE_DIR}/CMakeLists.txt" VKNN_CMAKE)
-    string(REPLACE "$<LINK_LIBRARY:WHOLE_ARCHIVE,vknn>" "vknn" VKNN_CMAKE "${VKNN_CMAKE}")
+    string(REPLACE [[$<LINK_LIBRARY:WHOLE_ARCHIVE,vknn>]] [[vknn]] VKNN_CMAKE "${VKNN_CMAKE}")
+    string(FIND "${VKNN_CMAKE}" [[$<LINK_LIBRARY:WHOLE_ARCHIVE,vknn>]] VKNN_WHOLE_ARCHIVE_INDEX)
+    if(NOT VKNN_WHOLE_ARCHIVE_INDEX EQUAL -1)
+        message(FATAL_ERROR "CMake 3.22 compatibility patch did not remove LINK_LIBRARY/WHOLE_ARCHIVE from VKNN.")
+    endif()
     file(WRITE "${vknn_SOURCE_DIR}/CMakeLists.txt" "${VKNN_CMAKE}")
 
     # Android Vulkan exposes newer entry points through vkGetInstanceProcAddr; keep the loader path portable across API levels.

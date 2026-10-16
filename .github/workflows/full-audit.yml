@@ -55,11 +55,13 @@ jobs:
           chmod +x android/gradlew
           test -d android/app/src/main/assets/public
 
+      - name: Python and 3D worker contract
+        if: ${{ hashFiles('**/*.py') != '' }}
+        run: |
+          python -m compileall -q .
+          python tests/triposr_worker_contract.py
+
       - name: Android build
         run: |
           cd android
           ./gradlew assembleDebug --no-build-cache --rerun-tasks
-
-      - name: Python
-        if: ${{ hashFiles('**/*.py') != '' }}
-        run: python -m compileall -q .

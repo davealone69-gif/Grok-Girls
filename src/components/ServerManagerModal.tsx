@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import OllamaPanel from './OllamaPanel';
 import SdLocalPanel from './SdLocalPanel';
-import { ensureTripoSRRunning } from '../services/triposrLocal';
-import { hunyuan3dStatus } from '../services/hunyuan3dLocal';
+import { ensureTripoSRRunning, triposrStatus } from '../services/triposrLocal';
+
 
 type ComfyUiStatus = { running: boolean; started?: boolean; version?: string; message: string; method?: string };
 type ThreeDStatus = { running: boolean; engine?: string; message: string };
@@ -67,9 +67,9 @@ export default function ServerManagerModal({ isOpen, onClose, onNotice }: Server
   const checkThreeD = useCallback(async () => {
     setBusy('check-3d');
     try {
-      const status = await hunyuan3dStatus();
+      const status = await triposrStatus();
       const message = status.ok
-        ? `${status.engine || 'Local 3D'} API responding. A real GLB job is still required to verify inference.`
+        ? `${status.engine || 'TripoSR'} worker responding. A real GLB job is still required to verify inference.`
         : status.message;
       setThreeD({ running: status.ok, engine: status.engine, message });
     } catch (e) {
@@ -82,10 +82,10 @@ export default function ServerManagerModal({ isOpen, onClose, onNotice }: Server
     setThreeD({ running: false, message: 'Starting the local TripoSR-compatible worker through Termux…' });
     try {
       const started = await ensureTripoSRRunning();
-      const status = await hunyuan3dStatus();
-      const running = status.ok;
+      const status = await triposrStatus();
+      const running = started.ok && status.ok;
       const message = running
-        ? `${status.engine || 'Local 3D'} API responding. Run MAKE 3D to verify a real GLB job.`
+        ? `${status.engine || 'TripoSR'} worker responding. Run MAKE 3D to verify a real GLB job.`
         : `Worker start failed: ${started.message} · ${status.message}`;
       setThreeD({ running, engine: status.engine, message });
       onNotice?.(message);
@@ -135,7 +135,7 @@ export default function ServerManagerModal({ isOpen, onClose, onNotice }: Server
         <OllamaPanel onNotice={onNotice} />
         <SdLocalPanel onNotice={onNotice} />
         <section className="settings-section selfhosted-section">
-          <div className="settings-section-title">🧊 LOCAL 3D WORKER · 127.0.0.1:8081</div>
+          <div className="settings-section-title">🧊 LOCAL TRIPOSR WORKER · 127.0.0.1:8082</div>
           <div className="server-manager-status-row">
             <span className={'server-manager-dot ' + (threeD.running ? 'is-running' : 'is-stopped')} />
             <strong>{threeD.running ? 'API RESPONDING' : 'NOT READY'}</strong>

@@ -1,6 +1,7 @@
 import { registerPlugin, Capacitor } from '@capacitor/core';
 
 interface TripoSRPlugin {
+  status(): Promise<{ running?: boolean; engine?: string; base?: string; generationVerified?: boolean; message?: string }>;
   startServer(opts?: { timeoutMs?: number }): Promise<{ started?: boolean; method?: string; message?: string }>;
   generate(opts: {
     image: string;
@@ -19,6 +20,22 @@ interface TripoSRPlugin {
 }
 
 const TripoSRLocal = registerPlugin<TripoSRPlugin>('TripoSRLocal');
+
+export async function triposrStatus(): Promise<{ ok: boolean; message: string; engine: string }> {
+  if (!Capacitor.isNativePlatform()) {
+    return { ok: false, engine: 'triposr', message: 'TripoSR worker status requires the Android app.' };
+  }
+  try {
+    const r = await TripoSRLocal.status();
+    return {
+      ok: !!r.running,
+      engine: r.engine || 'triposr',
+      message: r.message || (r.running ? 'TripoSR worker configured; generation is not yet verified.' : 'TripoSR worker unavailable.')
+    };
+  } catch (e) {
+    return { ok: false, engine: 'triposr', message: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 export async function ensureTripoSRRunning(): Promise<{ ok: boolean; message: string }> {
   if (!Capacitor.isNativePlatform()) return { ok: false, message: 'TripoSR worker requires the Android app.' };

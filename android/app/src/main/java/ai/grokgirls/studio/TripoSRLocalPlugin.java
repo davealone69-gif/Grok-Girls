@@ -8,6 +8,7 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import org.json.JSONObject;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.concurrent.Executors;
@@ -18,15 +19,44 @@ public class TripoSRLocalPlugin extends Plugin {
   private static final String TERMUX = "com.termux";
   private static final String SERVICE = "com.termux.app.RunCommandService";
   private static final String ACTION = "com.termux.RUN_COMMAND";
-  private static final String BASE = "http://127.0.0.1:8081";
+  private static final String BASE = "http://127.0.0.1:8082";
 
+  /**
+   * Hunyuan3D owns port 8081. TripoSR must identify itself on its own port.
+   */
   private boolean ready() {
+    HttpURLConnection c = null;
     try {
-      HttpURLConnection c = (HttpURLConnection) new URL(BASE + "/health").openConnection();
-      c.setConnectTimeout(1500); c.setReadTimeout(2000);
-      int code = c.getResponseCode(); c.disconnect();
-      return code == 200;
-    } catch (Exception e) { return false; }
+      c = (HttpURLConnection) new URL(BASE + "/health").openConnection();
+      c.setConnectTimeout(1500);
+      c.setReadTimeout(2000);
+      if (c.getResponseCode() != 200) return false;
+      try (InputStream input = c.getInputStream()) {
+        JSONObject health = new JSONObject(new String(readAll(input), java.nio.charset.StandardCharsets.UTF_8));
+        return health.optBoolean("ok", false)
+            && "triposr".equalsIgnoreCase(health.optString("engine", ""));
+      }
+    } catch (Exception e) {
+      return false;
+    } finally {
+      if (c != null) c.disconnect();
+    }
+  }
+
+  @PluginMethod
+  public void status(PluginCall call) {
+    pool.execute(() -> {
+      boolean running = ready();
+      JSObject result = new JSObject();
+      result.put("running", running);
+      result.put("engine", "triposr");
+      result.put("base", BASE);
+      result.put("generationVerified", false);
+      result.put("message", running
+          ? "TripoSR worker is configured at " + BASE + "; inference remains unverified until /generate returns a valid GLB."
+          : "TripoSR worker is not ready at " + BASE + ". Check Termux setup and ~/.cache/grokgirls/triposr-worker.log.");
+      call.resolve(result);
+    });
   }
 
   @PluginMethod

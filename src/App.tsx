@@ -866,13 +866,25 @@ export default function App() {
     setHy3dBusy(true);
     setHy3dStatus('Checking available real 3D workers...');
     try {
+      if (!isNativeShell()) {
+        throw new Error('Real 3D generation requires the Android app and its local 3D worker.');
+      }
+
       let workerReady = false;
+      let workerEngine = 'local 3D worker';
+      let workerMessage = '';
       try {
+        const start = await ensureTripoSRRunning();
+        workerMessage = start.message;
         const worker = await triposrStatus();
         workerReady = start.ok && worker.ok;
-        if (!workerReady) setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
-      } catch {
-        setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
+        workerEngine = worker.engine || 'TripoSR';
+        if (!workerReady) {
+          setHy3dStatus('Local 3D worker unavailable: ' + (worker.message || workerMessage) + '. Using the real on-device 3DDD mesh pipeline...');
+        }
+      } catch (e) {
+        workerMessage = e instanceof Error ? e.message : String(e);
+        setHy3dStatus('Local 3D worker unavailable: ' + workerMessage + '. Using the real on-device 3DDD mesh pipeline...');
       }
 
       setHy3dStatus('Generating the real source image with local Stable Diffusion...');

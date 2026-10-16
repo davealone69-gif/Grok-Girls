@@ -60,8 +60,10 @@ object GltfTextures {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
             if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-            val maxDimension = 4096
-            val maxPixels = 16 * 1024 * 1024
+            // Keep decoded avatar textures bounded for phone RAM and GPU memory.
+            // 1024² RGBA is ~4 MiB before mipmaps; 4K images can exceed 64 MiB.
+            val maxDimension = 1024
+            val maxPixels = 1024 * 1024
             var sample = 1
             while (bounds.outWidth / sample > maxDimension ||
                 bounds.outHeight / sample > maxDimension ||
@@ -80,13 +82,19 @@ object GltfTextures {
             uploaded[imageIndex]?.let { return it }
             val image = document.images.getOrNull(imageIndex) ?: return 0
 
-            var bitmap = imagePixels(image) ?: return 0
+            val decoded = imagePixels(image) ?: return 0
+
+            // Normalize pixel format without losing the original reference:
+            // recycled bitmaps still count toward native memory until released.
+            val bitmap = if (decoded.config != Bitmap.Config.ARGB_8888) {
+                decoded.copy(Bitmap.Config.ARGB_8888, false) ?: decoded
+            } else {
+                decoded
+            }
 
             // glTF UV origin is top-left; GL expects bottom-left -> flip V.
-            if (bitmap.config != Bitmap.Config.ARGB_8888) {
-                bitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false)
-            }
             val flipped = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+            if (bitmap !== decoded) decoded.recycle()
             val canvas = Canvas(flipped)
             val matrix = Matrix()
             matrix.postScale(1f, -1f)

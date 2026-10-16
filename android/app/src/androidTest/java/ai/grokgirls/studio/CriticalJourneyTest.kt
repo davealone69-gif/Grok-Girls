@@ -63,7 +63,7 @@ class CriticalJourneyTest {
 
         val ctx: Context = ApplicationProvider.getApplicationContext()
         val intent = ctx.packageManager.getLaunchIntentForPackage(PKG)?.apply {
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         assertNotNull("No launch intent for $PKG — is the APK installed?", intent)
         ctx.startActivity(intent)

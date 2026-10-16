@@ -40,6 +40,7 @@ public class MainActivity extends BridgeActivity {
     registerPlugin(AvatarStudioPlugin.class);
     registerPlugin(OllamaLocalPlugin.class);
     registerPlugin(SdLocalPlugin.class);
+    registerPlugin(ComfyUiLocalPlugin.class);
     registerPlugin(Hunyuan3DLocalPlugin.class);
     registerPlugin(TripoSRLocalPlugin.class);
     registerPlugin(Photo3DLocalPlugin.class);

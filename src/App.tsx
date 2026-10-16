@@ -8,7 +8,6 @@ import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from '.
 import { ensureSdRunning, isNativeShell, isSdAutoStart, setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
 import { generateTripoSR, ensureTripoSRRunning, triposrStatus } from './services/triposrLocal';
-import { ensureTripoSRRunning } from './services/triposrLocal';
 import { buildPhoto3D } from './services/photo3dLocal';
 import { downloadVknn3DModel, probeVknn3DModel, vknn3dStatus } from './services/vknn3dLocal';
 import { openNativeHdAvatar } from './nativeAvatarBridge';
@@ -856,7 +855,7 @@ export default function App() {
 
   const openReal3D = async () => {
     if (hy3dBusy || busyRef.current) return;
-    setHy3dStatus('Opening native GLES3 Hunyuan3D test asset...');
+    setHy3dStatus('Opening the bundled native GLES3 3D test asset...');
     try {
       await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft));
       setHy3dStatus('Native 3D renderer opened. Drag to orbit, pinch to zoom.');
@@ -2364,7 +2363,7 @@ export default function App() {
 
           <div className="native-3d-controls">
             <button className="native-action native-3d-test" disabled={hy3dBusy} onClick={() => void openReal3D()} title="Open the bundled GLB test asset in the native GLES3 viewer">🧊 3D VIEWER TEST</button>
-            <button className="native-action native-3d-generate" disabled={hy3dBusy} onClick={() => void generateReal3D()} title="Generate a real Hunyuan3D GLB and load it into the native renderer">🧬 {hy3dBusy ? '3D…' : 'MAKE 3D'}</button>
+            <button className="native-action native-3d-generate" disabled={hy3dBusy} onClick={() => void generateReal3D()} title="Generate a real TripoSR GLB and load it into the native renderer">🧬 {hy3dBusy ? '3D…' : 'MAKE 3D'}</button>
           </div>
           <div className="mode-pills">
             <button

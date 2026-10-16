@@ -909,24 +909,36 @@ export default function App() {
         { autoStart: true, timeoutMs: 600000 }
       );
 
-      if (workerReady) {
-        setHy3dStatus(`${workerEngine} is generating the GLB...`);
-        const glb = await generateTripoSR(image.dataUrl, {
-          texture: true,
-          mcResolution: 192,
-          timeoutMs: 1800000
-        });
-        setHy3dStatus(`Real ${workerEngine} GLB generated (${glb.bytes.toLocaleString()} bytes). Opening the native renderer...`);
-        await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), glb.file);
-        setHy3dStatus(`REAL 3D READY · ${workerEngine} GLB loaded by the native GLES3 renderer.`);
-      } else {
-        setHy3dStatus('Building a real closed 3D mesh from the generated image...');
+      const buildLocalFallback = async (workerFailure?: string) => {
+        setHy3dStatus(workerFailure
+          ? `TripoSR generation failed: ${workerFailure}. Falling back to the on-device 3DDD mesh pipeline...`
+          : 'Building a real closed 3D mesh from the generated image...');
         const mesh = await buildPhoto3D(image.dataUrl, girl.name || 'grok-girls-avatar');
         setHy3dStatus(
           `Real 3DDD GLB generated · ${mesh.vertices.toLocaleString()} vertices · ${mesh.triangles.toLocaleString()} triangles. Opening renderer...`
         );
         await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), mesh.file);
-        setHy3dStatus('REAL 3D READY · 3DDD GLB loaded by the native GLES3 renderer.');
+        setHy3dStatus(workerFailure
+          ? `3DDD FALLBACK READY · TripoSR failed: ${workerFailure}`
+          : 'REAL 3D READY · 3DDD GLB loaded by the native GLES3 renderer.');
+      };
+
+      if (workerReady) {
+        try {
+          setHy3dStatus(`${workerEngine} is generating the GLB...`);
+          const glb = await generateTripoSR(image.dataUrl, {
+            texture: true,
+            mcResolution: 192,
+            timeoutMs: 1800000
+          });
+          setHy3dStatus(`Real ${workerEngine} GLB generated (${glb.bytes.toLocaleString()} bytes). Opening the native renderer...`);
+          await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), glb.file);
+          setHy3dStatus(`REAL 3D READY · ${workerEngine} GLB loaded by the native GLES3 renderer.`);
+        } catch (e) {
+          await buildLocalFallback(e instanceof Error ? e.message : String(e));
+        }
+      } else {
+        await buildLocalFallback();
       }
     } catch (e) {
       setHy3dStatus(e instanceof Error ? e.message : String(e));

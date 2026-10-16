@@ -258,9 +258,8 @@ jobs:
             # The emulator action can execute its script from a different cwd.
             # Use the checkout's absolute path instead of assuming "android"
             # is relative to the script's current directory.
-            cd "$GITHUB_WORKSPACE/android"
-            test -x ./gradlew || { echo "::error::Android Gradle wrapper missing at $PWD/gradlew"; ls -la; exit 1; }
-            ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
+            cd "$GITHUB_WORKSPACE/android" && test -x ./gradlew || { echo "::error::Android Gradle wrapper missing at $GITHUB_WORKSPACE/android/gradlew"; ls -la "$GITHUB_WORKSPACE/android"; exit 1; }
+            cd "$GITHUB_WORKSPACE/android" && ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
       - name: Upload Phase 8 reports
         if: always()
         uses: actions/upload-artifact@v4

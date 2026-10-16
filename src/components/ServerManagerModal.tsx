@@ -112,6 +112,11 @@ export default function ServerManagerModal({ isOpen, onClose, onNotice }: Server
           <button className="modal-close" onClick={onClose} aria-label="Close server manager">✕</button>
         </div>
         <p className="settings-note">Start local services from this app through the Android-to-Termux bridge. A responding port is not proof a model can finish a job, so use each engine's real test.</p>
+        <section className="settings-section selfhosted-section" aria-label="Phone-only Termux setup">
+          <div className="settings-section-title">📱 PHONE-ONLY SETUP / START BUTTON TROUBLESHOOTING</div>
+          <p className="settings-note">No laptop is required to run the app or its local engines. Install Termux on this phone, open it once, and allow Android's RUN_COMMAND permission for Grok Girls. In Termux, set <code>allow-external-apps=true</code> in <code>~/.termux/termux.properties</code>, then run <code>termux-reload-settings</code>. Reopen Grok Girls and use the START buttons below.</p>
+          <p className="settings-note">If a button reports that Android refused the request, check Termux's external-app setting and the app permission first. If it says a path or script is missing, that engine's Termux checkout is not installed at the expected path. A successful start only means the API answered; use TEST RENDER or a real generation job to verify inference.</p>
+        </section>
         <section className="settings-section selfhosted-section server-manager-comfy">
           <div className="settings-section-title">🧩 COMFYUI · 127.0.0.1:8188</div>
           <div className="server-manager-status-row">

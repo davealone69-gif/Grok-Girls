@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.opengl.GLES30
+import android.opengl.GLUtils
 import android.util.Log
 
 /**
@@ -105,28 +106,20 @@ object GltfTextures {
             GLES30.glGenTextures(1, tex, 0)
             GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, tex[0])
 
-            val pixels = java.nio.ByteBuffer
-                .allocateDirect(flipped.width * flipped.height * 4)
-                .order(java.nio.ByteOrder.nativeOrder())
-            flipped.copyPixelsToBuffer(pixels)
-            pixels.position(0)
-
+            // GLUtils uploads the Bitmap directly. Avoid a second full-size
+            // direct ByteBuffer copy, which briefly doubled texture memory.
             // sRGB storage for base-color/emissive maps: the GPU decodes
             // to linear light at sample time (correct PBR input).
             val internalFormat =
                 if (srgb) GLES30.GL_SRGB8_ALPHA8
                 else GLES30.GL_RGBA8
 
-            GLES30.glTexImage2D(
+            GLUtils.texImage2D(
                 GLES30.GL_TEXTURE_2D,
                 0,
                 internalFormat,
-                flipped.width,
-                flipped.height,
-                0,
-                GLES30.GL_RGBA,
-                GLES30.GL_UNSIGNED_BYTE,
-                pixels
+                flipped,
+                0
             )
 
             // Sampler state (defaults per glTF spec); a texture may be

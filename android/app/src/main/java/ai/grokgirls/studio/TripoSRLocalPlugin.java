@@ -18,6 +18,7 @@ import java.util.concurrent.Executors;
 @CapacitorPlugin(name = "TripoSRLocal")
 public class TripoSRLocalPlugin extends Plugin {
   private final java.util.concurrent.ExecutorService pool = Executors.newCachedThreadPool();
+  private volatile boolean generationVerified = false;
   private static final String TERMUX = "com.termux";
   private static final String SERVICE = "com.termux.app.RunCommandService";
   private static final String ACTION = "com.termux.RUN_COMMAND";
@@ -53,10 +54,12 @@ public class TripoSRLocalPlugin extends Plugin {
       result.put("running", running);
       result.put("engine", "triposr");
       result.put("base", BASE);
-      result.put("generationVerified", false);
-      result.put("message", running
-          ? "TripoSR worker is configured at " + BASE + "; inference remains unverified until /generate returns a valid GLB."
-          : "TripoSR worker is not ready at " + BASE + ". Check Termux setup and ~/.cache/grokgirls/triposr-worker.log.");
+      result.put("generationVerified", generationVerified);
+      result.put("message", !running
+          ? "TripoSR worker is not ready at " + BASE + ". Check Termux setup and ~/.cache/grokgirls/triposr-worker.log."
+          : generationVerified
+              ? "TripoSR returned a valid GLB during this app session."
+              : "TripoSR worker is configured at " + BASE + "; inference remains unverified until /generate returns a valid GLB.");
       call.resolve(result);
     });
   }
@@ -113,6 +116,7 @@ public class TripoSRLocalPlugin extends Plugin {
           output.write(response);
           output.getFD().sync();
         }
+        generationVerified = true;
         JSObject r = new JSObject(); r.put("ok", true);
         r.put("file", outputFile.getAbsolutePath());
         r.put("bytes", response.length);

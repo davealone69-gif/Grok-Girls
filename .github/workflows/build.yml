@@ -252,9 +252,14 @@ jobs:
           pre-emulator-launch-script: adb kill-server || true; adb start-server
           disable-animations: true
           script: |
+            set -eu
             adb uninstall ai.grokgirls.studio || true
             adb shell pm clear ai.grokgirls.studio || true
-            cd android
+            # The emulator action can execute its script from a different cwd.
+            # Use the checkout's absolute path instead of assuming "android"
+            # is relative to the script's current directory.
+            cd "$GITHUB_WORKSPACE/android"
+            test -x ./gradlew || { echo "::error::Android Gradle wrapper missing at $PWD/gradlew"; ls -la; exit 1; }
             ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
       - name: Upload Phase 8 reports
         if: always()

@@ -60,9 +60,7 @@ class HdTextureManager(
     ): HdTexture? {
         cache[cacheKey(assetPath, srgb)]?.let { return it }
 
-        val bitmap = context.assets.open(assetPath).use {
-            BitmapFactory.decodeStream(it)
-        } ?: return null
+        val bitmap = decodeSampledAsset(assetPath) ?: return null
 
         val source = if (flipY) flipBitmap(bitmap) else bitmap
 
@@ -92,10 +90,7 @@ class HdTextureManager(
 
         cache[key]?.let { return it }
 
-        val bitmap = BitmapFactory.decodeResource(
-            context.resources,
-            resourceId
-        ) ?: return null
+        val bitmap = decodeSampledResource(resourceId) ?: return null
 
         val texture = createTexture(bitmap, srgb)
 
@@ -106,6 +101,44 @@ class HdTextureManager(
         }
 
         return texture
+    }
+
+    private fun decodeSampledAsset(assetPath: String): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.assets.open(assetPath).use {
+            BitmapFactory.decodeStream(it, null, bounds)
+        }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        var sample = 1
+        while (bounds.outWidth / sample > MAX_TEXTURE_DIMENSION ||
+            bounds.outHeight / sample > MAX_TEXTURE_DIMENSION) {
+            sample *= 2
+        }
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+        return context.assets.open(assetPath).use {
+            BitmapFactory.decodeStream(it, null, options)
+        }
+    }
+
+    private fun decodeSampledResource(resourceId: Int): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeResource(context.resources, resourceId, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        var sample = 1
+        while (bounds.outWidth / sample > MAX_TEXTURE_DIMENSION ||
+            bounds.outHeight / sample > MAX_TEXTURE_DIMENSION) {
+            sample *= 2
+        }
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+        return BitmapFactory.decodeResource(context.resources, resourceId, options)
     }
 
     private fun createTexture(
@@ -243,5 +276,6 @@ class HdTextureManager(
 
     companion object {
         private const val GL_TEXTURE_MAX_ANISOTROPY_EXT = 0x84FE
+        private const val MAX_TEXTURE_DIMENSION = 1024
     }
 }

@@ -26,21 +26,39 @@ class PbrTexture(
         srgb: Boolean = false
     ): Int {
 
-        val bitmap =
-            context.assets
-                .open(assetPath)
-                .use {
-                    BitmapFactory.decodeStream(it)
-                }
-                ?: error(
-                    "Unable to decode texture: $assetPath"
-                )
+        val bitmap = decodeSampledAsset(assetPath)
+            ?: error("Unable to decode texture: $assetPath")
 
         return upload(
             bitmap,
             srgb
         ).also {
             bitmap.recycle()
+        }
+    }
+
+    /**
+     * Decode at a phone-friendly size before allocating a full-resolution Bitmap.
+     * This caps decoded textures at 1024 px per side and avoids transient OOMs.
+     */
+    private fun decodeSampledAsset(assetPath: String): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.assets.open(assetPath).use {
+            BitmapFactory.decodeStream(it, null, bounds)
+        }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        var sample = 1
+        while (bounds.outWidth / sample > MAX_TEXTURE_DIMENSION ||
+            bounds.outHeight / sample > MAX_TEXTURE_DIMENSION) {
+            sample *= 2
+        }
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+        return context.assets.open(assetPath).use {
+            BitmapFactory.decodeStream(it, null, options)
         }
     }
 
@@ -123,5 +141,9 @@ class PbrTexture(
                 0
             )
         }
+    }
+
+    companion object {
+        private const val MAX_TEXTURE_DIMENSION = 1024
     }
 }

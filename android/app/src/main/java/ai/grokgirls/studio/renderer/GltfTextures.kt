@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.opengl.GLES30
+import android.opengl.GLUtils
 import android.util.Log
 
 /**
@@ -60,8 +61,10 @@ object GltfTextures {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
             if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-            val maxDimension = 4096
-            val maxPixels = 16 * 1024 * 1024
+            // Keep decoded avatar textures bounded for phone RAM and GPU memory.
+            // 1024² RGBA is ~4 MiB before mipmaps; 4K images can exceed 64 MiB.
+            val maxDimension = 1024
+            val maxPixels = 1024 * 1024
             var sample = 1
             while (bounds.outWidth / sample > maxDimension ||
                 bounds.outHeight / sample > maxDimension ||
@@ -80,13 +83,19 @@ object GltfTextures {
             uploaded[imageIndex]?.let { return it }
             val image = document.images.getOrNull(imageIndex) ?: return 0
 
-            var bitmap = imagePixels(image) ?: return 0
+            val decoded = imagePixels(image) ?: return 0
+
+            // Normalize pixel format without losing the original reference:
+            // recycled bitmaps still count toward native memory until released.
+            val bitmap = if (decoded.config != Bitmap.Config.ARGB_8888) {
+                decoded.copy(Bitmap.Config.ARGB_8888, false) ?: decoded
+            } else {
+                decoded
+            }
 
             // glTF UV origin is top-left; GL expects bottom-left -> flip V.
-            if (bitmap.config != Bitmap.Config.ARGB_8888) {
-                bitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false)
-            }
             val flipped = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+            if (bitmap !== decoded) decoded.recycle()
             val canvas = Canvas(flipped)
             val matrix = Matrix()
             matrix.postScale(1f, -1f)
@@ -97,28 +106,20 @@ object GltfTextures {
             GLES30.glGenTextures(1, tex, 0)
             GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, tex[0])
 
-            val pixels = java.nio.ByteBuffer
-                .allocateDirect(flipped.width * flipped.height * 4)
-                .order(java.nio.ByteOrder.nativeOrder())
-            flipped.copyPixelsToBuffer(pixels)
-            pixels.position(0)
-
+            // GLUtils uploads the Bitmap directly. Avoid a second full-size
+            // direct ByteBuffer copy, which briefly doubled texture memory.
             // sRGB storage for base-color/emissive maps: the GPU decodes
             // to linear light at sample time (correct PBR input).
             val internalFormat =
                 if (srgb) GLES30.GL_SRGB8_ALPHA8
                 else GLES30.GL_RGBA8
 
-            GLES30.glTexImage2D(
+            GLUtils.texImage2D(
                 GLES30.GL_TEXTURE_2D,
                 0,
                 internalFormat,
-                flipped.width,
-                flipped.height,
-                0,
-                GLES30.GL_RGBA,
-                GLES30.GL_UNSIGNED_BYTE,
-                pixels
+                flipped,
+                0
             )
 
             // Sampler state (defaults per glTF spec); a texture may be

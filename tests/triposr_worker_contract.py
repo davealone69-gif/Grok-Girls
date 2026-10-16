@@ -76,6 +76,11 @@ def test_generated_glb_reaches_native_viewport() -> None:
     assert ".putExtra(NativeAvatarActivity.EXTRA_FILE, file)" in bridge
     assert "await generateTripoSR(image.dataUrl" in app
     assert "openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), glb.file)" in app
+    manager = (ROOT / "src/components/ServerManagerModal.tsx").read_text()
+    activity = (ROOT / "android/app/src/main/java/ai/grokgirls/studio/MainActivity.java").read_text()
+    assert 'className="server-manager-launcher"' in app
+    assert "127.0.0.1:8082" in manager and "▶ START 3D WORKER" in manager
+    assert "registerPlugin(ComfyUiLocalPlugin.class);" in activity
 
 
 if __name__ == "__main__":

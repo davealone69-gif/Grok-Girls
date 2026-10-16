@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { Girl, rooms, seedGirls, Room } from './models/studio';
 import { advanceStory, initialStory, StoryState, storyChapters, storyPrompt } from './models/story';
@@ -868,7 +869,7 @@ export default function App() {
     setHy3dBusy(true);
     setHy3dStatus('Checking available real 3D workers...');
     try {
-      if (!isNativeShell()) {
+      if (!Capacitor.isNativePlatform()) {
         throw new Error('Real 3D generation requires the Android app and its local 3D worker.');
       }
 

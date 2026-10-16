@@ -21,19 +21,20 @@ interface TripoSRPlugin {
 
 const TripoSRLocal = registerPlugin<TripoSRPlugin>('TripoSRLocal');
 
-export async function triposrStatus(): Promise<{ ok: boolean; message: string; engine: string }> {
+export async function triposrStatus(): Promise<{ ok: boolean; message: string; engine: string; generationVerified?: boolean }> {
   if (!Capacitor.isNativePlatform()) {
-    return { ok: false, engine: 'triposr', message: 'TripoSR worker status requires the Android app.' };
+    return { ok: false, engine: 'triposr', generationVerified: false, message: 'TripoSR worker status requires the Android app.' };
   }
   try {
     const r = await TripoSRLocal.status();
     return {
       ok: !!r.running,
       engine: r.engine || 'triposr',
+      generationVerified: !!r.generationVerified,
       message: r.message || (r.running ? 'TripoSR worker configured; generation is not yet verified.' : 'TripoSR worker unavailable.')
     };
   } catch (e) {
-    return { ok: false, engine: 'triposr', message: e instanceof Error ? e.message : String(e) };
+    return { ok: false, engine: 'triposr', generationVerified: false, message: e instanceof Error ? e.message : String(e) };
   }
 }
 

@@ -7,7 +7,7 @@ import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, Gallery
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
 import { ensureSdRunning, isNativeShell, isSdAutoStart, setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
-import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
+import { generateTripoSR, ensureTripoSRRunning, triposrStatus } from './services/triposrLocal';
 import { ensureTripoSRRunning } from './services/triposrLocal';
 import { buildPhoto3D } from './services/photo3dLocal';
 import { downloadVknn3DModel, probeVknn3DModel, vknn3dStatus } from './services/vknn3dLocal';
@@ -882,9 +882,9 @@ export default function App() {
         // shares the /health + /generate contract used by the native GLB bridge.
         const start = await ensureTripoSRRunning();
         workerMessage = start.message;
-        const worker = await hunyuan3dStatus();
-        workerReady = worker.ok;
-        workerEngine = worker.engine === 'triposr' ? 'TripoSR' : (worker.engine || 'local 3D worker');
+        const worker = await triposrStatus();
+        workerReady = start.ok && worker.ok;
+        workerEngine = worker.engine || 'TripoSR';
         if (!workerReady) {
           setHy3dStatus('Local 3D worker unavailable: ' + (worker.message || workerMessage) + '. Using the real on-device 3DDD mesh pipeline...');
         }
@@ -912,13 +912,12 @@ export default function App() {
 
       if (workerReady) {
         setHy3dStatus(`${workerEngine} is generating the GLB...`);
-        const glb = await generateHunyuan3D(image.dataUrl, {
+        const glb = await generateTripoSR(image.dataUrl, {
           texture: true,
-          seed: Number(seedInput) || 1234,
-          octreeResolution: 256,
-          steps: 5
+          mcResolution: 192,
+          timeoutMs: 1800000
         });
-        setHy3dStatus(`Real ${workerEngine} GLB generated. Opening the native renderer...`);
+        setHy3dStatus(`Real ${workerEngine} GLB generated (${glb.bytes.toLocaleString()} bytes). Opening the native renderer...`);
         await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), glb.file);
         setHy3dStatus(`REAL 3D READY · ${workerEngine} GLB loaded by the native GLES3 renderer.`);
       } else {

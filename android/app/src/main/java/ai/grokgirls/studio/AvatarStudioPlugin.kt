@@ -28,9 +28,11 @@ class AvatarStudioPlugin : Plugin() {
     @PluginMethod
     fun openViewport(call: PluginCall) {
         val asset = call.getString("avatar") ?: NativeAvatarActivity.DEFAULT_AVATAR
+        val file = call.getString("file")
         val definition = call.getString("definition")
         val intent = Intent(activity, NativeAvatarActivity::class.java)
             .putExtra(NativeAvatarActivity.EXTRA_AVATAR, asset)
+            .putExtra(NativeAvatarActivity.EXTRA_FILE, file)
             .putExtra(NativeAvatarActivity.EXTRA_DEFINITION, definition)
         activity?.startActivity(intent)
         call.resolve()

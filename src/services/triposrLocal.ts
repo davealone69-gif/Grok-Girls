@@ -11,7 +11,7 @@ interface TripoSRPlugin {
     timeoutMs?: number;
   }): Promise<{
     ok?: boolean;
-    glbBase64?: string;
+    file?: string;
     bytes?: number;
     engine?: string;
     seconds?: string;
@@ -49,7 +49,7 @@ export async function ensureTripoSRRunning(): Promise<{ ok: boolean; message: st
 
 export interface TripoSRResult {
   ok: true;
-  glbDataUrl: string;
+  file: string;
   bytes: number;
   engine: string;
   seconds?: number;
@@ -86,13 +86,13 @@ export async function generateTripoSR(
     timeoutMs: options.timeoutMs ?? 1800000
   });
 
-  if (!r.ok || !r.glbBase64) {
+  if (!r.ok || !r.file) {
     throw new Error(r.error || 'TripoSR completed without returning a GLB.');
   }
 
   return {
     ok: true,
-    glbDataUrl: `data:model/gltf-binary;base64,${r.glbBase64}`,
+    file: r.file,
     bytes: r.bytes ?? 0,
     engine: r.engine ?? 'triposr',
     seconds: r.seconds ? Number(r.seconds) : undefined

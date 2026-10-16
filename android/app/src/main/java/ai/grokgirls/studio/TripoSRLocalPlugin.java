@@ -1,7 +1,8 @@
 package ai.grokgirls.studio;
 
 import android.content.Intent;
-import android.util.Base64;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -11,6 +12,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import org.json.JSONObject;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 
 @CapacitorPlugin(name = "TripoSRLocal")
@@ -102,8 +104,17 @@ public class TripoSRLocalPlugin extends Plugin {
         if (response.length < 4 || response[0] != 'g' || response[1] != 'l' || response[2] != 'T' || response[3] != 'F') {
           JSObject r = new JSObject(); r.put("ok", false); r.put("error", "TripoSR returned an invalid GLB."); call.resolve(r); return;
         }
+        File outputDir = new File(getContext().getFilesDir(), "triposr");
+        if (!outputDir.isDirectory() && !outputDir.mkdirs()) {
+          throw new java.io.IOException("Could not create the private TripoSR output directory.");
+        }
+        File outputFile = new File(outputDir, "avatar-" + UUID.randomUUID() + ".glb");
+        try (FileOutputStream output = new FileOutputStream(outputFile)) {
+          output.write(response);
+          output.getFD().sync();
+        }
         JSObject r = new JSObject(); r.put("ok", true);
-        r.put("glbBase64", Base64.encodeToString(response, Base64.NO_WRAP));
+        r.put("file", outputFile.getAbsolutePath());
         r.put("bytes", response.length);
         r.put("engine", "triposr");
         r.put("seconds", c.getHeaderField("X-GrokGirls-Seconds"));

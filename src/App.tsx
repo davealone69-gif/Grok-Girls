@@ -169,6 +169,7 @@ import { StylePreset, applyStylePreset, stylePresets } from './services/styles';
 import { StudioStats, achievements, bumpStat, loadStats } from './services/stats';
 import ColorWheel from './components/ColorWheel';
 import SettingsModal from './components/SettingsModal';
+import ServerManagerModal from './components/ServerManagerModal';
 import VideoExportPage from './pages/VideoExportPage';
 import './styles.css';
 
@@ -520,6 +521,7 @@ export default function App() {
   }, [chatProvider]);
   const adultChatPinWarnRef = useRef(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isServerManagerOpen, setIsServerManagerOpen] = useState(false);
   // Data-driven menu: labels/titles come from /menu.xml; a faulty file
   // falls back to DEFAULT_MENU (navigation can never break).
   const [menuItems, setMenuItems] = useState<MenuItem[]>(DEFAULT_MENU);
@@ -1923,6 +1925,7 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsSettingsOpen(false);
+        setIsServerManagerOpen(false);
         setPremiumOpen(false);
         setHelpOpen(false);
         setOutfitOpen(false);
@@ -2302,6 +2305,7 @@ export default function App() {
           <div className="avatar-design-title">
             <span>CREATE YOUR IDENTITY</span>
             <h2>{menuLabel('header_title')}</h2>
+          <button className="server-manager-launcher" onClick={() => setIsServerManagerOpen(true)} aria-label="Open Server Manager" title="Start and check local servers">⚙ <span>SERVERS</span></button>
           </div>
 
           {/* Menu-driven header actions (wide screens; phones use the HUD + footer) */}
@@ -4570,6 +4574,7 @@ export default function App() {
       )}
 
       {/* SETTINGS MODAL */}
+      <ServerManagerModal isOpen={isServerManagerOpen} onClose={() => setIsServerManagerOpen(false)} onNotice={showToast} />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
       {/* TOAST */}

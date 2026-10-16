@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 HOST = os.environ.get("TRIPOSR_HOST", "127.0.0.1")
-PORT = int(os.environ.get("TRIPOSR_PORT", "8081"))
+PORT = int(os.environ.get("TRIPOSR_PORT", "8082"))
 TRIPOSR_HOME = Path(os.environ.get("TRIPOSR_HOME", str(Path.home() / "TripoSR"))).expanduser()
 PYTHON = os.environ.get("TRIPOSR_PYTHON", "python")
 RUN_PY = Path(os.environ.get("TRIPOSR_RUN", str(TRIPOSR_HOME / "run.py"))).expanduser()
@@ -49,10 +49,15 @@ class Handler(BaseHTTPRequestHandler):
             "ok": ready,
             "engine": "triposr",
             "worker": "grokgirls-3d",
+            "state": "configured" if ready else "missing-install",
+            "generation_verified": False,
             "busy": JOB_LOCK.locked(),
             "available_memory_mb": available_memory_mb(),
             "run_py": str(RUN_PY),
-            "message": "TripoSR worker ready" if ready else "TripoSR installation not found",
+            "message": (
+                "TripoSR worker is configured; successful generation is not yet verified."
+                if ready else "TripoSR installation not found"
+            ),
         }
         body = json.dumps(payload).encode("utf-8")
         self.send_response(200 if ready else 503)

@@ -8,6 +8,7 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import org.json.JSONObject;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.concurrent.Executors;
@@ -18,15 +19,29 @@ public class TripoSRLocalPlugin extends Plugin {
   private static final String TERMUX = "com.termux";
   private static final String SERVICE = "com.termux.app.RunCommandService";
   private static final String ACTION = "com.termux.RUN_COMMAND";
-  private static final String BASE = "http://127.0.0.1:8081";
+  private static final String BASE = "http://127.0.0.1:8082";
 
+  /**
+   * Do not treat an arbitrary HTTP server on the old shared port as TripoSR.
+   * Hunyuan3D owns 8081; TripoSR has its own port and must identify itself.
+   */
   private boolean ready() {
+    HttpURLConnection c = null;
     try {
-      HttpURLConnection c = (HttpURLConnection) new URL(BASE + "/health").openConnection();
-      c.setConnectTimeout(1500); c.setReadTimeout(2000);
-      int code = c.getResponseCode(); c.disconnect();
-      return code == 200;
-    } catch (Exception e) { return false; }
+      c = (HttpURLConnection) new URL(BASE + "/health").openConnection();
+      c.setConnectTimeout(1500);
+      c.setReadTimeout(2000);
+      if (c.getResponseCode() != 200) return false;
+      try (InputStream input = c.getInputStream()) {
+        JSONObject health = new JSONObject(new String(readAll(input), java.nio.charset.StandardCharsets.UTF_8));
+        return health.optBoolean("ok", false)
+            && "triposr".equalsIgnoreCase(health.optString("engine", ""));
+      }
+    } catch (Exception e) {
+      return false;
+    } finally {
+      if (c != null) c.disconnect();
+    }
   }
 
   @PluginMethod

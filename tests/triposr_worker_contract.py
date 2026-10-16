@@ -67,7 +67,18 @@ def test_health_does_not_claim_generation_was_verified() -> None:
                 thread.join(timeout=3)
 
 
+def test_generated_glb_reaches_native_viewport() -> None:
+    plugin = (ROOT / "android/app/src/main/java/ai/grokgirls/studio/TripoSRLocalPlugin.java").read_text()
+    bridge = (ROOT / "android/app/src/main/java/ai/grokgirls/studio/AvatarStudioPlugin.kt").read_text()
+    app = (ROOT / "src/App.tsx").read_text()
+    assert 'result.put("file", outputFile.getAbsolutePath())' in plugin
+    assert ".putExtra(NativeAvatarActivity.EXTRA_FILE, file)" in bridge
+    assert "await generateTripoSR(image.dataUrl" in app
+    assert "openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), glb.file)" in app
+
+
 if __name__ == "__main__":
     test_worker_ports_are_isolated()
     test_health_does_not_claim_generation_was_verified()
+    test_generated_glb_reaches_native_viewport()
     print("PASS: 3D worker ports are isolated; health is configuration-only, not inference proof.")

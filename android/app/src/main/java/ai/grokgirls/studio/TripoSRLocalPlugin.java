@@ -1,7 +1,8 @@
 package ai.grokgirls.studio;
 
 import android.content.Intent;
-import android.util.Base64;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -11,6 +12,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import org.json.JSONObject;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 
 @CapacitorPlugin(name = "TripoSRLocal")
@@ -22,8 +24,7 @@ public class TripoSRLocalPlugin extends Plugin {
   private static final String BASE = "http://127.0.0.1:8082";
 
   /**
-   * Do not treat an arbitrary HTTP server on the old shared port as TripoSR.
-   * Hunyuan3D owns 8081; TripoSR has its own port and must identify itself.
+   * Hunyuan3D owns port 8081. TripoSR must identify itself on its own port.
    */
   private boolean ready() {
     HttpURLConnection c = null;
@@ -42,6 +43,22 @@ public class TripoSRLocalPlugin extends Plugin {
     } finally {
       if (c != null) c.disconnect();
     }
+  }
+
+  @PluginMethod
+  public void status(PluginCall call) {
+    pool.execute(() -> {
+      boolean running = ready();
+      JSObject result = new JSObject();
+      result.put("running", running);
+      result.put("engine", "triposr");
+      result.put("base", BASE);
+      result.put("generationVerified", false);
+      result.put("message", running
+          ? "TripoSR worker is configured at " + BASE + "; inference remains unverified until /generate returns a valid GLB."
+          : "TripoSR worker is not ready at " + BASE + ". Check Termux setup and ~/.cache/grokgirls/triposr-worker.log.");
+      call.resolve(result);
+    });
   }
 
   @PluginMethod
@@ -87,8 +104,17 @@ public class TripoSRLocalPlugin extends Plugin {
         if (response.length < 4 || response[0] != 'g' || response[1] != 'l' || response[2] != 'T' || response[3] != 'F') {
           JSObject r = new JSObject(); r.put("ok", false); r.put("error", "TripoSR returned an invalid GLB."); call.resolve(r); return;
         }
+        File outputDir = new File(getContext().getFilesDir(), "triposr");
+        if (!outputDir.isDirectory() && !outputDir.mkdirs()) {
+          throw new java.io.IOException("Could not create the private TripoSR output directory.");
+        }
+        File outputFile = new File(outputDir, "avatar-" + UUID.randomUUID() + ".glb");
+        try (FileOutputStream output = new FileOutputStream(outputFile)) {
+          output.write(response);
+          output.getFD().sync();
+        }
         JSObject r = new JSObject(); r.put("ok", true);
-        r.put("glbBase64", Base64.encodeToString(response, Base64.NO_WRAP));
+        r.put("file", outputFile.getAbsolutePath());
         r.put("bytes", response.length);
         r.put("engine", "triposr");
         r.put("seconds", c.getHeaderField("X-GrokGirls-Seconds"));

@@ -7,7 +7,7 @@ import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, Gallery
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
 import { setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
-import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
+import { generateTripoSR, ensureTripoSRRunning, triposrStatus } from './services/triposrLocal';
 import { buildPhoto3D } from './services/photo3dLocal';
 import { downloadVknn3DModel, probeVknn3DModel, vknn3dStatus } from './services/vknn3dLocal';
 import { openNativeHdAvatar } from './nativeAvatarBridge';
@@ -852,7 +852,7 @@ export default function App() {
 
   const openReal3D = async () => {
     if (hy3dBusy || busyRef.current) return;
-    setHy3dStatus('Opening native GLES3 Hunyuan3D test asset...');
+    setHy3dStatus('Opening the bundled native GLES3 3D test asset...');
     try {
       await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft));
       setHy3dStatus('Native 3D renderer opened. Drag to orbit, pinch to zoom.');
@@ -868,8 +868,8 @@ export default function App() {
     try {
       let workerReady = false;
       try {
-        const worker = await hunyuan3dStatus();
-        workerReady = worker.ok;
+        const worker = await triposrStatus();
+        workerReady = start.ok && worker.ok;
         if (!workerReady) setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
       } catch {
         setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
@@ -894,11 +894,10 @@ export default function App() {
 
       if (workerReady) {
         setHy3dStatus('Hunyuan3D is generating the GLB...');
-        const glb = await generateHunyuan3D(image.dataUrl, {
+        const glb = await generateTripoSR(image.dataUrl, {
           texture: true,
-          seed: Number(seedInput) || 1234,
-          octreeResolution: 256,
-          steps: 5
+          mcResolution: 192,
+          timeoutMs: 1800000
         });
         setHy3dStatus('Real Hunyuan3D GLB generated. Opening the native renderer...');
         await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), glb.file);
@@ -2302,7 +2301,7 @@ export default function App() {
 
           <div className="native-3d-controls">
             <button className="native-action native-3d-test" disabled={hy3dBusy} onClick={() => void openReal3D()} title="Open the real native GLES3 Hunyuan3D renderer">🧊 REAL 3D</button>
-            <button className="native-action native-3d-generate" disabled={hy3dBusy} onClick={() => void generateReal3D()} title="Generate a real Hunyuan3D GLB and load it into the native renderer">🧬 {hy3dBusy ? '3D…' : 'MAKE 3D'}</button>
+            <button className="native-action native-3d-generate" disabled={hy3dBusy} onClick={() => void generateReal3D()} title="Generate a real TripoSR GLB and load it into the native renderer">🧬 {hy3dBusy ? '3D…' : 'MAKE 3D'}</button>
           </div>
           <div className="mode-pills">
             <button

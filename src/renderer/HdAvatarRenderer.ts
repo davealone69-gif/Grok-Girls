@@ -673,7 +673,7 @@ export class HdAvatarRenderer {
    */
   renderToImage(options: { width?: number; height?: number; mimeType?: 'image/png' | 'image/jpeg'; quality?: number } = {}): string {
     const gl = this.gl;
-    const canvas = gl.canvas as HTMLCanvasElement;
+    // No canvas read is required in this render-target setup.
     const width = Math.max(1, Math.floor(options.width ?? 1920));
     const height = Math.max(1, Math.floor(options.height ?? 1080));
     const mimeType = options.mimeType ?? 'image/png';

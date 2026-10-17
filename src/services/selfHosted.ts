@@ -123,6 +123,11 @@ interface NativeSelfHostedHttpPlugin {
     body?: string;
     timeoutMs?: number;
   }): Promise<NativeSelfHostedHttpResult>;
+  startServer?(opts: { base: string; timeoutMs?: number }): Promise<{
+    started?: boolean;
+    method?: string;
+    message?: string;
+  }>;
 }
 
 function nativeSelfHostedHttp(): { native: boolean; plugin: NativeSelfHostedHttpPlugin | null } {
@@ -139,6 +144,29 @@ function nativeSelfHostedHttp(): { native: boolean; plugin: NativeSelfHostedHttp
     : typeof capacitor?.getPlatform === 'function' && capacitor.getPlatform() !== 'web';
   const candidate = capacitor?.Plugins?.['SelfHostedHttp'] as NativeSelfHostedHttpPlugin | undefined;
   return { native, plugin: candidate && typeof candidate.request === 'function' ? candidate : null };
+}
+
+/** Start only the phone-local ComfyUI server through the native Termux bridge. */
+export async function startSelfHostedServer(base = getServerBase()): Promise<{ ok: boolean; message: string }> {
+  const { native, plugin } = nativeSelfHostedHttp();
+  if (!native) {
+    return {
+      ok: false,
+      message: 'This start button requires the installed Android app. In a browser/PWA, start ComfyUI manually in Termux or on its host.'
+    };
+  }
+  if (!plugin?.startServer) {
+    return { ok: false, message: 'The native ComfyUI start bridge is missing. Rebuild and install the current Android APK.' };
+  }
+  try {
+    const result = await plugin.startServer({ base, timeoutMs: 120000 });
+    return {
+      ok: Boolean(result.started),
+      message: result.message || (result.started ? 'ComfyUI API is responding.' : 'ComfyUI could not be started.')
+    };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 /* Native Android requests must bypass WebView CORS/mixed-content restrictions

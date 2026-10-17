@@ -59,7 +59,13 @@ export function getServerBase(): string {
   return shGetBase();
 }
 export function saveServerBase(url: string) {
-  shSetBase(url);
+  const next = url.trim().replace(/\/+$/, '');
+  if (next !== getServerBase()) {
+    // A server type belongs to a specific URL. Never carry an A1111/ComfyUI
+    // detection result across endpoint changes.
+    shSetType('unknown');
+  }
+  shSetBase(next);
 }
 export function getServerType(): SelfHostServerType {
   const t = shGetType();
@@ -112,10 +118,17 @@ function fetchWithTimeout(url: string, init: RequestInit = {}, ms = 8000): Promi
 
 /* ------------------------------ discovery ----------------------------- */
 export async function detectServer(base: string): Promise<SelfHostServerType> {
-  const a1111 = await fetchWithTimeout(`${base}/sdapi/v1/sd-models`, { method: 'GET' }).catch(() => null);
-  if (a1111 && a1111.ok) return 'a1111';
-  const comfy = await fetchWithTimeout(`${base}/system_stats`, { method: 'GET' }).catch(() => null);
-  if (comfy && comfy.ok) return 'comfy';
+  const root = base.trim().replace(/\/+$/, '');
+  try {
+    const parsed = new URL(root);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return 'unknown';
+  } catch {
+    return 'unknown';
+  }
+  const a1111 = await fetchWithTimeout(`${root}/sdapi/v1/sd-models`, { method: 'GET' }).catch(() => null);
+  if (a1111?.ok) return 'a1111';
+  const comfy = await fetchWithTimeout(`${root}/system_stats`, { method: 'GET' }).catch(() => null);
+  if (comfy?.ok) return 'comfy';
   return 'unknown';
 }
 
@@ -126,6 +139,7 @@ export async function testConnection(): Promise<SelfHostStatus> {
   }
   const type = await detectServer(base);
   if (type === 'unknown') {
+    saveServerType('unknown');
     return {
       ok: false,
       serverType: 'unknown',
@@ -167,9 +181,12 @@ export async function testConnection(): Promise<SelfHostStatus> {
 }
 
 export async function fetchModels(): Promise<string[]> {
-  const base = getServerBase();
+  const base = getServerBase().trim().replace(/\/+$/, '');
   if (!base) return [];
-  const type = getServerType() !== 'unknown' ? getServerType() : await detectServer(base);
+  // Re-detect on each operation: endpoint settings or server process may have changed.
+  const type = await detectServer(base);
+  saveServerType(type);
+  if (type === 'unknown') return [];
   try {
     if (type === 'a1111') {
       const r = await fetchWithTimeout(`${base}/sdapi/v1/sd-models`);
@@ -189,9 +206,11 @@ export async function fetchModels(): Promise<string[]> {
 }
 
 export async function fetchLoras(): Promise<string[]> {
-  const base = getServerBase();
+  const base = getServerBase().trim().replace(/\/+$/, '');
   if (!base) return [];
-  const type = getServerType() !== 'unknown' ? getServerType() : await detectServer(base);
+  const type = await detectServer(base);
+  saveServerType(type);
+  if (type === 'unknown') return [];
   try {
     if (type === 'a1111') {
       const r = await fetchWithTimeout(`${base}/sdapi/v1/loras`);
@@ -250,7 +269,20 @@ export function buildA1111Payload(req: SelfHostRequest) {
 
 export function buildComfyPayload(req: SelfHostRequest, clientId: string) {
   const ckpt = getCheckpoint();
-  const sampler = (getSampler() || 'DPM++ 2M Karras').toLowerCase().replace(/\s+/g, '_');
+  // A1111 display names are not valid ComfyUI sampler IDs. Map each supported
+  // UI choice to ComfyUI's sampler_name + scheduler pair explicitly.
+  const samplerMap: Record<string, { sampler: string; scheduler: string }> = {
+    'DPM++ 2M Karras': { sampler: 'dpmpp_2m', scheduler: 'karras' },
+    'DPM++ SDE Karras': { sampler: 'dpmpp_sde', scheduler: 'karras' },
+    'Euler a': { sampler: 'euler_ancestral', scheduler: 'normal' },
+    'Euler': { sampler: 'euler', scheduler: 'normal' },
+    'UniPC': { sampler: 'uni_pc', scheduler: 'normal' },
+    'DDIM': { sampler: 'ddim', scheduler: 'ddim_uniform' },
+    'DPM++ 2M SDE Karras': { sampler: 'dpmpp_2m_sde', scheduler: 'karras' },
+    'Heun': { sampler: 'heun', scheduler: 'normal' }
+  };
+  const selectedSampler = getSampler() || 'DPM++ 2M Karras';
+  const comfySampler = samplerMap[selectedSampler] || samplerMap['DPM++ 2M Karras'];
   const apiJson: Record<string, any> = {
     '3': {
       class_type: 'KSampler',
@@ -258,8 +290,8 @@ export function buildComfyPayload(req: SelfHostRequest, clientId: string) {
         seed: req.seed ?? Math.floor(Math.random() * 1e9),
         steps: req.steps ?? 28,
         cfg: req.cfg ?? 7,
-        sampler_name: sampler.includes('euler_a') ? 'euler_ancestral' : sampler,
-        scheduler: 'karras',
+        sampler_name: comfySampler.sampler,
+        scheduler: comfySampler.scheduler,
         denoise: 1,
         model: ['4', 0],
         positive: ['6', 0],
@@ -296,14 +328,17 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHostResult> {
-  const base = getServerBase();
+  const base = getServerBase().trim().replace(/\/+$/, '');
   if (!base) {
     return {
       status: 'error',
       warning: 'Self-hosted server URL is not configured. Open ⚙ Settings → Self-Hosted and enter your A1111 or ComfyUI address.'
     };
   }
-  const type = getServerType() !== 'unknown' ? getServerType() : await detectServer(base);
+  // Always inspect the configured endpoint immediately before rendering. A
+  // stale saved type must never route a request to the wrong API.
+  const type = await detectServer(base);
+  saveServerType(type);
 
   if (type === 'a1111') {
     try {
@@ -325,8 +360,16 @@ export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHost
       }
       const d = await r.json();
       const b64: string | undefined = d?.images?.[0];
-      if (!b64) return { status: 'error', warning: 'A1111 returned no image. Check the server log.' };
-      return { status: 'ready', assetUrl: `data:image/png;base64,${b64}` };
+      if (!b64 || typeof b64 !== 'string') return { status: 'error', warning: 'A1111 returned no image. Check the server log.' };
+      const payload = b64.replace(/^data:image\/[^;]+;base64,/i, '').trim();
+      let bytes: string;
+      try { bytes = atob(payload); } catch { return { status: 'error', warning: 'A1111 returned an invalid Base64 image payload.' }; }
+      const png = bytes.length > 8 && bytes.charCodeAt(0) === 0x89 && bytes.slice(1, 4) === 'PNG';
+      const jpeg = bytes.length > 3 && bytes.charCodeAt(0) === 0xff && bytes.charCodeAt(1) === 0xd8;
+      const webp = bytes.length > 12 && bytes.slice(0, 4) === 'RIFF' && bytes.slice(8, 12) === 'WEBP';
+      if (!png && !jpeg && !webp) return { status: 'error', warning: 'A1111 returned data that is not a PNG, JPEG, or WebP image.' };
+      const mime = png ? 'image/png' : jpeg ? 'image/jpeg' : 'image/webp';
+      return { status: 'ready', assetUrl: `data:${mime};base64,${payload}` };
     } catch (e) {
       const hint = e instanceof Error && /fetch|network/i.test(e.message)
         ? ' If the browser blocked the request (CORS), launch A1111 with: --api --cors-allow-origins=*'
@@ -354,7 +397,11 @@ export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHost
         body: JSON.stringify({ prompt: apiJson, client_id: clientId })
       });
       if (!submit.ok) throw new Error(`ComfyUI HTTP ${submit.status} (submit)`);
-      const { prompt_id } = await submit.json();
+      const submitted = await submit.json();
+      const prompt_id = submitted?.prompt_id;
+      if (typeof prompt_id !== 'string' || !prompt_id) {
+        throw new Error('ComfyUI accepted the HTTP request but returned no prompt_id.');
+      }
       // M7: persist the queued job so a closed app resumes it on next launch
       saveComfyJob({ promptId: prompt_id, base, prompt: req.prompt, createdAt: Date.now() });
       const deadline = Date.now() + 180000;
@@ -380,6 +427,10 @@ export async function generateSelfHosted(req: SelfHostRequest): Promise<SelfHost
           const imgRes = await fetchWithTimeout(`${base}/view?${params}`);
           if (!imgRes.ok) return { status: 'error', warning: 'ComfyUI image fetch failed.' };
           const blob = await imgRes.blob();
+          if (!blob.type.startsWith('image/') || blob.size < 16) {
+            clearComfyJob();
+            return { status: 'error', warning: `ComfyUI returned ${blob.type || 'non-image data'} instead of an image file.` };
+          }
           // Persist as a data URL so the render survives reloads and stays in
           // the gallery (blob: URLs die when the page unloads).
           const dataUrl = await blobToDataUrl(blob);

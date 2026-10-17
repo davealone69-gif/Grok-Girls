@@ -1398,7 +1398,7 @@ export default function App() {
     if (engine === 'selfhosted' && !getServerBase()) {
       showToast('Configure your self-hosted server in ⚙ Settings → Self-Hosted first');
       setResult(
-        'SELF-HOSTED engine selected but no server URL is configured. Open ⚙ Settings and enter your A1111 (port 7860) or ComfyUI (port 8188) address.'
+        'COMFYUI / SELF-HOSTED selected but no server URL is configured. Open ⚙ Settings → Self-Hosted Image Server and enter your ComfyUI (usually port 8188) or AUTOMATIC1111 (usually port 7860) address.'
       );
       window.setTimeout(() => setResult(''), 10000);
       return;
@@ -3031,12 +3031,12 @@ export default function App() {
                 setProvider(v);
               }}
             >
-              <option value="local">LOCAL</option>
+              <option value="local">LOCAL (PROCEDURAL SVG)</option>
               <option value="sdlocal">SD LOCAL (ON-DEVICE)</option>
               <option value="openrouter">OPENROUTER</option>
               <option value="gemini">GEMINI</option>
               <option value="custom">CUSTOM</option>
-              <option value="selfhosted">SELF-HOSTED</option>
+              <option value="selfhosted">COMFYUI / SELF-HOSTED</option>
             </select>
           </label>
         </div>

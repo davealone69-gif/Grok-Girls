@@ -27,6 +27,7 @@ class PluginBridgeTest {
         val required = listOf(
             "ai.grokgirls.studio.OllamaLocalPlugin",
             "ai.grokgirls.studio.SdLocalPlugin",
+            "ai.grokgirls.studio.SelfHostedHttpPlugin",
             "ai.grokgirls.studio.AvatarStudioPlugin",
             "ai.grokgirls.studio.MainActivity"
         )
@@ -46,7 +47,9 @@ class PluginBridgeTest {
             "ai.grokgirls.studio.OllamaLocalPlugin" to
                 listOf("status", "listModels", "chat", "cancel", "pull", "startServer", "openTermux"),
             "ai.grokgirls.studio.SdLocalPlugin" to
-                listOf("txt2img", "cancel")
+                listOf("status", "txt2img", "startServer", "cancel"),
+            "ai.grokgirls.studio.SelfHostedHttpPlugin" to
+                listOf("request")
         )
         val problems = mutableListOf<String>()
         for ((cls, methods) in expected) {

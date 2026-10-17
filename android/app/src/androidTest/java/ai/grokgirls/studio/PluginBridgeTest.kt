@@ -49,7 +49,7 @@ class PluginBridgeTest {
             "ai.grokgirls.studio.SdLocalPlugin" to
                 listOf("status", "txt2img", "startServer", "cancel"),
             "ai.grokgirls.studio.SelfHostedHttpPlugin" to
-                listOf("request")
+                listOf("request", "startServer")
         )
         val problems = mutableListOf<String>()
         for ((cls, methods) in expected) {

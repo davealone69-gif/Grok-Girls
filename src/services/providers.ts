@@ -14,14 +14,10 @@ import {
 export type ProviderName = 'local' | 'sdlocal' | 'openrouter' | 'gemini' | 'custom' | 'selfhosted' | 'ollama';
 
 /**
- * Keyless image endpoint used when no custom endpoint is configured.
- *
- * No API key required, but it IS rate limited: throttled requests come back as
- * HTTP 402 (or 429) and are surfaced verbatim rather than quietly falling back
- * to the procedural placeholder engine. Point 'custom' at a keyed endpoint in
- * Settings when you want guaranteed throughput.
+ * CUSTOM image generation requires an explicitly configured endpoint.
+ * Never silently route an unconfigured CUSTOM engine to Pollinations: current
+ * deployments may require credentials and that route is not ComfyUI.
  */
-export const KEYLESS_IMAGE_ENDPOINT = 'https://image.pollinations.ai';
 export type Mode = 'image' | 'video';
 export type ProviderMode = Mode | 'chat';
 
@@ -650,13 +646,13 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
   }
   const key = getSavedApiKey(p);
   const model = env()[`VITE_${p.toUpperCase()}_${r.mode.toUpperCase()}_MODEL`] ?? env()[`VITE_${p.toUpperCase()}_MODEL`] ?? defaultModel(p, r.mode);
-  // Keyless fallback: a 'custom' image request with no endpoint configured goes
-  // to Pollinations' public image host. Non-image modes keep '' so they still
-  // report "not configured" instead of hitting an image endpoint.
+  // CUSTOM must use the endpoint the user actually configured. Never send a
+  // request to an implicit Pollinations URL: that can produce an auth error
+  // which looks like a ComfyUI/server-routing failure.
   const endpoint =
     getSavedEndpoint(p, r.mode) ||
     (p === 'custom'
-      ? (r.mode === 'image' ? KEYLESS_IMAGE_ENDPOINT : '')
+      ? (r.mode === 'image' ? (env().VITE_CUSTOM_IMAGE_ENDPOINT ?? '') : '')
       : defaultEndpoint(p, r.mode, model));
   // Custom endpoints may be keyless; OpenRouter and Gemini always need a key.
   const missingKey = p !== 'custom' && !key;
@@ -886,7 +882,7 @@ export async function generateWithFallback(
     provider: preferred,
     status: 'fallback',
     warning: r.mode === 'image'
-      ? 'No image engine is configured, and the one selected could not be reached. Open Settings and set an image endpoint (Pollinations works keyless), or check the error above — this app no longer substitutes a placeholder image for a failed generation.'
+      ? 'No image engine is configured, or the selected engine failed. Open Settings and configure the matching provider: SD LOCAL for phone-local Stable Diffusion, SELF-HOSTED for A1111/ComfyUI, or CUSTOM for an explicitly configured image endpoint. No placeholder is substituted for failed generation.'
       : 'No generation provider is configured for this mode. Open Settings and add an API key or endpoint.',
     assetUrl: undefined,
     text: undefined

@@ -1474,6 +1474,7 @@ export default function App() {
       prompt: buildFullPrompt(prompt)
     }));
     setVariations(results);
+    let failureMessage = '';
     try {
       // Heavy image engines on this phone must not receive four concurrent
       // jobs. Run one at a time and stop at the first failed generation.
@@ -1485,8 +1486,9 @@ export default function App() {
         if (!r.assetUrl) {
           results[i] = { provider: r.provider, prompt: buildFullPrompt(prompts[i]) };
           setVariations([...results]);
-          setResult(r.warning || `${r.provider} did not return an image. Remaining variations were not started.`);
-          showToast(r.warning || `${r.provider} did not return an image.`);
+          failureMessage = r.warning || `${r.provider} did not return an image. Remaining variations were not started.`;
+          setResult(failureMessage);
+          showToast(failureMessage);
           break;
         }
         results[i] = { url: r.assetUrl, provider: r.provider, prompt: buildFullPrompt(prompts[i]) };
@@ -1495,8 +1497,10 @@ export default function App() {
       const completed = results.filter(r => Boolean(r.url)).length;
       if (completed) {
         bumpAndCelebrate('generations', completed);
-        setResult('');
-        showToast(`${completed} variation${completed === 1 ? '' : 's'} rendered. Pick a completed image.`);
+        setResult(failureMessage ? `Partial batch: ${completed}/4 images rendered. ${failureMessage}` : '');
+        showToast(failureMessage
+          ? `Partial batch: ${completed}/4 images rendered. ${failureMessage}`
+          : `${completed} variation${completed === 1 ? '' : 's'} rendered. Pick a completed image.`);
       }
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Batch failed');

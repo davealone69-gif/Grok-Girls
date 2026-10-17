@@ -598,6 +598,17 @@ async function parse(response: Response, p: ProviderName, m: Mode): Promise<Gene
 }
 
 
+/* Persist remote image bytes as data URLs. A blob: URL is temporary and
+   becomes invalid after reload, so it must never be saved into a persona or gallery. */
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read generated image data.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
 /* Cloud calls get a hard timeout too — a hung provider must never leave
    GENERATE stuck "busy" (self-hosted calls use their own 8s/300s rules). */
 function fetchWithTimeout(url: string, init: RequestInit = {}, ms: number): Promise<Response> {
@@ -733,7 +744,7 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
     return {
       provider: p,
       status: 'ready',
-      assetUrl: URL.createObjectURL(blob),
+      assetUrl: await blobToDataUrl(blob),
       text: `Pollinations ${model || 'flux'} image generated successfully.`
     };
   }

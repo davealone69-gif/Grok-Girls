@@ -339,6 +339,11 @@ export async function ensureSdRunning(
   // Model load on a phone is slow; give it longer than the Ollama default.
   const timeoutMs = opts.timeoutMs ?? 90000;
   const first = await sdStatus(base, 3000);
+  if (first.state === 'blocked') {
+    // Never ask Termux to launch the SD server against a known ComfyUI URL.
+    opts.onState?.('blocked', first.message);
+    return { ok: false, state: 'blocked', message: first.message, method: 'none' };
+  }
   if (first.ok) {
     opts.onState?.('running', first.message);
     return { ok: true, state: 'running', message: first.message, method: 'already-running' };

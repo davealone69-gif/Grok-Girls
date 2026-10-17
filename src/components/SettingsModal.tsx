@@ -196,8 +196,8 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         </div>
 
         <p style={{ color: '#aaa', fontSize: 13, marginTop: 0 }}>
-          Configure cloud credentials or your own self-hosted render server. Keys are stored only in
-          your browser's local storage. The local engine works without any of this.
+          Configure the phone-local engines, cloud credentials, or your own render server. Keys are stored only in
+          this app's browser storage. LOCAL is a procedural SVG preview; SD LOCAL is the real phone-local diffusion route.
         </p>
 
         {savedStatus && (
@@ -220,22 +220,21 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           {/* OLLAMA — phone-local on-device LLM (first-class) */}
           <OllamaPanel onNotice={msg => { setSavedStatus(msg); window.setTimeout(() => setSavedStatus(''), 4000); }} />
 
-          {/* STABLE DIFFUSION — phone-local on-device image engine (:1234) */}
+          {/* STABLE DIFFUSION — phone-local A1111-compatible image engine (:1234) */}
           <SdLocalPanel onNotice={msg => { setSavedStatus(msg); window.setTimeout(() => setSavedStatus(''), 4000); }} />
 
           {/* SELF-HOSTED */}
           <div className="settings-section selfhosted-section">
-            <div className="settings-section-title">🖥️ SELF-HOSTED SERVER — A1111 / ComfyUI</div>
+            <div className="settings-section-title">🖥️ SELF-HOSTED IMAGE SERVER — A1111 / COMFYUI</div>
             <p className="settings-note">
-              Your own machine, your own model, your rules. Point the app at a running AUTOMATIC1111
-              SD-WebUI (<code>--api</code> flag) or ComfyUI instance and render directly to it.
+              Use this section for ComfyUI (normally port 8188) or AUTOMATIC1111 (normally port 7860). This is separate from SD LOCAL, which expects the phone-local A1111-compatible API on port 1234. Do not enter a ComfyUI URL in SD LOCAL.
             </p>
             <Field
               label="Server URL"
               value={shBase}
               onChange={setShBase}
               placeholder="http://127.0.0.1:7860  or  http://192.168.1.50:8188"
-              hint="A1111 port is usually 7860, ComfyUI 8188. LAN works from your phone's browser."
+              hint="ComfyUI: usually 8188. AUTOMATIC1111: usually 7860. Use 127.0.0.1 for a server on this phone, or a LAN IP for another machine."
             />
             <div className="selfhosted-actions">
               <button className="btn-test-server" disabled={shTesting} onClick={handleTest}>
@@ -398,21 +397,21 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               onChange={setCustomKey}
               placeholder="Bearer token or API secret"
               type="password"
-              hint="Some endpoints need no key."
+              hint="Optional only for providers that allow unauthenticated requests. Some providers, including your current Pollinations route, may require a key."
             />
             <Field
               label="Chat Endpoint"
               value={customChatEndpoint}
               onChange={setCustomChatEndpoint}
               placeholder="https://your-llm.example.com/v1/chat/completions"
-              hint="OpenAI-compatible chat API. Also used for chat when the SELF-HOSTED engine is selected."
+              hint="OpenAI-compatible chat API for the CUSTOM chat provider. Image SELF-HOSTED routing uses the server configured above."
             />
             <Field
               label="Image Endpoint"
               value={customImageEndpoint}
               onChange={setCustomImageEndpoint}
               placeholder="https://your-sd.example.com/sdapi/v1/txt2img"
-              hint="Any response shape the parser understands."
+              hint="CUSTOM provider only. For ComfyUI, configure the SELF-HOSTED server above instead."
             />
             <Field
               label="Video Endpoint"

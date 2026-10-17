@@ -153,7 +153,7 @@ export default function SdLocalPanel({ onNotice }: SdLocalPanelProps) {
     <div className="settings-section selfhosted-section">
       <div className="settings-section-title">🎨 STABLE DIFFUSION — ON-DEVICE IMAGES (PHONE-LOCAL)</div>
       <p className="settings-note">
-        Uses the phone-local A1111-compatible API at <code>{base}/sdapi/v1/txt2img</code>. A responding
+        Expects the phone-local A1111-compatible API at <code>{base}/sdapi/v1/txt2img</code>. A responding
         port only proves a listener exists. Press TEST RENDER to prove the selected server actually
         returns a valid image. This is separate from Ollama on <code>:11434</code>, which handles text.
       </p>

@@ -181,7 +181,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setShModels([]);
     setShLoras([]);
     setShLoraSlots([{ name: '', weight: 1 }, { name: '', weight: 1 }, { name: '', weight: 1 }]);
-    setSavedStatus('All keys and models cleared.');
+    setSavedStatus('Cloud credentials, custom endpoints, and self-hosted server settings cleared. SD LOCAL and Ollama settings were preserved.');
     setTimeout(() => setSavedStatus(''), 1500);
   };
 
@@ -432,7 +432,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
         <div className="row" style={{ marginTop: 20, justifyContent: 'flex-end' }}>
           <button type="button" onClick={handleClear} style={{ color: '#ff6b8a' }}>
-            Clear All
+            Clear Cloud / Self-Hosted
           </button>
           <button type="button" onClick={onClose}>
             Cancel

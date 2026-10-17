@@ -694,7 +694,7 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
     return {
       provider: p,
       status: 'error',
-      warning: `${p} ${r.mode} ${missingKey ? 'API key' : 'endpoint'} is not configured. (Local procedural engine available)`,
+      warning: `${p} ${r.mode} ${missingKey ? 'API key' : 'endpoint'} is not configured.`,
       assetUrl: undefined,
       text: undefined
     };

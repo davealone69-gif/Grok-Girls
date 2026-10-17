@@ -564,13 +564,36 @@ async function parse(response: Response, p: ProviderName, m: Mode): Promise<Gene
   }
 
   const job = d.id ?? d.jobId ?? d.task_id;
+  let assetUrl = asset ?? (b64 ? `data:image/png;base64,${b64}` : undefined);
+
+  // A 200 response is not proof that media was generated. Reject empty JSON,
+  // text-only chat replies, and storage URIs (for example gs://...) that an
+  // <img> cannot render directly.
+  if (assetUrl && !/^data:image\//i.test(assetUrl) && !/^https?:\/\//i.test(assetUrl) && !/^blob:/i.test(assetUrl)) {
+    assetUrl = undefined;
+  }
+  if (assetUrl && /^data:image\/(?:png|jpeg|webp);base64,/i.test(assetUrl)) {
+    const encoded = assetUrl.slice(assetUrl.indexOf(',') + 1);
+    try {
+      const bytes = atob(encoded);
+      const png = bytes.length > 8 && bytes.charCodeAt(0) === 0x89 && bytes.slice(1, 4) === 'PNG';
+      const jpeg = bytes.length > 3 && bytes.charCodeAt(0) === 0xff && bytes.charCodeAt(1) === 0xd8;
+      const webp = bytes.length > 12 && bytes.slice(0, 4) === 'RIFF' && bytes.slice(8, 12) === 'WEBP';
+      if (!png && !jpeg && !webp) assetUrl = undefined;
+    } catch {
+      assetUrl = undefined;
+    }
+  }
+
+  const hasMedia = Boolean(assetUrl);
+  const queuedVideo = m === 'video' && !hasMedia && Boolean(job);
   return {
     provider: p,
-    status: m === 'video' && !asset && !b64 ? 'queued' : 'ready',
-    assetUrl: asset ?? (b64 ? `data:image/png;base64,${b64}` : undefined),
+    status: hasMedia ? 'ready' : queuedVideo ? 'queued' : 'error',
+    assetUrl,
     jobId: job,
     text: d.text ?? d.message,
-    warning: asset || b64 || job ? undefined : 'Provider returned no media URL'
+    warning: hasMedia || queuedVideo ? undefined : 'Provider returned no renderable image/video asset. The HTTP request succeeded, but media generation was not verified.'
   };
 }
 

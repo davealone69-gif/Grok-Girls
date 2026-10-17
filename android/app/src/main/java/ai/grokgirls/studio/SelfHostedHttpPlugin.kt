@@ -80,8 +80,7 @@ class SelfHostedHttpPlugin : Plugin() {
             } catch (e: Exception) {
                 call.reject(
                     "Native self-hosted request failed: " +
-                        (e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName),
-                    e
+                        (e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName)
                 )
             } finally {
                 connection?.disconnect()

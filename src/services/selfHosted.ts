@@ -164,14 +164,14 @@ export async function testConnection(): Promise<SelfHostStatus> {
       return {
         ok: true,
         serverType: 'a1111',
-        message: 'Connected — AUTOMATIC1111 Stable Diffusion WebUI',
+        message: 'AUTOMATIC1111 API responds — image generation is not verified until TEST REAL RENDER succeeds.',
         modelCount: Array.isArray(models) ? models.length : 0,
         loraCount
       };
     }
     const statsRes = await fetchWithTimeout(`${base}/system_stats`);
     await statsRes.json();
-    return { ok: true, serverType: 'comfy', message: 'Connected — ComfyUI server' };
+    return { ok: true, serverType: 'comfy', message: 'ComfyUI API responds — image generation is not verified until TEST REAL RENDER succeeds.' };
   } catch (e) {
     return {
       ok: false,

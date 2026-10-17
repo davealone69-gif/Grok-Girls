@@ -850,43 +850,52 @@ export async function generateWithFallback(
   r: GenerationRequest,
   preferred: ProviderName = 'local'
 ): Promise<GenerationResult> {
-  // The `local` engine only ever draws a procedural placeholder — it is NOT a
-  // real generator. It is honoured when the user explicitly selects it (some
-  // people use it as an offline mock), but it must never be used as a silent
-  // fallback for a real engine that failed: that swaps a fixable error message
-  // for a fake picture and makes real misconfiguration impossible to diagnose.
-  //
-  // So: keep `local` in the candidate list only when it was asked for directly.
-  const explicitLocal = preferred === 'local';
-  const all = providers().filter(p => p.name !== 'local' || explicitLocal);
-  for (const p of [...all.filter(x => x.name === preferred), ...all.filter(x => x.name !== preferred)]) {
-    if (!p.available()) continue;
-    try {
-      const out = await p.generate(r);
-      if (out.status === 'ready' || out.status === 'queued' || (explicitLocal && p.name === 'local')) return out;
-    } catch (e) {
-      if (p.name === preferred && preferred !== 'local') {
-        return {
-          provider: p.name,
-          status: 'error',
-          warning: e instanceof Error ? e.message : 'Generation failed',
-          assetUrl: undefined,
-          text: undefined
-        };
-      }
-    }
+  // Despite the legacy function name, generation must not silently switch
+  // engines. A selector is a routing contract: CUSTOM cannot turn into
+  // ComfyUI, Gemini, or a procedural SVG when its own endpoint fails.
+  const selected = providers().find(p => p.name === preferred);
+  if (!selected) {
+    return {
+      provider: preferred,
+      status: 'error',
+      warning: `Unknown generation engine: ${preferred}.`,
+      assetUrl: undefined,
+      text: undefined
+    };
   }
-  // Nothing produced a real asset and we did NOT quietly return a placeholder
-  // instead. Say plainly what to do about it.
-  return {
-    provider: preferred,
-    status: 'fallback',
-    warning: r.mode === 'image'
-      ? 'No image engine is configured, or the selected engine failed. Open Settings and configure the matching provider: SD LOCAL for phone-local Stable Diffusion, SELF-HOSTED for A1111/ComfyUI, or CUSTOM for an explicitly configured image endpoint. No placeholder is substituted for failed generation.'
-      : 'No generation provider is configured for this mode. Open Settings and add an API key or endpoint.',
-    assetUrl: undefined,
-    text: undefined
-  };
+
+  if (!selected.available()) {
+    const warning = preferred === 'sdlocal'
+      ? 'SD LOCAL is selected but disabled. Open Settings → Stable Diffusion and enable it after configuring an A1111-compatible server on port 1234.'
+      : preferred === 'selfhosted'
+        ? 'COMFYUI / SELF-HOSTED is selected but no server URL is configured. Open Settings → Self-Hosted Image Server and test the connection.'
+        : preferred === 'custom'
+          ? 'CUSTOM is selected but has no configured image endpoint. Set Settings → Custom → Image Endpoint, or choose another engine explicitly.'
+          : preferred === 'openrouter' || preferred === 'gemini'
+            ? `${preferred} is selected but no API key is configured.`
+            : 'The selected image engine is not available. Check its Settings and server status.';
+    return { provider: preferred, status: 'error', warning, assetUrl: undefined, text: undefined };
+  }
+
+  try {
+    const out = await selected.generate(r);
+    if (out.status === 'ready' || out.status === 'queued' || out.status === 'error') return out;
+    return {
+      provider: preferred,
+      status: 'error',
+      warning: out.warning || `${preferred} did not produce an image.`,
+      assetUrl: undefined,
+      text: undefined
+    };
+  } catch (e) {
+    return {
+      provider: preferred,
+      status: 'error',
+      warning: e instanceof Error ? e.message : 'Generation failed',
+      assetUrl: undefined,
+      text: undefined
+    };
+  }
 }
 
 export async function chatWithProvider(messages: ChatMessage[], preferred: ProviderName = 'openrouter') {

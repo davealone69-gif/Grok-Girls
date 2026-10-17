@@ -28,7 +28,8 @@ import {
   saveServerBase,
   saveUpscaler,
   testConnection,
-  generateSelfHosted
+  generateSelfHosted,
+  startSelfHostedServer
 } from '../services/selfHosted';
 
 export interface SettingsModalProps {
@@ -79,6 +80,8 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [shBase, setShBase] = useState(() => getServerBase());
   const [shStatus, setShStatus] = useState<SelfHostStatus | null>(null);
   const [shTesting, setShTesting] = useState(false);
+  const [shStarting, setShStarting] = useState(false);
+  const [shStartStatus, setShStartStatus] = useState('');
   const [shRenderTesting, setShRenderTesting] = useState(false);
   const [shRenderStatus, setShRenderStatus] = useState('');
   const [shTestImage, setShTestImage] = useState('');
@@ -103,6 +106,32 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     saveUpscaler(shUpscaler);
     saveHiresFix(shHires);
     saveLoraSlots(shLoraSlots);
+  };
+
+  const handleStartComfyUI = async () => {
+    setShStarting(true);
+    setShStartStatus('Requesting phone-local ComfyUI start through Termux…');
+    saveServerBase(shBase);
+    try {
+      const result = await startSelfHostedServer(shBase);
+      setShStartStatus(result.message);
+      if (result.ok) {
+        const st = await testConnection();
+        setShStatus(st);
+        if (st.ok) {
+          const models = await fetchModels();
+          setShModels(models);
+          if (models.length && (!shModel || !models.includes(shModel))) {
+            setShModel(models[0]);
+            saveCheckpoint(models[0]);
+          }
+        }
+      }
+    } catch (err) {
+      setShStartStatus(err instanceof Error ? err.message : String(err));
+    } finally {
+      setShStarting(false);
+    }
   };
 
   const handleTest = async () => {
@@ -290,21 +319,39 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             <Field
               label="Server URL"
               value={shBase}
-              onChange={setShBase}
-              placeholder="http://127.0.0.1:7860  or  http://192.168.1.50:8188"
+              onChange={value => {
+                if (value !== shBase) {
+                  setShModels([]);
+                  setShModel('');
+                  setShStatus(null);
+                  setShStartStatus('');
+                  setShRenderStatus('');
+                  setShTestImage('');
+                }
+                setShBase(value);
+              }}
+              placeholder="http://127.0.0.1:8188 (phone-local ComfyUI) or a server URL"
               hint="ComfyUI: usually 8188. AUTOMATIC1111: usually 7860. Use 127.0.0.1 for a server on this phone, or a LAN IP for another machine."
             />
             <div className="selfhosted-actions">
               <button className="btn-test-server" disabled={shTesting || shRenderTesting} onClick={handleTest}>
                 {shTesting ? 'TESTING…' : '🔌 TEST CONNECTION'}
               </button>
-              <button className="prompt-mini-btn" disabled={shTesting || shRenderTesting} onClick={handleFetchModels}>
+              <button className="prompt-mini-btn" disabled={shTesting || shRenderTesting || shStarting} onClick={handleFetchModels}>
                 🔄 FETCH MODELS
               </button>
-              <button className="prompt-mini-btn" disabled={shTesting || shRenderTesting} onClick={handleTestRender}>
+              <button className="prompt-mini-btn" disabled={shTesting || shRenderTesting || shStarting} onClick={handleStartComfyUI}>
+                {shStarting ? 'STARTING COMFYUI…' : '▶ START COMFYUI (TERMUX)'}
+              </button>
+              <button className="prompt-mini-btn" disabled={shTesting || shRenderTesting || shStarting} onClick={handleTestRender}>
                 {shRenderTesting ? 'RENDERING TEST…' : '🖼️ TEST REAL RENDER'}
               </button>
             </div>
+            {shStartStatus && (
+              <div className={`selfhosted-status ${shStartStatus.startsWith('ComfyUI API is responding') || shStartStatus.startsWith('The ComfyUI API is already') ? 'ok' : 'fail'}`}>
+                {shStartStatus}
+              </div>
+            )}
             {shRenderStatus && (
               <div className={`selfhosted-status ${shRenderStatus.startsWith('✓') ? 'ok' : shRenderStatus.startsWith('✕') ? 'fail' : ''}`}>
                 {shRenderStatus}

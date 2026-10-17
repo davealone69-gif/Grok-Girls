@@ -184,7 +184,7 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, ms = 8000):
       catch { throw new Error('Native self-hosted HTTP returned invalid Base64 response bytes.'); }
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      body = bytes.buffer;
+      body = bytes.buffer as ArrayBuffer;
     }
     return new Response([204, 205, 304].includes(status) ? null : body, {
       status,

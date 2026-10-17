@@ -107,9 +107,91 @@ export function saveLoraSlots(slots: LoraSlot[]) {
 }
 
 
-/* Fetch with a hard timeout so an unreachable server can never leave the UI
-   stuck "busy" (and GENERATE disabled) for minutes. */
-function fetchWithTimeout(url: string, init: RequestInit = {}, ms = 8000): Promise<Response> {
+interface NativeSelfHostedHttpResult {
+  status?: number;
+  ok?: boolean;
+  contentType?: string;
+  bodyText?: string;
+  bodyBase64?: string;
+}
+
+interface NativeSelfHostedHttpPlugin {
+  request(opts: {
+    url: string;
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+    timeoutMs?: number;
+  }): Promise<NativeSelfHostedHttpResult>;
+}
+
+function nativeSelfHostedHttp(): { native: boolean; plugin: NativeSelfHostedHttpPlugin | null } {
+  if (typeof window === 'undefined') return { native: false, plugin: null };
+  const capacitor = (window as unknown as {
+    Capacitor?: {
+      Plugins?: Record<string, unknown>;
+      isNativePlatform?: () => boolean;
+      getPlatform?: () => string;
+    };
+  }).Capacitor;
+  const native = typeof capacitor?.isNativePlatform === 'function'
+    ? capacitor.isNativePlatform()
+    : typeof capacitor?.getPlatform === 'function' && capacitor.getPlatform() !== 'web';
+  const candidate = capacitor?.Plugins?.['SelfHostedHttp'] as NativeSelfHostedHttpPlugin | undefined;
+  return { native, plugin: candidate && typeof candidate.request === 'function' ? candidate : null };
+}
+
+/* Native Android requests must bypass WebView CORS/mixed-content restrictions
+   for Termux's HTTP server. Desktop/PWA keeps normal fetch. Both transports
+   return a standard Response so the same API/job logic is used downstream. */
+async function fetchWithTimeout(url: string, init: RequestInit = {}, ms = 8000): Promise<Response> {
+  const { native, plugin } = nativeSelfHostedHttp();
+  if (native) {
+    if (!plugin) {
+      throw new Error('Native SelfHostedHttp bridge is missing. Rebuild and install the current Android APK; browser fetch cannot reliably reach local ComfyUI/A1111 from the HTTPS WebView.');
+    }
+    const method = (init.method || 'GET').toUpperCase();
+    const headers: Record<string, string> = {};
+    if (init.headers instanceof Headers) {
+      init.headers.forEach((value, key) => { headers[key] = value; });
+    } else if (Array.isArray(init.headers)) {
+      for (const [key, value] of init.headers) headers[key] = value;
+    } else if (init.headers) {
+      Object.assign(headers, init.headers as Record<string, string>);
+    }
+    if (init.body != null && typeof init.body !== 'string') {
+      throw new Error('Native self-hosted HTTP currently requires a string request body.');
+    }
+    const raw = await plugin.request({
+      url,
+      method,
+      headers,
+      body: init.body == null ? undefined : init.body,
+      timeoutMs: ms
+    });
+    const status = Number(raw.status);
+    if (!Number.isInteger(status) || status < 100 || status > 599) {
+      throw new Error('Native self-hosted HTTP returned an invalid HTTP status.');
+    }
+    const responseHeaders = new Headers();
+    if (raw.contentType) responseHeaders.set('Content-Type', raw.contentType);
+    let body: BodyInit | null = null;
+    if (typeof raw.bodyText === 'string') {
+      body = raw.bodyText;
+    } else if (typeof raw.bodyBase64 === 'string' && raw.bodyBase64.length > 0) {
+      let binary: string;
+      try { binary = atob(raw.bodyBase64); }
+      catch { throw new Error('Native self-hosted HTTP returned invalid Base64 response bytes.'); }
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      body = bytes.buffer;
+    }
+    return new Response([204, 205, 304].includes(status) ? null : body, {
+      status,
+      headers: responseHeaders
+    });
+  }
+
   const signal =
     typeof AbortSignal !== 'undefined' && typeof (AbortSignal as any).timeout === 'function'
       ? (AbortSignal as any).timeout(ms)

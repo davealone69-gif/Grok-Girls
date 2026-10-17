@@ -251,10 +251,13 @@ export async function testConnection(): Promise<SelfHostStatus> {
   const type = await detectServer(base);
   if (type === 'unknown') {
     saveServerType('unknown');
+    const bridge = nativeSelfHostedHttp();
     return {
       ok: false,
       serverType: 'unknown',
-      message: `No A1111 or ComfyUI API found at ${base}. Check the URL and that the server is running with its API enabled (A1111: launch with --api). If the browser blocked the request, also add --cors-allow-origins=* (ComfyUI allows browsers by default).`
+      message: bridge.native && !bridge.plugin
+        ? 'Native SelfHostedHttp bridge is missing from this Android APK. Rebuild and install the current branch before testing ComfyUI/A1111.'
+        : `No A1111 or ComfyUI API found at ${base}. Check the URL and that the server is running with its API enabled (A1111: launch with --api). A listener responding on its root URL is not enough.`
     };
   }
   saveServerType(type);

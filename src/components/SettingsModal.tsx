@@ -348,7 +348,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </button>
             </div>
             {shStartStatus && (
-              <div className={`selfhosted-status ${shStartStatus.startsWith('ComfyUI API is responding') || shStartStatus.startsWith('The ComfyUI API is already') ? 'ok' : 'fail'}`}>
+              <div className={`selfhosted-status ${shStartStatus.startsWith('ComfyUI API is responding') || shStartStatus.startsWith('ComfyUI API is already responding') ? 'ok' : 'fail'}`}>
                 {shStartStatus}
               </div>
             )}

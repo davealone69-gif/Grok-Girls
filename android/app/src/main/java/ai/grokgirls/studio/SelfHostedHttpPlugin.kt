@@ -101,8 +101,8 @@ class SelfHostedHttpPlugin : Plugin() {
                 }
 
                 val script =
-                    "cd \"\$HOME/llama/llama.cpp/ComfyUI\" || { echo 'ComfyUI folder not found at ~/llama/llama.cpp/ComfyUI' >&2; exit 127; }; " +
-                    "if pgrep -f '[m]ain.py.*--port 8188' >/dev/null 2>&1; then echo 'ComfyUI process already exists but its API is not ready yet'; exit 0; fi; " +
+                    "cd \"\$HOME/llama/llama.cpp/ComfyUI\" || { echo 'ComfyUI folder not found at ~/llama/llama.cpp/ComfyUI' > \"\$HOME/comfyui.log\"; exit 127; }; " +
+                    "if pgrep -f '[m]ain.py.*--port 8188' >/dev/null 2>&1; then echo 'ComfyUI process already exists but its API is not ready yet' >> \"\$HOME/comfyui.log\"; exit 0; fi; " +
                     "nohup env LD_PRELOAD=\"\$PREFIX/lib/libpython3.13.so\" python main.py --listen 127.0.0.1 --port 8188 " +
                     "> \"\$HOME/comfyui.log\" 2>&1 &"
                 val intent = Intent()

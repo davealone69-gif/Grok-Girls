@@ -27,7 +27,8 @@ import {
   saveSampler,
   saveServerBase,
   saveUpscaler,
-  testConnection
+  testConnection,
+  generateSelfHosted
 } from '../services/selfHosted';
 
 export interface SettingsModalProps {
@@ -78,6 +79,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [shBase, setShBase] = useState(() => getServerBase());
   const [shStatus, setShStatus] = useState<SelfHostStatus | null>(null);
   const [shTesting, setShTesting] = useState(false);
+  const [shRenderTesting, setShRenderTesting] = useState(false);
+  const [shRenderStatus, setShRenderStatus] = useState('');
+  const [shTestImage, setShTestImage] = useState('');
   const [shModels, setShModels] = useState<string[]>([]);
   const [shModel, setShModel] = useState(() => getCheckpoint());
   const [shLoras, setShLoras] = useState<string[]>([]);
@@ -127,6 +131,60 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     const models = await fetchModels();
     setShModels(models);
     if (models.length && !shModel) setShModel(models[0]);
+  };
+
+  // This is intentionally separate from TEST CONNECTION. It runs an actual
+  // tiny generation through the selected A1111/ComfyUI server and only reports
+  // success when the server returns image data.
+  const handleTestRender = async () => {
+    if (!shBase.trim()) {
+      setShRenderStatus('Enter a server URL first.');
+      return;
+    }
+    setShRenderTesting(true);
+    setShRenderStatus('Running a real 256×256 test render…');
+    setShTestImage('');
+    saveServerBase(shBase);
+    saveSampler(shSampler);
+    saveUpscaler(shUpscaler);
+    saveHiresFix(shHires);
+    saveLoraSlots(shLoraSlots);
+    try {
+      const connection = await testConnection();
+      if (!connection.ok) throw new Error(connection.message);
+      const models = await fetchModels();
+      setShModels(models);
+      let checkpoint = shModel;
+      if (checkpoint && models.length && !models.includes(checkpoint)) {
+        throw new Error('The saved checkpoint is not available on this server. Select a model from FETCH MODELS first.');
+      }
+      if (connection.serverType === 'comfy' && !checkpoint) {
+        if (models.length === 1) {
+          checkpoint = models[0];
+          setShModel(checkpoint);
+        } else {
+          throw new Error('ComfyUI needs a checkpoint selected. Fetch models and choose one before testing generation.');
+        }
+      }
+      saveCheckpoint(checkpoint);
+      const out = await generateSelfHosted({
+        prompt: 'a red apple on a white table, studio lighting, photorealistic',
+        width: 256,
+        height: 256,
+        steps: 8,
+        cfg: 5,
+        seed: 42
+      });
+      if (out.status !== 'ready' || !out.assetUrl) {
+        throw new Error(out.warning || 'The server did not return a completed image.');
+      }
+      setShTestImage(out.assetUrl);
+      setShRenderStatus('✓ Real test image generated successfully by ' + connection.serverType.toUpperCase() + '.');
+    } catch (err) {
+      setShRenderStatus('✕ ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setShRenderTesting(false);
+    }
   };
 
   const handleSave = () => {
@@ -237,13 +295,27 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               hint="ComfyUI: usually 8188. AUTOMATIC1111: usually 7860. Use 127.0.0.1 for a server on this phone, or a LAN IP for another machine."
             />
             <div className="selfhosted-actions">
-              <button className="btn-test-server" disabled={shTesting} onClick={handleTest}>
+              <button className="btn-test-server" disabled={shTesting || shRenderTesting} onClick={handleTest}>
                 {shTesting ? 'TESTING…' : '🔌 TEST CONNECTION'}
               </button>
-              <button className="prompt-mini-btn" onClick={handleFetchModels}>
+              <button className="prompt-mini-btn" disabled={shTesting || shRenderTesting} onClick={handleFetchModels}>
                 🔄 FETCH MODELS
               </button>
+              <button className="prompt-mini-btn" disabled={shTesting || shRenderTesting} onClick={handleTestRender}>
+                {shRenderTesting ? 'RENDERING TEST…' : '🖼️ TEST REAL RENDER'}
+              </button>
             </div>
+            {shRenderStatus && (
+              <div className={`selfhosted-status ${shRenderStatus.startsWith('✓') ? 'ok' : shRenderStatus.startsWith('✕') ? 'fail' : ''}`}>
+                {shRenderStatus}
+              </div>
+            )}
+            {shTestImage && (
+              <div style={{ marginTop: 10 }}>
+                <strong>REAL SERVER TEST OUTPUT</strong>
+                <img src={shTestImage} alt="Actual image returned by the configured self-hosted server" style={{ display: 'block', width: 192, height: 192, objectFit: 'contain', marginTop: 8, borderRadius: 8 }} />
+              </div>
+            )}
             {shStatus && (
               <div className={`selfhosted-status ${shStatus.ok ? 'ok' : 'fail'}`}>
                 {shStatus.ok ? '✓' : '✕'} {shStatus.message}

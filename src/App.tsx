@@ -499,19 +499,10 @@ export default function App() {
     saveProviderPref('image', provider);
   }, [provider]);
 
-  // Phone-first: if the real local SD server is already running, make it the
-  // image engine automatically so the user does not have to hunt through settings.
-  useEffect(() => {
-    let alive = true;
-    void sdStatus().then(st => {
-      if (!alive || !st.ok) return;
-      setSdEnabled(true);
-      setProvider('sdlocal');
-    }).catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // Do not auto-select Stable Diffusion from a port/liveness check.
+  // ComfyUI also answers HTTP on :8188, but it is NOT the A1111-compatible
+  // /sdapi/v1/txt2img API used by sdlocal. Engine selection stays explicit
+  // in the small image-engine selector; each engine uses its own settings.
   // H1: chat has its OWN engine selector — picking SELF-HOSTED for renders
   // no longer breaks chat. The footer ENGINE drives generation only.
   const [chatProvider, setChatProvider] = useState<ProviderName>(() => getProviderPref('chat'));

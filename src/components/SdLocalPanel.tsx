@@ -16,7 +16,7 @@ import { saveProviderPref } from '../services/settingsState';
 const dot = (state: SdServerState): { color: string; label: string } => {
   switch (state) {
     case 'running':
-      return { color: '#7ff0bd', label: 'RUNNING' };
+      return { color: '#7ff0bd', label: 'LISTENER UP' };
     case 'starting':
       return { color: '#ffd166', label: 'STARTING…' };
     case 'stopped':
@@ -153,9 +153,9 @@ export default function SdLocalPanel({ onNotice }: SdLocalPanelProps) {
     <div className="settings-section selfhosted-section">
       <div className="settings-section-title">🎨 STABLE DIFFUSION — ON-DEVICE IMAGES (PHONE-LOCAL)</div>
       <p className="settings-note">
-        Renders entirely on this phone at <code>{SD_DEFAULT_BASE}</code> — no Wi-Fi, no LAN IP, no
-        internet, no API key. Images come from <code>{base}/sdapi/v1/txt2img</code>. This is separate
-        from Ollama on <code>:11434</code>, which handles text: two servers, two ports.
+        Uses the phone-local A1111-compatible API at <code>{base}/sdapi/v1/txt2img</code>. A responding
+        port only proves a listener exists. Press TEST RENDER to prove the selected server actually
+        returns a valid image. This is separate from Ollama on <code>:11434</code>, which handles text.
       </p>
 
       {/* live status line */}

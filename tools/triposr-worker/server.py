@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 HOST = os.environ.get("TRIPOSR_HOST", "127.0.0.1")
-PORT = int(os.environ.get("TRIPOSR_PORT", "8081"))
+PORT = int(os.environ.get("TRIPOSR_PORT", "8082"))
 TRIPOSR_HOME = Path(os.environ.get("TRIPOSR_HOME", str(Path.home() / "TripoSR"))).expanduser()
 PYTHON = os.environ.get("TRIPOSR_PYTHON", "python")
 RUN_PY = Path(os.environ.get("TRIPOSR_RUN", str(TRIPOSR_HOME / "run.py"))).expanduser()
@@ -14,6 +14,7 @@ MAX_INPUT_BYTES = int(os.environ.get("TRIPOSR_MAX_INPUT_BYTES", str(12 * 1024 * 
 MAX_JOB_SECONDS = int(os.environ.get("TRIPOSR_MAX_JOB_SECONDS", "1800"))
 MIN_AVAILABLE_MB = int(os.environ.get("TRIPOSR_MIN_AVAILABLE_MB", "1800"))
 JOB_LOCK = threading.Lock()
+GENERATION_VERIFIED = False
 
 def available_memory_mb():
     try:
@@ -49,10 +50,17 @@ class Handler(BaseHTTPRequestHandler):
             "ok": ready,
             "engine": "triposr",
             "worker": "grokgirls-3d",
+            "state": "configured" if ready else "missing-install",
+            "generation_verified": GENERATION_VERIFIED,
             "busy": JOB_LOCK.locked(),
             "available_memory_mb": available_memory_mb(),
             "run_py": str(RUN_PY),
-            "message": "TripoSR worker ready" if ready else "TripoSR installation not found",
+            "message": (
+                "TripoSR produced a valid GLB in this worker process."
+                if ready and GENERATION_VERIFIED else
+                "TripoSR worker is configured; successful generation is not yet verified."
+                if ready else "TripoSR installation not found"
+            ),
         }
         body = json.dumps(payload).encode("utf-8")
         self.send_response(200 if ready else 503)
@@ -62,6 +70,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
+        global GENERATION_VERIFIED
         if self.path != "/generate":
             json_error(self, 404, "Not found")
             return
@@ -126,6 +135,7 @@ class Handler(BaseHTTPRequestHandler):
             if data[:4] != b"glTF":
                 json_error(self, 500, "TripoSR returned an invalid GLB.")
                 return
+            GENERATION_VERIFIED = True
             self.send_response(200)
             self.send_header("Content-Type", "model/gltf-binary")
             self.send_header("Content-Length", str(len(data)))

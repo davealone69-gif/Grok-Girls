@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { Girl, rooms, seedGirls, Room } from './models/studio';
 import { advanceStory, initialStory, StoryState, storyChapters, storyPrompt } from './models/story';
@@ -7,7 +8,7 @@ import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, Gallery
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
 import { setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
-import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
+import { generateTripoSR, ensureTripoSRRunning, triposrStatus } from './services/triposrLocal';
 import { buildPhoto3D } from './services/photo3dLocal';
 import { downloadVknn3DModel, probeVknn3DModel, vknn3dStatus } from './services/vknn3dLocal';
 import { openNativeHdAvatar } from './nativeAvatarBridge';
@@ -169,6 +170,7 @@ import { StylePreset, applyStylePreset, stylePresets } from './services/styles';
 import { StudioStats, achievements, bumpStat, loadStats } from './services/stats';
 import ColorWheel from './components/ColorWheel';
 import SettingsModal from './components/SettingsModal';
+import ServerManagerModal from './components/ServerManagerModal';
 import VideoExportPage from './pages/VideoExportPage';
 import './styles.css';
 
@@ -520,6 +522,7 @@ export default function App() {
   }, [chatProvider]);
   const adultChatPinWarnRef = useRef(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isServerManagerOpen, setIsServerManagerOpen] = useState(false);
   // Data-driven menu: labels/titles come from /menu.xml; a faulty file
   // falls back to DEFAULT_MENU (navigation can never break).
   const [menuItems, setMenuItems] = useState<MenuItem[]>(DEFAULT_MENU);
@@ -788,7 +791,7 @@ export default function App() {
       setHdProgress(0);
     }
   };
-  const renderAvatarTo2D = async () => {
+  const _renderAvatarTo2D = async () => {
     if (busyRef.current || !avatar3dRef.current) return;
     enterBusy();
     try {
@@ -852,7 +855,7 @@ export default function App() {
 
   const openReal3D = async () => {
     if (hy3dBusy || busyRef.current) return;
-    setHy3dStatus('Opening native GLES3 Hunyuan3D test asset...');
+    setHy3dStatus('Opening the bundled native GLES3 3D test asset...');
     try {
       await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft));
       setHy3dStatus('Native 3D renderer opened. Drag to orbit, pinch to zoom.');
@@ -866,13 +869,25 @@ export default function App() {
     setHy3dBusy(true);
     setHy3dStatus('Checking available real 3D workers...');
     try {
+      if (!Capacitor.isNativePlatform()) {
+        throw new Error('Real 3D generation requires the Android app and its local 3D worker.');
+      }
+
       let workerReady = false;
+      let workerEngine = 'local 3D worker';
+      let workerMessage = '';
       try {
-        const worker = await hunyuan3dStatus();
-        workerReady = worker.ok;
-        if (!workerReady) setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
-      } catch {
-        setHy3dStatus('Hunyuan3D worker unavailable. Using the real on-device 3DDD mesh pipeline...');
+        const start = await ensureTripoSRRunning();
+        workerMessage = start.message;
+        const worker = await triposrStatus();
+        workerReady = start.ok && worker.ok;
+        workerEngine = worker.engine || 'TripoSR';
+        if (!workerReady) {
+          setHy3dStatus('Local 3D worker unavailable: ' + (worker.message || workerMessage) + '. Using the real on-device 3DDD mesh pipeline...');
+        }
+      } catch (e) {
+        workerMessage = e instanceof Error ? e.message : String(e);
+        setHy3dStatus('Local 3D worker unavailable: ' + workerMessage + '. Using the real on-device 3DDD mesh pipeline...');
       }
 
       setHy3dStatus('Generating the real source image with local Stable Diffusion...');
@@ -892,25 +907,36 @@ export default function App() {
         { autoStart: true, timeoutMs: 600000 }
       );
 
-      if (workerReady) {
-        setHy3dStatus('Hunyuan3D is generating the GLB...');
-        const glb = await generateHunyuan3D(image.dataUrl, {
-          texture: true,
-          seed: Number(seedInput) || 1234,
-          octreeResolution: 256,
-          steps: 5
-        });
-        setHy3dStatus('Real Hunyuan3D GLB generated. Opening the native renderer...');
-        await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), glb.file);
-        setHy3dStatus('REAL 3D READY · Hunyuan3D GLB loaded by the native GLES3 renderer.');
-      } else {
-        setHy3dStatus('Building a real closed 3D mesh from the generated image...');
+      const buildLocalFallback = async (workerFailure?: string) => {
+        setHy3dStatus(workerFailure
+          ? `TripoSR generation failed: ${workerFailure}. Falling back to the on-device 3DDD mesh pipeline...`
+          : 'Building a real closed 3D mesh from the generated image...');
         const mesh = await buildPhoto3D(image.dataUrl, girl.name || 'grok-girls-avatar');
         setHy3dStatus(
           `Real 3DDD GLB generated · ${mesh.vertices.toLocaleString()} vertices · ${mesh.triangles.toLocaleString()} triangles. Opening renderer...`
         );
         await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), mesh.file);
-        setHy3dStatus('REAL 3D READY · 3DDD GLB loaded by the native GLES3 renderer.');
+        setHy3dStatus(workerFailure
+          ? `3DDD FALLBACK READY · TripoSR failed: ${workerFailure}`
+          : 'REAL 3D READY · 3DDD GLB loaded by the native GLES3 renderer.');
+      };
+
+      if (workerReady) {
+        try {
+          setHy3dStatus(`${workerEngine} is generating the GLB...`);
+          const glb = await generateTripoSR(image.dataUrl, {
+            texture: true,
+            mcResolution: 192,
+            timeoutMs: 1800000
+          });
+          setHy3dStatus(`Real ${workerEngine} GLB generated (${glb.bytes.toLocaleString()} bytes). Opening the native renderer...`);
+          await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), glb.file);
+          setHy3dStatus(`REAL 3D READY · ${workerEngine} GLB loaded by the native GLES3 renderer.`);
+        } catch (e) {
+          await buildLocalFallback(e instanceof Error ? e.message : String(e));
+        }
+      } else {
+        await buildLocalFallback();
       }
     } catch (e) {
       setHy3dStatus(e instanceof Error ? e.message : String(e));
@@ -1900,6 +1926,7 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsSettingsOpen(false);
+        setIsServerManagerOpen(false);
         setPremiumOpen(false);
         setHelpOpen(false);
         setOutfitOpen(false);
@@ -2279,6 +2306,7 @@ export default function App() {
           <div className="avatar-design-title">
             <span>CREATE YOUR IDENTITY</span>
             <h2>{menuLabel('header_title')}</h2>
+          <button className="server-manager-launcher" onClick={() => setIsServerManagerOpen(true)} aria-label="Open Server Manager" title="Start and check local servers">⚙ <span>SERVERS</span></button>
           </div>
 
           {/* Menu-driven header actions (wide screens; phones use the HUD + footer) */}
@@ -2302,7 +2330,7 @@ export default function App() {
 
           <div className="native-3d-controls">
             <button className="native-action native-3d-test" disabled={hy3dBusy} onClick={() => void openReal3D()} title="Open the real native GLES3 Hunyuan3D renderer">🧊 REAL 3D</button>
-            <button className="native-action native-3d-generate" disabled={hy3dBusy} onClick={() => void generateReal3D()} title="Generate a real Hunyuan3D GLB and load it into the native renderer">🧬 {hy3dBusy ? '3D…' : 'MAKE 3D'}</button>
+            <button className="native-action native-3d-generate" disabled={hy3dBusy} onClick={() => void generateReal3D()} title="Generate a real TripoSR GLB and load it into the native renderer">🧬 {hy3dBusy ? '3D…' : 'MAKE 3D'}</button>
           </div>
           <div className="mode-pills">
             <button
@@ -4547,6 +4575,7 @@ export default function App() {
       )}
 
       {/* SETTINGS MODAL */}
+      <ServerManagerModal isOpen={isServerManagerOpen} onClose={() => setIsServerManagerOpen(false)} onNotice={showToast} />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
       {/* TOAST */}

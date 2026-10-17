@@ -1,6 +1,7 @@
 import { registerPlugin, Capacitor } from '@capacitor/core';
 
 interface TripoSRPlugin {
+  status(): Promise<{ running?: boolean; engine?: string; base?: string; generationVerified?: boolean; message?: string }>;
   startServer(opts?: { timeoutMs?: number }): Promise<{ started?: boolean; method?: string; message?: string }>;
   generate(opts: {
     image: string;
@@ -10,7 +11,7 @@ interface TripoSRPlugin {
     timeoutMs?: number;
   }): Promise<{
     ok?: boolean;
-    glbBase64?: string;
+    file?: string;
     bytes?: number;
     engine?: string;
     seconds?: string;
@@ -19,6 +20,23 @@ interface TripoSRPlugin {
 }
 
 const TripoSRLocal = registerPlugin<TripoSRPlugin>('TripoSRLocal');
+
+export async function triposrStatus(): Promise<{ ok: boolean; message: string; engine: string; generationVerified?: boolean }> {
+  if (!Capacitor.isNativePlatform()) {
+    return { ok: false, engine: 'triposr', generationVerified: false, message: 'TripoSR worker status requires the Android app.' };
+  }
+  try {
+    const r = await TripoSRLocal.status();
+    return {
+      ok: !!r.running,
+      engine: r.engine || 'triposr',
+      generationVerified: !!r.generationVerified,
+      message: r.message || (r.running ? 'TripoSR worker configured; generation is not yet verified.' : 'TripoSR worker unavailable.')
+    };
+  } catch (e) {
+    return { ok: false, engine: 'triposr', generationVerified: false, message: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 export async function ensureTripoSRRunning(): Promise<{ ok: boolean; message: string }> {
   if (!Capacitor.isNativePlatform()) return { ok: false, message: 'TripoSR worker requires the Android app.' };
@@ -32,7 +50,7 @@ export async function ensureTripoSRRunning(): Promise<{ ok: boolean; message: st
 
 export interface TripoSRResult {
   ok: true;
-  glbDataUrl: string;
+  file: string;
   bytes: number;
   engine: string;
   seconds?: number;
@@ -69,13 +87,13 @@ export async function generateTripoSR(
     timeoutMs: options.timeoutMs ?? 1800000
   });
 
-  if (!r.ok || !r.glbBase64) {
+  if (!r.ok || !r.file) {
     throw new Error(r.error || 'TripoSR completed without returning a GLB.');
   }
 
   return {
     ok: true,
-    glbDataUrl: `data:model/gltf-binary;base64,${r.glbBase64}`,
+    file: r.file,
     bytes: r.bytes ?? 0,
     engine: r.engine ?? 'triposr',
     seconds: r.seconds ? Number(r.seconds) : undefined

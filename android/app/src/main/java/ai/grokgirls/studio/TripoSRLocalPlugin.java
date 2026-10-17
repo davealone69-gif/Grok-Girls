@@ -1,32 +1,67 @@
 package ai.grokgirls.studio;
 
 import android.content.Intent;
-import android.util.Base64;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import org.json.JSONObject;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 
 @CapacitorPlugin(name = "TripoSRLocal")
 public class TripoSRLocalPlugin extends Plugin {
   private final java.util.concurrent.ExecutorService pool = Executors.newCachedThreadPool();
+  private volatile boolean generationVerified = false;
   private static final String TERMUX = "com.termux";
   private static final String SERVICE = "com.termux.app.RunCommandService";
   private static final String ACTION = "com.termux.RUN_COMMAND";
-  private static final String BASE = "http://127.0.0.1:8081";
+  private static final String BASE = "http://127.0.0.1:8082";
 
+  /**
+   * Hunyuan3D owns port 8081. TripoSR must identify itself on its own port.
+   */
   private boolean ready() {
+    HttpURLConnection c = null;
     try {
-      HttpURLConnection c = (HttpURLConnection) new URL(BASE + "/health").openConnection();
-      c.setConnectTimeout(1500); c.setReadTimeout(2000);
-      int code = c.getResponseCode(); c.disconnect();
-      return code == 200;
-    } catch (Exception e) { return false; }
+      c = (HttpURLConnection) new URL(BASE + "/health").openConnection();
+      c.setConnectTimeout(1500);
+      c.setReadTimeout(2000);
+      if (c.getResponseCode() != 200) return false;
+      try (InputStream input = c.getInputStream()) {
+        JSONObject health = new JSONObject(new String(readAll(input), java.nio.charset.StandardCharsets.UTF_8));
+        return health.optBoolean("ok", false)
+            && "triposr".equalsIgnoreCase(health.optString("engine", ""));
+      }
+    } catch (Exception e) {
+      return false;
+    } finally {
+      if (c != null) c.disconnect();
+    }
+  }
+
+  @PluginMethod
+  public void status(PluginCall call) {
+    pool.execute(() -> {
+      boolean running = ready();
+      JSObject result = new JSObject();
+      result.put("running", running);
+      result.put("engine", "triposr");
+      result.put("base", BASE);
+      result.put("generationVerified", generationVerified);
+      result.put("message", !running
+          ? "TripoSR worker is not ready at " + BASE + ". Check Termux setup and ~/.cache/grokgirls/triposr-worker.log."
+          : generationVerified
+              ? "TripoSR returned a valid GLB during this app session."
+              : "TripoSR worker is configured at " + BASE + "; inference remains unverified until /generate returns a valid GLB.");
+      call.resolve(result);
+    });
   }
 
   @PluginMethod
@@ -72,8 +107,18 @@ public class TripoSRLocalPlugin extends Plugin {
         if (response.length < 4 || response[0] != 'g' || response[1] != 'l' || response[2] != 'T' || response[3] != 'F') {
           JSObject r = new JSObject(); r.put("ok", false); r.put("error", "TripoSR returned an invalid GLB."); call.resolve(r); return;
         }
+        File outputDir = new File(getContext().getFilesDir(), "triposr");
+        if (!outputDir.isDirectory() && !outputDir.mkdirs()) {
+          throw new java.io.IOException("Could not create the private TripoSR output directory.");
+        }
+        File outputFile = new File(outputDir, "avatar-" + UUID.randomUUID() + ".glb");
+        try (FileOutputStream output = new FileOutputStream(outputFile)) {
+          output.write(response);
+          output.getFD().sync();
+        }
+        generationVerified = true;
         JSObject r = new JSObject(); r.put("ok", true);
-        r.put("glbBase64", Base64.encodeToString(response, Base64.NO_WRAP));
+        r.put("file", outputFile.getAbsolutePath());
         r.put("bytes", response.length);
         r.put("engine", "triposr");
         r.put("seconds", c.getHeaderField("X-GrokGirls-Seconds"));

@@ -232,6 +232,30 @@ export async function sdStatus(base = getSdBase(), timeoutMs = 4000): Promise<Sd
     return { ok: false, state: 'unknown', base, message: 'No image server address configured.', transport };
   }
 
+  // ComfyUI's HTTP listener is alive on :8188, but it is not the A1111
+  // API expected by this provider. Do not let a successful root response
+  // masquerade as a working Stable Diffusion server.
+  try {
+    const parsed = new URL(base);
+    if (parsed.port === '8188') {
+      return {
+        ok: false,
+        state: 'blocked',
+        base,
+        message: `This is the ComfyUI endpoint (${base}). ComfyUI belongs in Settings → Self-Hosted Server; Stable Diffusion needs its own A1111-compatible endpoint, normally http://127.0.0.1:1234.`,
+        transport
+      };
+    }
+  } catch {
+    return {
+      ok: false,
+      state: 'blocked',
+      base,
+      message: `Invalid image-server URL: ${base}. Use a full http:// or https:// URL.`,
+      transport
+    };
+  }
+
   const plugin = nativePlugin();
   if (plugin) {
     try {

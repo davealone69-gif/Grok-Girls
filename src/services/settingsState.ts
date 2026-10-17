@@ -165,8 +165,8 @@ export const DEFAULT_SETTINGS: SettingsState = {
   version: 1,
   contentGate: { ageConfirmed: false, adult: false },
   generation: { negative: '', seed: '', steps: 28, cfg: 7, size: 1024 },
-  // 'local' only draws a procedural SVG placeholder, so the default image
-  // engine is 'custom', which falls back to KEYLESS_IMAGE_ENDPOINT.
+  // CUSTOM is explicit: it does not silently fall back to a public endpoint.
+  // A fresh install must configure an image endpoint or choose a local/server engine.
   provider: { image: 'custom', chat: 'local' },
   connections: {},
   selfHost: {

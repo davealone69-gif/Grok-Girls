@@ -27,7 +27,9 @@ import {
   saveSampler,
   saveServerBase,
   saveUpscaler,
-  testConnection
+  testConnection,
+  generateSelfHosted,
+  startSelfHostedServer
 } from '../services/selfHosted';
 
 export interface SettingsModalProps {
@@ -78,6 +80,11 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [shBase, setShBase] = useState(() => getServerBase());
   const [shStatus, setShStatus] = useState<SelfHostStatus | null>(null);
   const [shTesting, setShTesting] = useState(false);
+  const [shStarting, setShStarting] = useState(false);
+  const [shStartStatus, setShStartStatus] = useState('');
+  const [shRenderTesting, setShRenderTesting] = useState(false);
+  const [shRenderStatus, setShRenderStatus] = useState('');
+  const [shTestImage, setShTestImage] = useState('');
   const [shModels, setShModels] = useState<string[]>([]);
   const [shModel, setShModel] = useState(() => getCheckpoint());
   const [shLoras, setShLoras] = useState<string[]>([]);
@@ -99,6 +106,32 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     saveUpscaler(shUpscaler);
     saveHiresFix(shHires);
     saveLoraSlots(shLoraSlots);
+  };
+
+  const handleStartComfyUI = async () => {
+    setShStarting(true);
+    setShStartStatus('Requesting phone-local ComfyUI start through Termux…');
+    saveServerBase(shBase);
+    try {
+      const result = await startSelfHostedServer(shBase);
+      setShStartStatus(result.message);
+      if (result.ok) {
+        const st = await testConnection();
+        setShStatus(st);
+        if (st.ok) {
+          const models = await fetchModels();
+          setShModels(models);
+          if (models.length && (!shModel || !models.includes(shModel))) {
+            setShModel(models[0]);
+            saveCheckpoint(models[0]);
+          }
+        }
+      }
+    } catch (err) {
+      setShStartStatus(err instanceof Error ? err.message : String(err));
+    } finally {
+      setShStarting(false);
+    }
   };
 
   const handleTest = async () => {
@@ -127,6 +160,60 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     const models = await fetchModels();
     setShModels(models);
     if (models.length && !shModel) setShModel(models[0]);
+  };
+
+  // This is intentionally separate from TEST CONNECTION. It runs an actual
+  // tiny generation through the selected A1111/ComfyUI server and only reports
+  // success when the server returns image data.
+  const handleTestRender = async () => {
+    if (!shBase.trim()) {
+      setShRenderStatus('Enter a server URL first.');
+      return;
+    }
+    setShRenderTesting(true);
+    setShRenderStatus('Running a real 256×256 test render…');
+    setShTestImage('');
+    saveServerBase(shBase);
+    saveSampler(shSampler);
+    saveUpscaler(shUpscaler);
+    saveHiresFix(shHires);
+    saveLoraSlots(shLoraSlots);
+    try {
+      const connection = await testConnection();
+      if (!connection.ok) throw new Error(connection.message);
+      const models = await fetchModels();
+      setShModels(models);
+      let checkpoint = shModel;
+      if (checkpoint && models.length && !models.includes(checkpoint)) {
+        throw new Error('The saved checkpoint is not available on this server. Select a model from FETCH MODELS first.');
+      }
+      if (connection.serverType === 'comfy' && !checkpoint) {
+        if (models.length === 1) {
+          checkpoint = models[0];
+          setShModel(checkpoint);
+        } else {
+          throw new Error('ComfyUI needs a checkpoint selected. Fetch models and choose one before testing generation.');
+        }
+      }
+      saveCheckpoint(checkpoint);
+      const out = await generateSelfHosted({
+        prompt: 'a red apple on a white table, studio lighting, photorealistic',
+        width: 256,
+        height: 256,
+        steps: 8,
+        cfg: 5,
+        seed: 42
+      });
+      if (out.status !== 'ready' || !out.assetUrl) {
+        throw new Error(out.warning || 'The server did not return a completed image.');
+      }
+      setShTestImage(out.assetUrl);
+      setShRenderStatus('✓ Real test image generated successfully by ' + connection.serverType.toUpperCase() + '.');
+    } catch (err) {
+      setShRenderStatus('✕ ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setShRenderTesting(false);
+    }
   };
 
   const handleSave = () => {
@@ -181,7 +268,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setShModels([]);
     setShLoras([]);
     setShLoraSlots([{ name: '', weight: 1 }, { name: '', weight: 1 }, { name: '', weight: 1 }]);
-    setSavedStatus('All keys and models cleared.');
+    setSavedStatus('Cloud credentials, custom endpoints, and self-hosted server settings cleared. SD LOCAL and Ollama settings were preserved.');
     setTimeout(() => setSavedStatus(''), 1500);
   };
 
@@ -196,8 +283,8 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         </div>
 
         <p style={{ color: '#aaa', fontSize: 13, marginTop: 0 }}>
-          Configure cloud credentials or your own self-hosted render server. Keys are stored only in
-          your browser's local storage. The local engine works without any of this.
+          Configure the phone-local engines, cloud credentials, or your own render server. Keys are stored only in
+          this app's browser storage. LOCAL is a procedural SVG preview; SD LOCAL is the real phone-local diffusion route.
         </p>
 
         {savedStatus && (
@@ -220,31 +307,62 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           {/* OLLAMA — phone-local on-device LLM (first-class) */}
           <OllamaPanel onNotice={msg => { setSavedStatus(msg); window.setTimeout(() => setSavedStatus(''), 4000); }} />
 
-          {/* STABLE DIFFUSION — phone-local on-device image engine (:1234) */}
+          {/* STABLE DIFFUSION — phone-local A1111-compatible image engine (:1234) */}
           <SdLocalPanel onNotice={msg => { setSavedStatus(msg); window.setTimeout(() => setSavedStatus(''), 4000); }} />
 
           {/* SELF-HOSTED */}
           <div className="settings-section selfhosted-section">
-            <div className="settings-section-title">🖥️ SELF-HOSTED SERVER — A1111 / ComfyUI</div>
+            <div className="settings-section-title">🖥️ SELF-HOSTED IMAGE SERVER — A1111 / COMFYUI</div>
             <p className="settings-note">
-              Your own machine, your own model, your rules. Point the app at a running AUTOMATIC1111
-              SD-WebUI (<code>--api</code> flag) or ComfyUI instance and render directly to it.
+              Use this section for ComfyUI (normally port 8188) or AUTOMATIC1111 (normally port 7860). This is separate from SD LOCAL, which expects the phone-local A1111-compatible API on port 1234. Do not enter a ComfyUI URL in SD LOCAL.
             </p>
             <Field
               label="Server URL"
               value={shBase}
-              onChange={setShBase}
-              placeholder="http://127.0.0.1:7860  or  http://192.168.1.50:8188"
-              hint="A1111 port is usually 7860, ComfyUI 8188. LAN works from your phone's browser."
+              onChange={value => {
+                if (value !== shBase) {
+                  setShModels([]);
+                  setShModel('');
+                  setShStatus(null);
+                  setShStartStatus('');
+                  setShRenderStatus('');
+                  setShTestImage('');
+                }
+                setShBase(value);
+              }}
+              placeholder="http://127.0.0.1:8188 (phone-local ComfyUI) or a server URL"
+              hint="ComfyUI: usually 8188. AUTOMATIC1111: usually 7860. START COMFYUI starts only phone-local Termux ComfyUI at 127.0.0.1:8188; remote/A1111 servers must be started on their host."
             />
             <div className="selfhosted-actions">
-              <button className="btn-test-server" disabled={shTesting} onClick={handleTest}>
+              <button className="btn-test-server" disabled={shTesting || shRenderTesting} onClick={handleTest}>
                 {shTesting ? 'TESTING…' : '🔌 TEST CONNECTION'}
               </button>
-              <button className="prompt-mini-btn" onClick={handleFetchModels}>
+              <button className="prompt-mini-btn" disabled={shTesting || shRenderTesting || shStarting} onClick={handleFetchModels}>
                 🔄 FETCH MODELS
               </button>
+              <button className="prompt-mini-btn" disabled={shTesting || shRenderTesting || shStarting} onClick={handleStartComfyUI}>
+                {shStarting ? 'STARTING COMFYUI…' : '▶ START COMFYUI (TERMUX)'}
+              </button>
+              <button className="prompt-mini-btn" disabled={shTesting || shRenderTesting || shStarting} onClick={handleTestRender}>
+                {shRenderTesting ? 'RENDERING TEST…' : '🖼️ TEST REAL RENDER'}
+              </button>
             </div>
+            {shStartStatus && (
+              <div className={`selfhosted-status ${shStartStatus.startsWith('ComfyUI API is responding') || shStartStatus.startsWith('ComfyUI API is already responding') ? 'ok' : 'fail'}`}>
+                {shStartStatus}
+              </div>
+            )}
+            {shRenderStatus && (
+              <div className={`selfhosted-status ${shRenderStatus.startsWith('✓') ? 'ok' : shRenderStatus.startsWith('✕') ? 'fail' : ''}`}>
+                {shRenderStatus}
+              </div>
+            )}
+            {shTestImage && (
+              <div style={{ marginTop: 10 }}>
+                <strong>REAL SERVER TEST OUTPUT</strong>
+                <img src={shTestImage} alt="Actual image returned by the configured self-hosted server" style={{ display: 'block', width: 192, height: 192, objectFit: 'contain', marginTop: 8, borderRadius: 8 }} />
+              </div>
+            )}
             {shStatus && (
               <div className={`selfhosted-status ${shStatus.ok ? 'ok' : 'fail'}`}>
                 {shStatus.ok ? '✓' : '✕'} {shStatus.message}
@@ -398,21 +516,21 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               onChange={setCustomKey}
               placeholder="Bearer token or API secret"
               type="password"
-              hint="Some endpoints need no key."
+              hint="Optional only for providers that allow unauthenticated requests. Some providers, including your current Pollinations route, may require a key."
             />
             <Field
               label="Chat Endpoint"
               value={customChatEndpoint}
               onChange={setCustomChatEndpoint}
               placeholder="https://your-llm.example.com/v1/chat/completions"
-              hint="OpenAI-compatible chat API. Also used for chat when the SELF-HOSTED engine is selected."
+              hint="OpenAI-compatible chat API for the CUSTOM chat provider. Image SELF-HOSTED routing uses the server configured above."
             />
             <Field
               label="Image Endpoint"
               value={customImageEndpoint}
               onChange={setCustomImageEndpoint}
               placeholder="https://your-sd.example.com/sdapi/v1/txt2img"
-              hint="Any response shape the parser understands."
+              hint="CUSTOM provider only. For ComfyUI, configure the SELF-HOSTED server above instead."
             />
             <Field
               label="Video Endpoint"
@@ -433,7 +551,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
         <div className="row" style={{ marginTop: 20, justifyContent: 'flex-end' }}>
           <button type="button" onClick={handleClear} style={{ color: '#ff6b8a' }}>
-            Clear All
+            Clear Cloud / Self-Hosted
           </button>
           <button type="button" onClick={onClose}>
             Cancel

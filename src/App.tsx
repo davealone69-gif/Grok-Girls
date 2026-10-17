@@ -499,19 +499,10 @@ export default function App() {
     saveProviderPref('image', provider);
   }, [provider]);
 
-  // Phone-first: if the real local SD server is already running, make it the
-  // image engine automatically so the user does not have to hunt through settings.
-  useEffect(() => {
-    let alive = true;
-    void sdStatus().then(st => {
-      if (!alive || !st.ok) return;
-      setSdEnabled(true);
-      setProvider('sdlocal');
-    }).catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // Do not auto-select Stable Diffusion from a port/liveness check.
+  // ComfyUI also answers HTTP on :8188, but it is NOT the A1111-compatible
+  // /sdapi/v1/txt2img API used by sdlocal. Engine selection stays explicit
+  // in the small image-engine selector; each engine uses its own settings.
   // H1: chat has its OWN engine selector — picking SELF-HOSTED for renders
   // no longer breaks chat. The footer ENGINE drives generation only.
   const [chatProvider, setChatProvider] = useState<ProviderName>(() => getProviderPref('chat'));
@@ -1407,7 +1398,7 @@ export default function App() {
     if (engine === 'selfhosted' && !getServerBase()) {
       showToast('Configure your self-hosted server in ⚙ Settings → Self-Hosted first');
       setResult(
-        'SELF-HOSTED engine selected but no server URL is configured. Open ⚙ Settings and enter your A1111 (port 7860) or ComfyUI (port 8188) address.'
+        'COMFYUI / SELF-HOSTED selected but no server URL is configured. Open ⚙ Settings → Self-Hosted Image Server and enter your ComfyUI (usually port 8188) or AUTOMATIC1111 (usually port 7860) address.'
       );
       window.setTimeout(() => setResult(''), 10000);
       return;
@@ -1477,30 +1468,40 @@ export default function App() {
     if (busyRef.current) return;
     enterBusy();
     setVariationsOpen(true);
-    setVariations([
-      { provider: '…', prompt: '' },
-      { provider: '…', prompt: '' },
-      { provider: '…', prompt: '' },
-      { provider: '…', prompt: '' }
-    ]);
+    const prompts = [0, 1, 2, 3].map(i => variationPrompt(i));
+    const results: { url?: string; provider: string; prompt: string }[] = prompts.map(prompt => ({
+      provider: 'NOT RUN',
+      prompt: buildFullPrompt(prompt)
+    }));
+    setVariations(results);
+    let failureMessage = '';
     try {
-      const results = await Promise.all(
-        [0, 1, 2, 3].map(async i => {
-          const r = await generateWithFallback(
-            genRequest(variationPrompt(i), (seedInput ? Number(seedInput) : Date.now() % 100000) + i * 7),
-            provider
-          );
-          return { url: r.assetUrl, provider: r.provider, prompt: buildFullPrompt(variationPrompt(i)) };
-        })
-      );
-      setVariations(results);
-      bumpAndCelebrate('generations', results.filter(r => r.url).length);
-      setResult('');
-      showToast(
-        results.some(r => r.url && r.provider !== 'local')
-          ? '4 variations rendered — pick your favorite'
-          : '4 local preview variations ready — USE THIS to apply one'
-      );
+      // Heavy image engines on this phone must not receive four concurrent
+      // jobs. Run one at a time and stop at the first failed generation.
+      for (let i = 0; i < prompts.length; i++) {
+        const r = await generateWithFallback(
+          genRequest(prompts[i], (seedInput ? Number(seedInput) : Date.now() % 100000) + i * 7),
+          provider
+        );
+        if (!r.assetUrl) {
+          results[i] = { provider: r.provider, prompt: buildFullPrompt(prompts[i]) };
+          setVariations([...results]);
+          failureMessage = r.warning || `${r.provider} did not return an image. Remaining variations were not started.`;
+          setResult(failureMessage);
+          showToast(failureMessage);
+          break;
+        }
+        results[i] = { url: r.assetUrl, provider: r.provider, prompt: buildFullPrompt(prompts[i]) };
+        setVariations([...results]);
+      }
+      const completed = results.filter(r => Boolean(r.url)).length;
+      if (completed) {
+        bumpAndCelebrate('generations', completed);
+        setResult(failureMessage ? `Partial batch: ${completed}/4 images rendered. ${failureMessage}` : '');
+        showToast(failureMessage
+          ? `Partial batch: ${completed}/4 images rendered. ${failureMessage}`
+          : `${completed} variation${completed === 1 ? '' : 's'} rendered. Pick a completed image.`);
+      }
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Batch failed');
     } finally {
@@ -1514,16 +1515,23 @@ export default function App() {
         genRequest(variationPrompt(i), (Date.now() % 100000) + i * 13),
         provider
       );
+      if (!r.assetUrl) {
+        showToast(r.warning || `${r.provider} did not return an image; the previous variation was kept.`);
+        setResult(r.warning || `${r.provider} did not return an image.`);
+        return;
+      }
       setVariations(vs =>
         vs.map((v, j) => (j === i ? { url: r.assetUrl, provider: r.provider, prompt: buildFullPrompt(variationPrompt(i)) } : v))
       );
-      if (r.assetUrl) bumpAndCelebrate('generations');
+      bumpAndCelebrate('generations');
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Re-roll failed');
     }
   };
 
-  const isProceduralUrl = (u: string) => u.startsWith('blob:') || u.startsWith('data:image/svg+xml');
+  // Blob URLs can contain genuine raster images (e.g. older provider responses).
+  // Only the explicit procedural SVG format is the offline preview engine.
+  const isProceduralUrl = (u: string) => u.startsWith('data:image/svg+xml');
 
   const applyVariation = async (v: { url?: string; provider: string; prompt: string }) => {
     if (!v.url) return;
@@ -3040,12 +3048,12 @@ export default function App() {
                 setProvider(v);
               }}
             >
-              <option value="local">LOCAL</option>
+              <option value="local">LOCAL (PROCEDURAL SVG)</option>
               <option value="sdlocal">SD LOCAL (ON-DEVICE)</option>
               <option value="openrouter">OPENROUTER</option>
               <option value="gemini">GEMINI</option>
               <option value="custom">CUSTOM</option>
-              <option value="selfhosted">SELF-HOSTED</option>
+              <option value="selfhosted">COMFYUI / SELF-HOSTED</option>
             </select>
           </label>
         </div>

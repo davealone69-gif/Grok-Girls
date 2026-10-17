@@ -155,7 +155,7 @@ class SelfHostedHttpPlugin : Plugin() {
         val method = (call.getString("method") ?: "GET").uppercase()
         val timeoutMs = (call.getInt("timeoutMs") ?: 8000).coerceIn(1000, 600000)
         val body = call.getString("body")
-        val headers = call.data.optJSONObject("headers") ?: JSONObject()
+        val headers = call.getData().optJSONObject("headers") ?: JSONObject()
 
         pool.execute {
             var connection: HttpURLConnection? = null

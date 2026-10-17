@@ -61,9 +61,10 @@ export function getServerBase(): string {
 export function saveServerBase(url: string) {
   const next = url.trim().replace(/\/+$/, '');
   if (next !== getServerBase()) {
-    // A server type belongs to a specific URL. Never carry an A1111/ComfyUI
-    // detection result across endpoint changes.
+    // Server type and selected checkpoint belong to one endpoint. Never carry
+    // A1111/ComfyUI detection or a model name across endpoint changes.
     shSetType('unknown');
+    shSetCkpt('');
   }
   shSetBase(next);
 }
@@ -535,6 +536,10 @@ export async function resumeComfyJob(): Promise<ComfyResumeResult | null> {
         return { status: 'error', warning: 'ComfyUI image fetch failed.', prompt: job.prompt };
       }
       const blob = await imgRes.blob();
+      if (!blob.type.startsWith('image/') || blob.size < 16) {
+        clearComfyJob();
+        return { status: 'error', warning: `Resumed ComfyUI job returned ${blob.type || 'non-image data'} instead of an image file.`, prompt: job.prompt };
+      }
       const dataUrl = await blobToDataUrl(blob);
       clearComfyJob();
       return { status: 'ready', assetUrl: dataUrl, prompt: job.prompt };

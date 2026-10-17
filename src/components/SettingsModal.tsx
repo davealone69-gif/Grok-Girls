@@ -331,7 +331,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 setShBase(value);
               }}
               placeholder="http://127.0.0.1:8188 (phone-local ComfyUI) or a server URL"
-              hint="ComfyUI: usually 8188. AUTOMATIC1111: usually 7860. Use 127.0.0.1 for a server on this phone, or a LAN IP for another machine."
+              hint="ComfyUI: usually 8188. AUTOMATIC1111: usually 7860. START COMFYUI starts only phone-local Termux ComfyUI at 127.0.0.1:8188; remote/A1111 servers must be started on their host."
             />
             <div className="selfhosted-actions">
               <button className="btn-test-server" disabled={shTesting || shRenderTesting} onClick={handleTest}>

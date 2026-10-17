@@ -21,7 +21,7 @@ class PluginBridgeTest {
 
     private val ctx: Context get() = ApplicationProvider.getApplicationContext()
 
-    /** All three plugin classes survived dexing and are loadable at runtime. */
+    /** Required native plugin classes survived dexing and are loadable at runtime. */
     @Test
     fun pluginClassesAreLoadable() {
         val required = listOf(

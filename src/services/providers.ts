@@ -892,7 +892,9 @@ export async function generateWithFallback(
     return {
       provider: preferred,
       status: 'error',
-      warning: `Unknown generation engine: ${preferred}.`,
+      warning: preferred === 'ollama'
+        ? 'Ollama is the local text/chat engine, not an image generator. Choose SD LOCAL, COMFYUI / SELF-HOSTED, CUSTOM, OpenRouter, or Gemini for images.'
+        : `Unknown generation engine: ${preferred}.`,
       assetUrl: undefined,
       text: undefined
     };

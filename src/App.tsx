@@ -6,7 +6,7 @@ import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDele
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
-import { setSdEnabled, sdTxt2Img } from './services/sdLocal';
+import { setSdEnabled } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
 import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
 import { generateTripoSR, ensureTripoSRRunning, triposrStatus } from './services/triposrLocal';
@@ -867,24 +867,40 @@ export default function App() {
       let workerEngine = 'TripoSR';
       let workerMessage = '';
 
-      // Generate the source image before starting a second heavy worker. This
-      // avoids loading TripoSR alongside the phone's image-generation startup.
-      setHy3dStatus('Generating the real source image with local Stable Diffusion...');
-      // Android/Termux SD.cpp is CPU/RAM constrained. Keep the real 3D
-      // source render inside the tested phone-safe envelope. The previous
-      // 512x768 request could kill sd-server during generation even though
-      // the server and model loaded correctly. 256x256/12 is verified on
-      // the target device and is deliberately used for the source image.
-      const image = await sdTxt2Img(
-        {
-          prompt: compiledPrompt,
-          width: 256,
-          height: 256,
-          steps: Math.min(Number(stepsInput) || 12, 12),
-          cfgScale: Number(cfgInput) || 6
-        },
-        { autoStart: true, timeoutMs: 600000 }
-      );
+      // Use the selected image engine for the source image. MAKE 3D must not
+      // secretly depend on SD LOCAL when the user selected Pollinations or
+      // their own A1111/ComfyUI server.
+      setHy3dStatus(`Generating a 256px source image with ${provider.toUpperCase()}...`);
+      const source = await generateWithFallback({
+        ...genRequest(compiledPrompt),
+        mode: 'image',
+        width: 256,
+        height: 256,
+        steps: Math.min(Number(stepsInput) || 12, 12),
+        cfg: Number(cfgInput) || 6
+      }, provider);
+      if (!source.assetUrl) {
+        throw new Error(source.warning || `${source.provider} did not return a source image for 3D generation.`);
+      }
+      if (source.provider === 'local' || source.assetUrl.startsWith('data:image/svg+xml')) {
+        throw new Error('The LOCAL procedural preview is not a real source image. Select Pollinations, SD LOCAL, SELF-HOSTED, OpenRouter, or Gemini for MAKE 3D.');
+      }
+      const sourceResponse = await fetch(source.assetUrl);
+      if (!sourceResponse.ok) throw new Error(`Could not download the source image (${sourceResponse.status}).`);
+      const sourceBlob = await sourceResponse.blob();
+      if (!sourceBlob.type.startsWith('image/')) {
+        throw new Error(`The selected image engine returned ${sourceBlob.type || 'non-image data'}, not an image.`);
+      }
+      const sourceDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === 'string'
+          ? resolve(reader.result)
+          : reject(new Error('Could not decode the generated source image.'));
+        reader.onerror = () => reject(new Error('Could not read the generated source image.'));
+        reader.readAsDataURL(sourceBlob);
+      });
+      const image = { dataUrl: sourceDataUrl, width: 256, height: 256 };
+      setHy3dStatus(`Source image ready from ${source.provider}. Checking 3D workers...`);
 
       // Preserve the existing Hunyuan3D worker route when its API is available.
       // PR #19 added TripoSR, but it must not silently remove the Hunyuan3D option.

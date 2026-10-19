@@ -271,6 +271,38 @@ with sync_playwright() as p:
     chk("faulty menu XML: no page errors", len(errs) == 0, errs[:1])
     ctx.close()
 
+    # --- 7b) SETTINGS GEAR + SERVER MANAGER CONTROLS ---
+    ctx = b.new_context(viewport={"width": 1280, "height": 900})
+    pg = ctx.new_page()
+    ui_errors = []
+    pg.on("pageerror", lambda e: ui_errors.append(str(e)[:160]))
+    pg.goto("http://localhost:8080/", wait_until="networkidle")
+    pg.wait_for_timeout(700)
+    gear = pg.locator('.viewport-tools-top button[aria-label="Open settings"]')
+    chk("settings gear: visible and accessible", gear.count() == 1 and "⚙" in gear.inner_text(), gear.inner_text() if gear.count() else "missing")
+    gear.click()
+    pg.wait_for_timeout(250)
+    chk("settings gear: opens provider settings", pg.locator(".settings-card h3", has_text="AI Provider Settings").count() == 1)
+    pg.locator(".settings-card .modal-close").last.click()
+    pg.wait_for_timeout(150)
+
+    launcher = pg.locator(".server-manager-launcher")
+    chk("server manager: launcher visible", launcher.count() == 1)
+    launcher.click()
+    pg.wait_for_timeout(350)
+    sm = pg.locator(".server-manager-card")
+    chk("server manager: dialog opens", sm.count() == 1 and sm.locator("#server-manager-title").inner_text() == "🖥 SERVER MANAGER")
+    for label in ["CHECK COMFYUI", "START COMFYUI", "RECHECK API",
+                  "CHECK 3D WORKER", "START 3D WORKER",
+                  "CHECK SERVER", "START SERVER",
+                  "USE OLLAMA FOR CHAT", "TEST RENDER", "USE SD FOR IMAGES"]:
+        count = sm.get_by_role("button", name=lambda name, wanted=label: wanted in name).count()
+        chk("server manager button: " + label, count >= 1, "count=" + str(count))
+    chk("server manager: both local engines represented", sm.locator(".server-manager-comfy").count() == 1 and sm.locator(".server-manager-card .settings-section").count() >= 4)
+    pg.wait_for_timeout(400)
+    chk("server manager: native/browser errors stay in UI, no uncaught page errors", len(ui_errors) == 0, str(ui_errors[:2]))
+    ctx.close()
+
     # --- 8) AVATAR DEFINITION ---
     ctx = b.new_context(viewport={"width": 1280, "height": 900})
     pg = ctx.new_page()

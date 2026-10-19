@@ -111,9 +111,12 @@ export default function ServerManagerModal({ isOpen, onClose, onNotice }: Server
 
   useEffect(() => {
     if (isOpen) {
-      void checkComfyUi();
-      void checkThreeD();
-      void checkHunyuan();
+      // Run checks serially: each check owns the shared busy indicator.
+      void (async () => {
+        await checkComfyUi();
+        await checkThreeD();
+        await checkHunyuan();
+      })();
     }
   }, [isOpen, checkComfyUi, checkThreeD, checkHunyuan]);
   if (!isOpen) return null;

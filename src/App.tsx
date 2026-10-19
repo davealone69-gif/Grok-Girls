@@ -864,22 +864,11 @@ export default function App() {
       }
 
       let workerReady = false;
-      let workerEngine = 'local 3D worker';
+      let workerEngine = 'TripoSR';
       let workerMessage = '';
-      try {
-        const start = await ensureTripoSRRunning();
-        workerMessage = start.message;
-        const worker = await triposrStatus();
-        workerReady = start.ok && worker.ok;
-        workerEngine = worker.engine || 'TripoSR';
-        if (!workerReady) {
-          setHy3dStatus('Local 3D worker unavailable: ' + (worker.message || workerMessage) + '. Using the real on-device 3DDD mesh pipeline...');
-        }
-      } catch (e) {
-        workerMessage = e instanceof Error ? e.message : String(e);
-        setHy3dStatus('Local 3D worker unavailable: ' + workerMessage + '. Using the real on-device 3DDD mesh pipeline...');
-      }
 
+      // Generate the source image before starting a second heavy worker. This
+      // avoids loading TripoSR alongside the phone's image-generation startup.
       setHy3dStatus('Generating the real source image with local Stable Diffusion...');
       // Android/Termux SD.cpp is CPU/RAM constrained. Keep the real 3D
       // source render inside the tested phone-safe envelope. The previous
@@ -899,9 +888,11 @@ export default function App() {
 
       // Preserve the existing Hunyuan3D worker route when its API is available.
       // PR #19 added TripoSR, but it must not silently remove the Hunyuan3D option.
+      let hunyuanAvailable = false;
       try {
         const hunyuan = await hunyuan3dStatus();
         if (hunyuan.ok) {
+          hunyuanAvailable = true;
           try {
             setHy3dStatus('Hunyuan3D worker is responding. Generating a GLB...');
             const glb = await generateHunyuan3D(image.dataUrl, {
@@ -915,12 +906,30 @@ export default function App() {
             setHy3dStatus('REAL 3D READY · Hunyuan3D GLB loaded by the native GLES3 renderer.');
             return;
           } catch (e) {
+            hunyuanAvailable = false;
             setHy3dStatus('Hunyuan3D generation failed; trying TripoSR / local mesh fallback: ' +
               (e instanceof Error ? e.message : String(e)));
           }
         }
       } catch {
         // An unavailable optional Hunyuan3D endpoint should not block TripoSR.
+      }
+
+      if (!hunyuanAvailable) {
+        setHy3dStatus('Checking and starting the TripoSR worker after source-image generation...');
+        try {
+          const start = await ensureTripoSRRunning();
+          workerMessage = start.message;
+          const worker = await triposrStatus();
+          workerReady = start.ok && worker.ok;
+          workerEngine = worker.engine || 'TripoSR';
+          if (!workerReady) {
+            setHy3dStatus('Local TripoSR worker unavailable: ' + (worker.message || workerMessage) + '. Using the real on-device 3DDD mesh pipeline...');
+          }
+        } catch (e) {
+          workerMessage = e instanceof Error ? e.message : String(e);
+          setHy3dStatus('Local TripoSR worker unavailable: ' + workerMessage + '. Using the real on-device 3DDD mesh pipeline...');
+        }
       }
 
       const buildLocalFallback = async (workerFailure?: string) => {

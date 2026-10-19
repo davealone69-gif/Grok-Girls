@@ -17,9 +17,9 @@ export type ProviderName = 'local' | 'sdlocal' | 'openrouter' | 'gemini' | 'cust
 export const KEYLESS_IMAGE_ENDPOINT = 'https://image.pollinations.ai';
 
 /**
- * CUSTOM image generation requires an explicitly configured endpoint.
- * Never silently route an unconfigured CUSTOM engine to Pollinations: current
- * deployments may require credentials and that route is not ComfyUI.
+ * CUSTOM image generation defaults to keyless, rate-limited Pollinations when
+ * no image endpoint is saved. This applies only while CUSTOM is selected;
+ * failures are surfaced instead of silently switching to another engine.
  */
 export type Mode = 'image' | 'video';
 export type ProviderMode = Mode | 'chat';
@@ -683,9 +683,8 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
   }
   const key = getSavedApiKey(p);
   const model = env()[`VITE_${p.toUpperCase()}_${r.mode.toUpperCase()}_MODEL`] ?? env()[`VITE_${p.toUpperCase()}_MODEL`] ?? defaultModel(p, r.mode);
-  // CUSTOM must use the endpoint the user actually configured. Never send a
-  // request to an implicit Pollinations URL: that can produce an auth error
-  // which looks like a ComfyUI/server-routing failure.
+  // CUSTOM defaults to keyless Pollinations only when no endpoint is saved.
+  // This is still the selected CUSTOM route; a failed request is surfaced.
   const endpoint =
     getSavedEndpoint(p, r.mode) ||
     (p === 'custom'

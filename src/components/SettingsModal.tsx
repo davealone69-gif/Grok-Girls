@@ -516,7 +516,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               onChange={setCustomKey}
               placeholder="Bearer token or API secret"
               type="password"
-              hint="Optional only for providers that allow unauthenticated requests. Some providers, including your current Pollinations route, may require a key."
+              hint="Optional for keyless image.pollinations.ai. Other configured endpoints may require authentication."
             />
             <Field
               label="Chat Endpoint"
@@ -530,7 +530,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               value={customImageEndpoint}
               onChange={setCustomImageEndpoint}
               placeholder="https://your-sd.example.com/sdapi/v1/txt2img"
-              hint="CUSTOM provider only. For ComfyUI, configure the SELF-HOSTED server above instead."
+              hint="Leave blank to use keyless, rate-limited Pollinations. Set a URL to override it. For ComfyUI, use SELF-HOSTED above."
             />
             <Field
               label="Video Endpoint"

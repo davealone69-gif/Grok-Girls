@@ -296,7 +296,7 @@ with sync_playwright() as p:
                   "CHECK 3D WORKER", "START 3D WORKER",
                   "CHECK SERVER", "START SERVER",
                   "USE OLLAMA FOR CHAT", "TEST RENDER", "USE SD FOR IMAGES"]:
-        count = sm.get_by_role("button", name=lambda name, wanted=label: wanted in name).count()
+        count = sm.locator("button", has_text=label).count()
         chk("server manager button: " + label, count >= 1, "count=" + str(count))
     chk("server manager: both local engines represented", sm.locator(".server-manager-comfy").count() == 1 and sm.locator(".server-manager-card .settings-section").count() >= 4)
     pg.wait_for_timeout(400)

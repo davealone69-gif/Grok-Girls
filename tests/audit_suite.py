@@ -89,11 +89,14 @@ with sync_playwright() as p:
     pg.close()
 
     # --- 3) QUOTA WARNING (real 1.6MB self-hosted render against the mock) ---
-    pg = b.new_page(viewport={"width": 393, "height": 851})
+    quota_ctx = b.new_context(viewport={"width": 393, "height": 851})
+    pg = quota_ctx.new_page()
     pg.goto("http://localhost:8080/", wait_until="networkidle")
     pg.wait_for_timeout(500)
     pg.evaluate("""
       () => {
+        // This quota stress test needs a clean origin, not state from prior UI journeys.
+        localStorage.clear();
         localStorage.setItem('quota-filler', 'x'.repeat(1024*1024*4));
         localStorage.setItem('grok-girls-selfhosted-base', 'http://localhost:7860');
         localStorage.setItem('grok-girls-selfhosted-type', 'a1111');
@@ -133,6 +136,7 @@ with sync_playwright() as p:
     chk("M3 prompt stored in IDB record", bool(idb_prompt) and len(idb_prompt) > 20, (idb_prompt or "")[:60])
     pg.evaluate("localStorage.removeItem('quota-filler')")
     pg.close()
+    quota_ctx.close()
 
     # --- 4) REGRESSION: 3 viewports ---
     for label, vp in [("phone-393x851", (393, 851)), ("phone-land-780x360", (780, 360)), ("desktop-1280x900", (1280, 900))]:
@@ -255,7 +259,7 @@ with sync_playwright() as p:
     chk("menu XML: custom title drives the rail", pg.locator(".rail-btn[title='ARCHIVE CUSTOM']").count() == 1)
     chk("menu XML: custom dock label applied", pg.locator(".dock-tab", has_text="COSMETICS").count() == 1)
     chk("menu XML: angle strip driven by XML", pg.locator(".angle-btn").count() == 1)
-    chk("menu XML: header actions driven by XML", pg.locator(".native-action").count() == 1)
+    chk("menu XML: header actions driven by XML", pg.locator(".native-action-row .native-action").count() == 1)
     ctx.close()
     ctx = b.new_context(viewport={"width": 1280, "height": 900})
     ctx.add_init_script(menu_override(faulty_xml))
@@ -268,7 +272,7 @@ with sync_playwright() as p:
     chk("faulty menu XML: built-in labels restored", pg.locator(".rail-btn[title='Generation Archive']").count() == 1)
     chk("faulty menu XML: dock tabs intact", pg.locator(".dock-tab", has_text="HAIR STYLE").count() == 1)
     chk("faulty menu XML: angle strip restored (4 buttons)", pg.locator(".angle-btn").count() == 4)
-    chk("faulty menu XML: header actions restored (5 buttons)", pg.locator(".native-action").count() == 5)
+    chk("faulty menu XML: header actions restored (5 buttons)", pg.locator(".native-action-row .native-action").count() == 5)
     chk("faulty menu XML: BUILD rail header restored", pg.locator(".rail-build-label").inner_text() == "BUILD")
     chk("faulty menu XML: no page errors", len(errs) == 0, errs[:1])
     ctx.close()

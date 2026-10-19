@@ -293,13 +293,9 @@ with sync_playwright() as p:
     chk("provider settings: both Ollama and SD server actions exist",
         settings_card.locator("button", has_text="CHECK SERVER").count() >= 2
         and settings_card.locator("button", has_text="START SERVER").count() >= 2)
-    advanced = settings_card.locator("summary", has_text="ADVANCED")
-    if advanced.count():
-        advanced.click()
-        pg.wait_for_timeout(120)
-        for label in ["TEST CONNECTION", "FETCH MODELS", "START COMFYUI"]:
-            count = settings_card.locator("button", has_text=label).count()
-            chk("self-hosted settings button: " + label, count >= 1, "count=" + str(count))
+    for label in ["TEST CONNECTION", "FETCH MODELS", "START COMFYUI", "TEST REAL RENDER"]:
+        count = settings_card.locator("button", has_text=label).count()
+        chk("self-hosted settings button: " + label, count >= 1, "count=" + str(count))
     pg.locator(".settings-card .modal-close").last.click()
     pg.wait_for_timeout(150)
 

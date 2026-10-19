@@ -316,7 +316,11 @@ with sync_playwright() as p:
                   "USE OLLAMA FOR CHAT", "TEST RENDER", "USE SD FOR IMAGES"]:
         count = sm.locator("button", has_text=label).count()
         chk("server manager button: " + label, count >= 1, "count=" + str(count))
-    chk("server manager: both local engines represented", sm.locator(".server-manager-comfy").count() == 1 and sm.locator(".server-manager-card .settings-section").count() >= 4)
+    sm_text = sm.inner_text() if sm.count() == 1 else ""
+    chk("server manager: both local engines represented",
+        "COMFYUI" in sm_text and "TRIPOSR WORKER" in sm_text and "HUNYUAN3D WORKER" in sm_text
+        and sm.locator(".settings-section").count() >= 3,
+        "sections=" + str(sm.locator(".settings-section").count()))
     pg.wait_for_timeout(400)
     chk("server manager: native/browser errors stay in UI, no uncaught page errors", len(ui_errors) == 0, str(ui_errors[:2]))
     ctx.close()

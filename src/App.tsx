@@ -2415,8 +2415,8 @@ export default function App() {
             >
               −
             </button>
-            <button className="icon-tool-btn" onClick={() => setIsSettingsOpen(true)} title="Provider Settings">
-              ⋮
+            <button className="icon-tool-btn" onClick={() => setIsSettingsOpen(true)} title="Provider Settings" aria-label="Open settings">
+              ⚙
             </button>
           </div>
         </header>

@@ -6,7 +6,7 @@ import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDele
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
-import { sdTxt2Img } from './services/sdLocal';
+import { setSdEnabled, sdTxt2Img } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
 import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
 import { generateTripoSR, ensureTripoSRRunning, triposrStatus } from './services/triposrLocal';

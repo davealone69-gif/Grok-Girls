@@ -1458,7 +1458,7 @@ export default function App() {
     if (engine === 'selfhosted' && !getServerBase()) {
       showToast('Configure your self-hosted server in ⚙ Settings → Self-Hosted first');
       setResult(
-        'SELF-HOSTED engine selected but no server URL is configured. Open ⚙ Settings and enter your A1111 (port 7860) or ComfyUI (port 8188) address.'
+        'COMFYUI / SELF-HOSTED selected but no server URL is configured. Open ⚙ Settings → Self-Hosted Image Server and enter your ComfyUI (usually port 8188) or AUTOMATIC1111 (usually port 7860) address.'
       );
       window.setTimeout(() => setResult(''), 10000);
       return;
@@ -1528,30 +1528,40 @@ export default function App() {
     if (busyRef.current) return;
     enterBusy();
     setVariationsOpen(true);
-    setVariations([
-      { provider: '…', prompt: '' },
-      { provider: '…', prompt: '' },
-      { provider: '…', prompt: '' },
-      { provider: '…', prompt: '' }
-    ]);
+    const prompts = [0, 1, 2, 3].map(i => variationPrompt(i));
+    const results: { url?: string; provider: string; prompt: string }[] = prompts.map(prompt => ({
+      provider: 'NOT RUN',
+      prompt: buildFullPrompt(prompt)
+    }));
+    setVariations(results);
+    let failureMessage = '';
     try {
-      const results = await Promise.all(
-        [0, 1, 2, 3].map(async i => {
-          const r = await generateWithFallback(
-            genRequest(variationPrompt(i), (seedInput ? Number(seedInput) : Date.now() % 100000) + i * 7),
-            provider
-          );
-          return { url: r.assetUrl, provider: r.provider, prompt: buildFullPrompt(variationPrompt(i)) };
-        })
-      );
-      setVariations(results);
-      bumpAndCelebrate('generations', results.filter(r => r.url).length);
-      setResult('');
-      showToast(
-        results.some(r => r.url && r.provider !== 'local')
-          ? '4 variations rendered — pick your favorite'
-          : '4 local preview variations ready — USE THIS to apply one'
-      );
+      // Phone-local image engines must not receive four concurrent heavy jobs.
+      // Render serially and stop at the first failure, keeping completed results.
+      for (let i = 0; i < prompts.length; i++) {
+        const r = await generateWithFallback(
+          genRequest(prompts[i], (seedInput ? Number(seedInput) : Date.now() % 100000) + i * 7),
+          provider
+        );
+        if (!r.assetUrl) {
+          results[i] = { provider: r.provider, prompt: buildFullPrompt(prompts[i]) };
+          setVariations([...results]);
+          failureMessage = r.warning || `${r.provider} did not return an image. Remaining variations were not started.`;
+          setResult(failureMessage);
+          showToast(failureMessage);
+          break;
+        }
+        results[i] = { url: r.assetUrl, provider: r.provider, prompt: buildFullPrompt(prompts[i]) };
+        setVariations([...results]);
+      }
+      const completed = results.filter(r => Boolean(r.url)).length;
+      if (completed) {
+        bumpAndCelebrate('generations', completed);
+        setResult(failureMessage ? `Partial batch: ${completed}/4 images rendered. ${failureMessage}` : '');
+        showToast(failureMessage
+          ? `Partial batch: ${completed}/4 images rendered. ${failureMessage}`
+          : `${completed} variation${completed === 1 ? '' : 's'} rendered. Pick a completed image.`);
+      }
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Batch failed');
     } finally {
@@ -1565,16 +1575,21 @@ export default function App() {
         genRequest(variationPrompt(i), (Date.now() % 100000) + i * 13),
         provider
       );
+      if (!r.assetUrl) {
+        showToast(r.warning || `${r.provider} did not return an image; the previous variation was kept.`);
+        setResult(r.warning || `${r.provider} did not return an image.`);
+        return;
+      }
       setVariations(vs =>
         vs.map((v, j) => (j === i ? { url: r.assetUrl, provider: r.provider, prompt: buildFullPrompt(variationPrompt(i)) } : v))
       );
-      if (r.assetUrl) bumpAndCelebrate('generations');
+      bumpAndCelebrate('generations');
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Re-roll failed');
     }
   };
 
-  const isProceduralUrl = (u: string) => u.startsWith('blob:') || u.startsWith('data:image/svg+xml');
+  const isProceduralUrl = (u: string) => u.startsWith('data:image/svg+xml');
 
   const applyVariation = async (v: { url?: string; provider: string; prompt: string }) => {
     if (!v.url) return;

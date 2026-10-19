@@ -6,7 +6,7 @@ import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDele
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
-import { setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
+import { sdTxt2Img } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
 import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
 import { generateTripoSR, ensureTripoSRRunning, triposrStatus } from './services/triposrLocal';
@@ -502,19 +502,8 @@ export default function App() {
     saveProviderPref('image', provider);
   }, [provider]);
 
-  // Phone-first: if the real local SD server is already running, make it the
-  // image engine automatically so the user does not have to hunt through settings.
-  useEffect(() => {
-    let alive = true;
-    void sdStatus().then(st => {
-      if (!alive || !st.ok) return;
-      setSdEnabled(true);
-      setProvider('sdlocal');
-    }).catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // Keep image-engine selection explicit. A responding listener is not proof
+  // it is the selected API (ComfyUI and A1111 have different routes).
   // H1: chat has its OWN engine selector — picking SELF-HOSTED for renders
   // no longer breaks chat. The footer ENGINE drives generation only.
   const [chatProvider, setChatProvider] = useState<ProviderName>(() => getProviderPref('chat'));

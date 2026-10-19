@@ -293,7 +293,7 @@ with sync_playwright() as p:
     sm = pg.locator(".server-manager-card")
     chk("server manager: dialog opens", sm.count() == 1 and sm.locator("#server-manager-title").inner_text() == "🖥 SERVER MANAGER")
     for label in ["CHECK COMFYUI", "START COMFYUI", "RECHECK API",
-                  "CHECK 3D WORKER", "START 3D WORKER",
+                  "CHECK 3D WORKER", "START 3D WORKER", "CHECK HUNYUAN3D",
                   "CHECK SERVER", "START SERVER",
                   "USE OLLAMA FOR CHAT", "TEST RENDER", "USE SD FOR IMAGES"]:
         count = sm.locator("button", has_text=label).count()

@@ -8,6 +8,7 @@ import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, Gallery
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
 import { setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
+import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
 import { generateTripoSR, ensureTripoSRRunning, triposrStatus } from './services/triposrLocal';
 import { buildPhoto3D } from './services/photo3dLocal';
 import { downloadVknn3DModel, probeVknn3DModel, vknn3dStatus } from './services/vknn3dLocal';
@@ -906,6 +907,32 @@ export default function App() {
         },
         { autoStart: true, timeoutMs: 600000 }
       );
+
+      // Preserve the existing Hunyuan3D worker route when its API is available.
+      // PR #19 added TripoSR, but it must not silently remove the Hunyuan3D option.
+      try {
+        const hunyuan = await hunyuan3dStatus();
+        if (hunyuan.ok) {
+          try {
+            setHy3dStatus('Hunyuan3D worker is responding. Generating a GLB...');
+            const glb = await generateHunyuan3D(image.dataUrl, {
+              texture: true,
+              octreeResolution: 256,
+              steps: 5,
+              timeoutMs: 1800000
+            });
+            setHy3dStatus(`Hunyuan3D GLB generated (${glb.bytes.toLocaleString()} bytes). Opening the native renderer...`);
+            await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), glb.file);
+            setHy3dStatus('REAL 3D READY · Hunyuan3D GLB loaded by the native GLES3 renderer.');
+            return;
+          } catch (e) {
+            setHy3dStatus('Hunyuan3D generation failed; trying TripoSR / local mesh fallback: ' +
+              (e instanceof Error ? e.message : String(e)));
+          }
+        }
+      } catch {
+        // An unavailable optional Hunyuan3D endpoint should not block TripoSR.
+      }
 
       const buildLocalFallback = async (workerFailure?: string) => {
         setHy3dStatus(workerFailure

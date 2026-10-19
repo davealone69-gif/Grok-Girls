@@ -284,6 +284,22 @@ with sync_playwright() as p:
     gear.click()
     pg.wait_for_timeout(250)
     chk("settings gear: opens provider settings", pg.locator(".settings-card h3", has_text="AI Provider Settings").count() == 1)
+    settings_card = pg.locator(".settings-card").last
+    for label in ["CHECK SERVER", "START SERVER", "USE OLLAMA FOR CHAT",
+                  "TEST RENDER", "USE SD FOR IMAGES", "PULL",
+                  "Save Configuration", "Cancel", "Clear Cloud / Self-Hosted"]:
+        count = settings_card.locator("button", has_text=label).count()
+        chk("provider settings button: " + label, count >= 1, "count=" + str(count))
+    chk("provider settings: both Ollama and SD server actions exist",
+        settings_card.locator("button", has_text="CHECK SERVER").count() >= 2
+        and settings_card.locator("button", has_text="START SERVER").count() >= 2)
+    advanced = settings_card.locator("summary", has_text="ADVANCED")
+    if advanced.count():
+        advanced.click()
+        pg.wait_for_timeout(120)
+        for label in ["TEST CONNECTION", "FETCH MODELS", "START COMFYUI"]:
+            count = settings_card.locator("button", has_text=label).count()
+            chk("self-hosted settings button: " + label, count >= 1, "count=" + str(count))
     pg.locator(".settings-card .modal-close").last.click()
     pg.wait_for_timeout(150)
 

@@ -68,8 +68,14 @@ class CriticalJourneyTest {
         assertNotNull("No launch intent for $PKG — is the APK installed?", intent)
         ctx.startActivity(intent)
 
-        val appeared = device.wait(Until.hasObject(By.pkg(PKG).depth(0)), LAUNCH_TIMEOUT)
-        assertTrue("$PKG did not reach the foreground within ${LAUNCH_TIMEOUT}ms", appeared)
+        // WebView/app roots are not consistently exposed at accessibility depth 0
+        // across emulator images. Match the package anywhere in the visible tree.
+        val appeared = device.wait(Until.hasObject(By.pkg(PKG)), LAUNCH_TIMEOUT)
+        assertTrue(
+            "$PKG did not reach the foreground within ${LAUNCH_TIMEOUT}ms; " +
+                "currentPackage=${device.currentPackageName}",
+            appeared
+        )
         waitForWebContent()
     }
 

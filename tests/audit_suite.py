@@ -106,8 +106,9 @@ with sync_playwright() as p:
     seen = []
     for _ in range(18):
         pg.wait_for_timeout(300)
-        if pg.locator(".toast").count():
-            seen.append(pg.locator(".toast").inner_text())
+        # Toasts auto-dismiss; read the current collection atomically rather
+        # than count-then-inner_text, which races the dismissal timer.
+        seen.extend(pg.locator(".toast").all_inner_texts())
     toast = " | ".join(seen)
     gal = pg.evaluate("JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]')")
     render_ok = any("complete" in t.lower() for t in seen)

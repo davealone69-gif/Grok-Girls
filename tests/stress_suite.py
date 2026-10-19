@@ -146,6 +146,11 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
     pg.evaluate("""
       () => {
+        // The app has already mounted once, so clear the canonical record to
+        // exercise the intended legacy-key migration on the following reload.
+        // Also isolate the in-flight assertion from the previous B1 render.
+        localStorage.removeItem('grok-girls-settings-v1');
+        localStorage.removeItem('grok-girls-gallery-v1');
         localStorage.setItem('grok-girls-selfhosted-base', 'http://localhost:7861');
         localStorage.setItem('grok-girls-selfhosted-type', 'a1111');
         localStorage.setItem('grok-girls-provider-v1', 'selfhosted');

@@ -89,11 +89,14 @@ with sync_playwright() as p:
     pg.close()
 
     # --- 3) QUOTA WARNING (real 1.6MB self-hosted render against the mock) ---
-    pg = b.new_page(viewport={"width": 393, "height": 851})
+    quota_ctx = b.new_context(viewport={"width": 393, "height": 851})
+    pg = quota_ctx.new_page()
     pg.goto("http://localhost:8080/", wait_until="networkidle")
     pg.wait_for_timeout(500)
     pg.evaluate("""
       () => {
+        // This quota stress test needs a clean origin, not state from prior UI journeys.
+        localStorage.clear();
         localStorage.setItem('quota-filler', 'x'.repeat(1024*1024*4));
         localStorage.setItem('grok-girls-selfhosted-base', 'http://localhost:7860');
         localStorage.setItem('grok-girls-selfhosted-type', 'a1111');
@@ -106,8 +109,9 @@ with sync_playwright() as p:
     seen = []
     for _ in range(18):
         pg.wait_for_timeout(300)
-        if pg.locator(".toast").count():
-            seen.append(pg.locator(".toast").inner_text())
+        # Toasts auto-dismiss; read the current collection atomically rather
+        # than count-then-inner_text, which races the dismissal timer.
+        seen.extend(pg.locator(".toast").all_inner_texts())
     toast = " | ".join(seen)
     gal = pg.evaluate("JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]')")
     render_ok = any("complete" in t.lower() for t in seen)
@@ -132,6 +136,7 @@ with sync_playwright() as p:
     chk("M3 prompt stored in IDB record", bool(idb_prompt) and len(idb_prompt) > 20, (idb_prompt or "")[:60])
     pg.evaluate("localStorage.removeItem('quota-filler')")
     pg.close()
+    quota_ctx.close()
 
     # --- 4) REGRESSION: 3 viewports ---
     for label, vp in [("phone-393x851", (393, 851)), ("phone-land-780x360", (780, 360)), ("desktop-1280x900", (1280, 900))]:
@@ -206,8 +211,9 @@ with sync_playwright() as p:
     seen = []
     for _ in range(6):
         pg.wait_for_timeout(300)
-        if pg.locator(".toast").count():
-            seen.append(pg.locator(".toast").inner_text())
+        # Toasts are transient and may disappear between count() and inner_text().
+        # Snapshot all visible toast text in one locator call to avoid a flaky timeout.
+        seen.extend(pg.locator(".toast").all_inner_texts())
     toasts = " | ".join(seen)
     chk("M5 adult chat pinned to LOCAL", "pinned to LOCAL" in toasts or "cloud chat" in toasts, toasts[:100])
     chk("M5 pinned chat still replies", pg.locator(".chat-bubble.assistant").count() >= 2)
@@ -253,7 +259,7 @@ with sync_playwright() as p:
     chk("menu XML: custom title drives the rail", pg.locator(".rail-btn[title='ARCHIVE CUSTOM']").count() == 1)
     chk("menu XML: custom dock label applied", pg.locator(".dock-tab", has_text="COSMETICS").count() == 1)
     chk("menu XML: angle strip driven by XML", pg.locator(".angle-btn").count() == 1)
-    chk("menu XML: header actions driven by XML", pg.locator(".native-action").count() == 1)
+    chk("menu XML: header actions driven by XML", pg.locator(".native-action-row .native-action").count() == 1)
     ctx.close()
     ctx = b.new_context(viewport={"width": 1280, "height": 900})
     ctx.add_init_script(menu_override(faulty_xml))
@@ -266,9 +272,57 @@ with sync_playwright() as p:
     chk("faulty menu XML: built-in labels restored", pg.locator(".rail-btn[title='Generation Archive']").count() == 1)
     chk("faulty menu XML: dock tabs intact", pg.locator(".dock-tab", has_text="HAIR STYLE").count() == 1)
     chk("faulty menu XML: angle strip restored (4 buttons)", pg.locator(".angle-btn").count() == 4)
-    chk("faulty menu XML: header actions restored (5 buttons)", pg.locator(".native-action").count() == 5)
+    chk("faulty menu XML: header actions restored (5 buttons)", pg.locator(".native-action-row .native-action").count() == 5)
     chk("faulty menu XML: BUILD rail header restored", pg.locator(".rail-build-label").inner_text() == "BUILD")
     chk("faulty menu XML: no page errors", len(errs) == 0, errs[:1])
+    ctx.close()
+
+    # --- 7b) SETTINGS GEAR + SERVER MANAGER CONTROLS ---
+    ctx = b.new_context(viewport={"width": 1280, "height": 900})
+    pg = ctx.new_page()
+    ui_errors = []
+    pg.on("pageerror", lambda e: ui_errors.append(str(e)[:160]))
+    pg.goto("http://localhost:8080/", wait_until="networkidle")
+    pg.wait_for_timeout(700)
+    gear = pg.locator('.viewport-tools-top button[aria-label="Open settings"]')
+    chk("settings gear: visible and accessible", gear.count() == 1 and "⚙" in gear.inner_text(), gear.inner_text() if gear.count() else "missing")
+    gear.click()
+    pg.wait_for_timeout(250)
+    chk("settings gear: opens provider settings", pg.locator(".settings-card h3", has_text="AI Provider Settings").count() == 1)
+    settings_card = pg.locator(".settings-card").last
+    for label in ["CHECK SERVER", "START SERVER", "USE OLLAMA FOR CHAT",
+                  "TEST RENDER", "USE SD FOR IMAGES", "PULL",
+                  "Save Configuration", "Cancel", "Clear Cloud / Self-Hosted"]:
+        count = settings_card.locator("button", has_text=label).count()
+        chk("provider settings button: " + label, count >= 1, "count=" + str(count))
+    chk("provider settings: both Ollama and SD server actions exist",
+        settings_card.locator("button", has_text="CHECK SERVER").count() >= 2
+        and settings_card.locator("button", has_text="START SERVER").count() >= 2)
+    for label in ["TEST CONNECTION", "FETCH MODELS", "START COMFYUI", "TEST REAL RENDER"]:
+        count = settings_card.locator("button", has_text=label).count()
+        chk("self-hosted settings button: " + label, count >= 1, "count=" + str(count))
+    pg.locator(".settings-card .modal-close").last.click()
+    pg.wait_for_timeout(150)
+
+    launcher = pg.locator(".server-manager-launcher")
+    chk("server manager: launcher visible", launcher.count() == 1)
+    launcher.click()
+    pg.wait_for_timeout(350)
+    sm = pg.locator(".server-manager-card")
+    chk("server manager: dialog opens", sm.count() == 1 and sm.locator("#server-manager-title").inner_text() == "🖥 SERVER MANAGER")
+    for label in ["CHECK COMFYUI", "START COMFYUI", "RECHECK API",
+                  "CHECK 3D WORKER", "START 3D WORKER", "CHECK HUNYUAN3D",
+                  "CHECK SERVER", "START SERVER",
+                  "USE OLLAMA FOR CHAT", "TEST RENDER", "USE SD FOR IMAGES"]:
+        count = sm.locator("button", has_text=label).count()
+        chk("server manager button: " + label, count >= 1, "count=" + str(count))
+    sm_text = sm.inner_text() if sm.count() == 1 else ""
+    chk("server manager: both local engines represented",
+        "COMFYUI" in sm_text and "TRIPOSR WORKER" in sm_text and "HUNYUAN3D WORKER" in sm_text
+        and sm.locator(".settings-section").count() >= 3,
+        "sections=" + str(sm.locator(".settings-section").count()))
+    pg.wait_for_timeout(400)
+    chk("server manager: native/browser errors stay in UI, no uncaught page errors", len(ui_errors) == 0, str(ui_errors[:2]))
     ctx.close()
 
     # --- 8) AVATAR DEFINITION ---

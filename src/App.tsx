@@ -6,8 +6,9 @@ import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDele
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
-import { setSdEnabled, sdStatus, sdTxt2Img } from './services/sdLocal';
+import { setSdEnabled } from './services/sdLocal';
 import { getServerBase, resumeComfyJob } from './services/selfHosted';
+import { generateHunyuan3D, hunyuan3dStatus } from './services/hunyuan3dLocal';
 import { generateTripoSR, ensureTripoSRRunning, triposrStatus } from './services/triposrLocal';
 import { buildPhoto3D } from './services/photo3dLocal';
 import { downloadVknn3DModel, probeVknn3DModel, vknn3dStatus } from './services/vknn3dLocal';
@@ -501,19 +502,8 @@ export default function App() {
     saveProviderPref('image', provider);
   }, [provider]);
 
-  // Phone-first: if the real local SD server is already running, make it the
-  // image engine automatically so the user does not have to hunt through settings.
-  useEffect(() => {
-    let alive = true;
-    void sdStatus().then(st => {
-      if (!alive || !st.ok) return;
-      setSdEnabled(true);
-      setProvider('sdlocal');
-    }).catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // Keep image-engine selection explicit. A responding listener is not proof
+  // it is the selected API (ComfyUI and A1111 have different routes).
   // H1: chat has its OWN engine selector — picking SELF-HOSTED for renders
   // no longer breaks chat. The footer ENGINE drives generation only.
   const [chatProvider, setChatProvider] = useState<ProviderName>(() => getProviderPref('chat'));
@@ -874,38 +864,89 @@ export default function App() {
       }
 
       let workerReady = false;
-      let workerEngine = 'local 3D worker';
+      let workerEngine = 'TripoSR';
       let workerMessage = '';
+
+      // Use the selected image engine for the source image. MAKE 3D must not
+      // secretly depend on SD LOCAL when the user selected Pollinations or
+      // their own A1111/ComfyUI server.
+      setHy3dStatus(`Generating a 256px source image with ${provider.toUpperCase()}...`);
+      const source = await generateWithFallback({
+        ...genRequest(compiledPrompt),
+        mode: 'image',
+        width: 256,
+        height: 256,
+        steps: Math.min(Number(stepsInput) || 12, 12),
+        cfg: Number(cfgInput) || 6
+      }, provider);
+      if (!source.assetUrl) {
+        throw new Error(source.warning || `${source.provider} did not return a source image for 3D generation.`);
+      }
+      if (source.provider === 'local' || source.assetUrl.startsWith('data:image/svg+xml')) {
+        throw new Error('The LOCAL procedural preview is not a real source image. Select Pollinations, SD LOCAL, SELF-HOSTED, OpenRouter, or Gemini for MAKE 3D.');
+      }
+      const sourceResponse = await fetch(source.assetUrl);
+      if (!sourceResponse.ok) throw new Error(`Could not download the source image (${sourceResponse.status}).`);
+      const sourceBlob = await sourceResponse.blob();
+      if (!sourceBlob.type.startsWith('image/')) {
+        throw new Error(`The selected image engine returned ${sourceBlob.type || 'non-image data'}, not an image.`);
+      }
+      const sourceDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === 'string'
+          ? resolve(reader.result)
+          : reject(new Error('Could not decode the generated source image.'));
+        reader.onerror = () => reject(new Error('Could not read the generated source image.'));
+        reader.readAsDataURL(sourceBlob);
+      });
+      const image = { dataUrl: sourceDataUrl, width: 256, height: 256 };
+      setHy3dStatus(`Source image ready from ${source.provider}. Checking 3D workers...`);
+
+      // Preserve the existing Hunyuan3D worker route when its API is available.
+      // PR #19 added TripoSR, but it must not silently remove the Hunyuan3D option.
+      let hunyuanAvailable = false;
       try {
-        const start = await ensureTripoSRRunning();
-        workerMessage = start.message;
-        const worker = await triposrStatus();
-        workerReady = start.ok && worker.ok;
-        workerEngine = worker.engine || 'TripoSR';
-        if (!workerReady) {
-          setHy3dStatus('Local 3D worker unavailable: ' + (worker.message || workerMessage) + '. Using the real on-device 3DDD mesh pipeline...');
+        const hunyuan = await hunyuan3dStatus();
+        if (hunyuan.ok) {
+          hunyuanAvailable = true;
+          try {
+            setHy3dStatus('Hunyuan3D worker is responding. Generating a GLB...');
+            const glb = await generateHunyuan3D(image.dataUrl, {
+              texture: true,
+              octreeResolution: 256,
+              steps: 5,
+              timeoutMs: 1800000
+            });
+            setHy3dStatus(`Hunyuan3D GLB generated (${glb.bytes.toLocaleString()} bytes). Opening the native renderer...`);
+            await openNativeHdAvatar(avatarVm.get() ?? toAvatarDefinition(draft), glb.file);
+            setHy3dStatus('REAL 3D READY · Hunyuan3D GLB loaded by the native GLES3 renderer.');
+            return;
+          } catch (e) {
+            hunyuanAvailable = false;
+            setHy3dStatus('Hunyuan3D generation failed; trying TripoSR / local mesh fallback: ' +
+              (e instanceof Error ? e.message : String(e)));
+          }
         }
-      } catch (e) {
-        workerMessage = e instanceof Error ? e.message : String(e);
-        setHy3dStatus('Local 3D worker unavailable: ' + workerMessage + '. Using the real on-device 3DDD mesh pipeline...');
+      } catch {
+        // An unavailable optional Hunyuan3D endpoint should not block TripoSR.
       }
 
-      setHy3dStatus('Generating the real source image with local Stable Diffusion...');
-      // Android/Termux SD.cpp is CPU/RAM constrained. Keep the real 3D
-      // source render inside the tested phone-safe envelope. The previous
-      // 512x768 request could kill sd-server during generation even though
-      // the server and model loaded correctly. 256x256/12 is verified on
-      // the target device and is deliberately used for the source image.
-      const image = await sdTxt2Img(
-        {
-          prompt: compiledPrompt,
-          width: 256,
-          height: 256,
-          steps: Math.min(Number(stepsInput) || 12, 12),
-          cfgScale: Number(cfgInput) || 6
-        },
-        { autoStart: true, timeoutMs: 600000 }
-      );
+      if (!hunyuanAvailable) {
+        setHy3dStatus('Checking and starting the TripoSR worker after source-image generation...');
+        try {
+          const start = await ensureTripoSRRunning();
+          workerMessage = start.message;
+          const worker = await triposrStatus();
+          workerReady = start.ok && worker.ok;
+          workerEngine = worker.engine || 'TripoSR';
+          if (!workerReady) {
+            setHy3dStatus('Local TripoSR worker unavailable: ' + (worker.message || workerMessage) + '. Using the real on-device 3DDD mesh pipeline...');
+          }
+        } catch (e) {
+          workerMessage = e instanceof Error ? e.message : String(e);
+          setHy3dStatus('Local TripoSR worker unavailable: ' + workerMessage + '. Using the real on-device 3DDD mesh pipeline...');
+        }
+      }
 
       const buildLocalFallback = async (workerFailure?: string) => {
         setHy3dStatus(workerFailure
@@ -1433,7 +1474,7 @@ export default function App() {
     if (engine === 'selfhosted' && !getServerBase()) {
       showToast('Configure your self-hosted server in ⚙ Settings → Self-Hosted first');
       setResult(
-        'SELF-HOSTED engine selected but no server URL is configured. Open ⚙ Settings and enter your A1111 (port 7860) or ComfyUI (port 8188) address.'
+        'COMFYUI / SELF-HOSTED selected but no server URL is configured. Open ⚙ Settings → Self-Hosted Image Server and enter your ComfyUI (usually port 8188) or AUTOMATIC1111 (usually port 7860) address.'
       );
       window.setTimeout(() => setResult(''), 10000);
       return;
@@ -1503,30 +1544,40 @@ export default function App() {
     if (busyRef.current) return;
     enterBusy();
     setVariationsOpen(true);
-    setVariations([
-      { provider: '…', prompt: '' },
-      { provider: '…', prompt: '' },
-      { provider: '…', prompt: '' },
-      { provider: '…', prompt: '' }
-    ]);
+    const prompts = [0, 1, 2, 3].map(i => variationPrompt(i));
+    const results: { url?: string; provider: string; prompt: string }[] = prompts.map(prompt => ({
+      provider: 'NOT RUN',
+      prompt: buildFullPrompt(prompt)
+    }));
+    setVariations(results);
+    let failureMessage = '';
     try {
-      const results = await Promise.all(
-        [0, 1, 2, 3].map(async i => {
-          const r = await generateWithFallback(
-            genRequest(variationPrompt(i), (seedInput ? Number(seedInput) : Date.now() % 100000) + i * 7),
-            provider
-          );
-          return { url: r.assetUrl, provider: r.provider, prompt: buildFullPrompt(variationPrompt(i)) };
-        })
-      );
-      setVariations(results);
-      bumpAndCelebrate('generations', results.filter(r => r.url).length);
-      setResult('');
-      showToast(
-        results.some(r => r.url && r.provider !== 'local')
-          ? '4 variations rendered — pick your favorite'
-          : '4 local preview variations ready — USE THIS to apply one'
-      );
+      // Phone-local image engines must not receive four concurrent heavy jobs.
+      // Render serially and stop at the first failure, keeping completed results.
+      for (let i = 0; i < prompts.length; i++) {
+        const r = await generateWithFallback(
+          genRequest(prompts[i], (seedInput ? Number(seedInput) : Date.now() % 100000) + i * 7),
+          provider
+        );
+        if (!r.assetUrl) {
+          results[i] = { provider: r.provider, prompt: buildFullPrompt(prompts[i]) };
+          setVariations([...results]);
+          failureMessage = r.warning || `${r.provider} did not return an image. Remaining variations were not started.`;
+          setResult(failureMessage);
+          showToast(failureMessage);
+          break;
+        }
+        results[i] = { url: r.assetUrl, provider: r.provider, prompt: buildFullPrompt(prompts[i]) };
+        setVariations([...results]);
+      }
+      const completed = results.filter(r => Boolean(r.url)).length;
+      if (completed) {
+        bumpAndCelebrate('generations', completed);
+        setResult(failureMessage ? `Partial batch: ${completed}/4 images rendered. ${failureMessage}` : '');
+        showToast(failureMessage
+          ? `Partial batch: ${completed}/4 images rendered. ${failureMessage}`
+          : `${completed} variation${completed === 1 ? '' : 's'} rendered. Pick a completed image.`);
+      }
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Batch failed');
     } finally {
@@ -1540,16 +1591,21 @@ export default function App() {
         genRequest(variationPrompt(i), (Date.now() % 100000) + i * 13),
         provider
       );
+      if (!r.assetUrl) {
+        showToast(r.warning || `${r.provider} did not return an image; the previous variation was kept.`);
+        setResult(r.warning || `${r.provider} did not return an image.`);
+        return;
+      }
       setVariations(vs =>
         vs.map((v, j) => (j === i ? { url: r.assetUrl, provider: r.provider, prompt: buildFullPrompt(variationPrompt(i)) } : v))
       );
-      if (r.assetUrl) bumpAndCelebrate('generations');
+      bumpAndCelebrate('generations');
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Re-roll failed');
     }
   };
 
-  const isProceduralUrl = (u: string) => u.startsWith('blob:') || u.startsWith('data:image/svg+xml');
+  const isProceduralUrl = (u: string) => u.startsWith('data:image/svg+xml');
 
   const applyVariation = async (v: { url?: string; provider: string; prompt: string }) => {
     if (!v.url) return;
@@ -2415,8 +2471,8 @@ export default function App() {
             >
               −
             </button>
-            <button className="icon-tool-btn" onClick={() => setIsSettingsOpen(true)} title="Provider Settings">
-              ⋮
+            <button className="icon-tool-btn" onClick={() => setIsSettingsOpen(true)} title="Provider Settings" aria-label="Open settings">
+              ⚙
             </button>
           </div>
         </header>

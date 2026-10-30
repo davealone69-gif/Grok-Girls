@@ -541,7 +541,10 @@ export default function App() {
   const avatarVm = avatarVmRef.current;
   const [avatarDef, setAvatarDef] = useState<AvatarDefinition>(() => avatarVm.get());
   const avatarPreviewRef = useRef<AvatarPreviewHandle>(null);
-  const [cubeMode, setCubeMode] = useState(true);
+  // Keep first launch responsive: the full PBR/HDR renderer allocates large GPU textures,
+  // a 2048² shadow map and IBL/cinematic resources synchronously. Start it only when
+  // the user explicitly opens the 3D viewport; the Builder remains usable meanwhile.
+  const [cubeMode, setCubeMode] = useState(false);
   const avatar3dRef = useRef<HdAvatarRenderer | null>(null);
   const avatarCanvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {

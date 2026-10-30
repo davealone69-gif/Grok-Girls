@@ -13,15 +13,14 @@ import {
 
 export type ProviderName = 'local' | 'sdlocal' | 'openrouter' | 'gemini' | 'custom' | 'selfhosted' | 'ollama';
 
-/**
- * Keyless image endpoint used when no custom endpoint is configured.
- *
- * No API key required, but it IS rate limited: throttled requests come back as
- * HTTP 402 (or 429) and are surfaced verbatim rather than quietly falling back
- * to the procedural placeholder engine. Point 'custom' at a keyed endpoint in
- * Settings when you want guaranteed throughput.
- */
+/** Keyless, rate-limited default for the explicitly selected CUSTOM image engine. */
 export const KEYLESS_IMAGE_ENDPOINT = 'https://image.pollinations.ai';
+
+/**
+ * CUSTOM image generation defaults to keyless, rate-limited Pollinations when
+ * no image endpoint is saved. This applies only while CUSTOM is selected;
+ * failures are surfaced instead of silently switching to another engine.
+ */
 export type Mode = 'image' | 'video';
 export type ProviderMode = Mode | 'chat';
 
@@ -568,16 +567,50 @@ async function parse(response: Response, p: ProviderName, m: Mode): Promise<Gene
   }
 
   const job = d.id ?? d.jobId ?? d.task_id;
+  let assetUrl = asset ?? (b64 ? `data:image/png;base64,${b64}` : undefined);
+
+  // A 200 response is not proof that media was generated. Reject empty JSON,
+  // text-only chat replies, and storage URIs (for example gs://...) that an
+  // <img> cannot render directly.
+  if (assetUrl && !/^data:image\//i.test(assetUrl) && !/^https?:\/\//i.test(assetUrl) && !/^blob:/i.test(assetUrl)) {
+    assetUrl = undefined;
+  }
+  if (assetUrl && /^data:image\/(?:png|jpeg|webp);base64,/i.test(assetUrl)) {
+    const encoded = assetUrl.slice(assetUrl.indexOf(',') + 1);
+    try {
+      const bytes = atob(encoded);
+      const png = bytes.length > 8 && bytes.charCodeAt(0) === 0x89 && bytes.slice(1, 4) === 'PNG';
+      const jpeg = bytes.length > 3 && bytes.charCodeAt(0) === 0xff && bytes.charCodeAt(1) === 0xd8;
+      const webp = bytes.length > 12 && bytes.slice(0, 4) === 'RIFF' && bytes.slice(8, 12) === 'WEBP';
+      if (!png && !jpeg && !webp) assetUrl = undefined;
+    } catch {
+      assetUrl = undefined;
+    }
+  }
+
+  const hasMedia = Boolean(assetUrl);
+  const queuedVideo = m === 'video' && !hasMedia && Boolean(job);
   return {
     provider: p,
-    status: m === 'video' && !asset && !b64 ? 'queued' : 'ready',
-    assetUrl: asset ?? (b64 ? `data:image/png;base64,${b64}` : undefined),
+    status: hasMedia ? 'ready' : queuedVideo ? 'queued' : 'error',
+    assetUrl,
     jobId: job,
     text: d.text ?? d.message,
-    warning: asset || b64 || job ? undefined : 'Provider returned no media URL'
+    warning: hasMedia || queuedVideo ? undefined : 'Provider returned no renderable image/video asset. The HTTP request succeeded, but media generation was not verified.'
   };
 }
 
+
+/* Persist remote image bytes as data URLs. A blob: URL is temporary and
+   becomes invalid after reload, so it must never be saved into a persona or gallery. */
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read generated image data.'));
+    reader.readAsDataURL(blob);
+  });
+}
 
 /* Cloud calls get a hard timeout too — a hung provider must never leave
    GENERATE stuck "busy" (self-hosted calls use their own 8s/300s rules). */
@@ -650,13 +683,12 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
   }
   const key = getSavedApiKey(p);
   const model = env()[`VITE_${p.toUpperCase()}_${r.mode.toUpperCase()}_MODEL`] ?? env()[`VITE_${p.toUpperCase()}_MODEL`] ?? defaultModel(p, r.mode);
-  // Keyless fallback: a 'custom' image request with no endpoint configured goes
-  // to Pollinations' public image host. Non-image modes keep '' so they still
-  // report "not configured" instead of hitting an image endpoint.
+  // CUSTOM defaults to keyless Pollinations only when no endpoint is saved.
+  // This is still the selected CUSTOM route; a failed request is surfaced.
   const endpoint =
     getSavedEndpoint(p, r.mode) ||
     (p === 'custom'
-      ? (r.mode === 'image' ? KEYLESS_IMAGE_ENDPOINT : '')
+      ? (r.mode === 'image' ? (env().VITE_CUSTOM_IMAGE_ENDPOINT || KEYLESS_IMAGE_ENDPOINT) : '')
       : defaultEndpoint(p, r.mode, model));
   // Custom endpoints may be keyless; OpenRouter and Gemini always need a key.
   const missingKey = p !== 'custom' && !key;
@@ -664,7 +696,7 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
     return {
       provider: p,
       status: 'error',
-      warning: `${p} ${r.mode} ${missingKey ? 'API key' : 'endpoint'} is not configured. (Local procedural engine available)`,
+      warning: `${p} ${r.mode} ${missingKey ? 'API key' : 'endpoint'} is not configured.`,
       assetUrl: undefined,
       text: undefined
     };
@@ -714,7 +746,7 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
     return {
       provider: p,
       status: 'ready',
-      assetUrl: URL.createObjectURL(blob),
+      assetUrl: await blobToDataUrl(blob),
       text: `Pollinations ${model || 'flux'} image generated successfully.`
     };
   }
@@ -830,7 +862,7 @@ class Cloud {
     if (this.name === 'custom') {
       // Custom endpoints may be keyless — an endpoint is all we require.
       // (getSavedEndpoint already falls back from the mode-specific to the generic key.)
-      return Boolean(getSavedEndpoint(this.name, 'image') || getSavedEndpoint(this.name));
+      return Boolean(getSavedEndpoint(this.name, 'image') || getSavedEndpoint(this.name) || KEYLESS_IMAGE_ENDPOINT);
     }
     return Boolean(getSavedApiKey(this.name));
   }
@@ -854,43 +886,54 @@ export async function generateWithFallback(
   r: GenerationRequest,
   preferred: ProviderName = 'local'
 ): Promise<GenerationResult> {
-  // The `local` engine only ever draws a procedural placeholder — it is NOT a
-  // real generator. It is honoured when the user explicitly selects it (some
-  // people use it as an offline mock), but it must never be used as a silent
-  // fallback for a real engine that failed: that swaps a fixable error message
-  // for a fake picture and makes real misconfiguration impossible to diagnose.
-  //
-  // So: keep `local` in the candidate list only when it was asked for directly.
-  const explicitLocal = preferred === 'local';
-  const all = providers().filter(p => p.name !== 'local' || explicitLocal);
-  for (const p of [...all.filter(x => x.name === preferred), ...all.filter(x => x.name !== preferred)]) {
-    if (!p.available()) continue;
-    try {
-      const out = await p.generate(r);
-      if (out.status === 'ready' || out.status === 'queued' || (explicitLocal && p.name === 'local')) return out;
-    } catch (e) {
-      if (p.name === preferred && preferred !== 'local') {
-        return {
-          provider: p.name,
-          status: 'error',
-          warning: e instanceof Error ? e.message : 'Generation failed',
-          assetUrl: undefined,
-          text: undefined
-        };
-      }
-    }
+  // Despite the legacy function name, generation must not silently switch
+  // engines. A selector is a routing contract: CUSTOM cannot turn into
+  // ComfyUI, Gemini, or a procedural SVG when its own endpoint fails.
+  const selected = providers().find(p => p.name === preferred);
+  if (!selected) {
+    return {
+      provider: preferred,
+      status: 'error',
+      warning: preferred === 'ollama'
+        ? 'Ollama is the local text/chat engine, not an image generator. Choose SD LOCAL, COMFYUI / SELF-HOSTED, CUSTOM, OpenRouter, or Gemini for images.'
+        : `Unknown generation engine: ${preferred}.`,
+      assetUrl: undefined,
+      text: undefined
+    };
   }
-  // Nothing produced a real asset and we did NOT quietly return a placeholder
-  // instead. Say plainly what to do about it.
-  return {
-    provider: preferred,
-    status: 'fallback',
-    warning: r.mode === 'image'
-      ? 'No image engine is configured, and the one selected could not be reached. Open Settings and set an image endpoint (Pollinations works keyless), or check the error above — this app no longer substitutes a placeholder image for a failed generation.'
-      : 'No generation provider is configured for this mode. Open Settings and add an API key or endpoint.',
-    assetUrl: undefined,
-    text: undefined
-  };
+
+  if (!selected.available()) {
+    const warning = preferred === 'sdlocal'
+      ? 'SD LOCAL is selected but disabled. Open Settings → Stable Diffusion and enable it after configuring an A1111-compatible server on port 1234.'
+      : preferred === 'selfhosted'
+        ? 'COMFYUI / SELF-HOSTED is selected but no server URL is configured. Open Settings → Self-Hosted Image Server and test the connection.'
+        : preferred === 'custom'
+          ? 'CUSTOM is selected but its keyless Pollinations endpoint is unavailable. Check connectivity/rate limits or configure another image endpoint in Settings.'
+          : preferred === 'openrouter' || preferred === 'gemini'
+            ? `${preferred} is selected but no API key is configured.`
+            : 'The selected image engine is not available. Check its Settings and server status.';
+    return { provider: preferred, status: 'error', warning, assetUrl: undefined, text: undefined };
+  }
+
+  try {
+    const out = await selected.generate(r);
+    if (out.status === 'ready' || out.status === 'queued' || out.status === 'error') return out;
+    return {
+      provider: preferred,
+      status: 'error',
+      warning: out.warning || `${preferred} did not produce an image.`,
+      assetUrl: undefined,
+      text: undefined
+    };
+  } catch (e) {
+    return {
+      provider: preferred,
+      status: 'error',
+      warning: e instanceof Error ? e.message : 'Generation failed',
+      assetUrl: undefined,
+      text: undefined
+    };
+  }
 }
 
 export async function chatWithProvider(messages: ChatMessage[], preferred: ProviderName = 'openrouter') {

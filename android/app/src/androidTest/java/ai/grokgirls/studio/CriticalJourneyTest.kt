@@ -63,13 +63,19 @@ class CriticalJourneyTest {
 
         val ctx: Context = ApplicationProvider.getApplicationContext()
         val intent = ctx.packageManager.getLaunchIntentForPackage(PKG)?.apply {
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         assertNotNull("No launch intent for $PKG — is the APK installed?", intent)
         ctx.startActivity(intent)
 
-        val appeared = device.wait(Until.hasObject(By.pkg(PKG).depth(0)), LAUNCH_TIMEOUT)
-        assertTrue("$PKG did not reach the foreground within ${LAUNCH_TIMEOUT}ms", appeared)
+        // WebView/app roots are not consistently exposed at accessibility depth 0
+        // across emulator images. Match the package anywhere in the visible tree.
+        val appeared = device.wait(Until.hasObject(By.pkg(PKG)), LAUNCH_TIMEOUT)
+        assertTrue(
+            "$PKG did not reach the foreground within ${LAUNCH_TIMEOUT}ms; " +
+                "currentPackage=${device.currentPackageName}",
+            appeared
+        )
         waitForWebContent()
     }
 
@@ -96,7 +102,7 @@ class CriticalJourneyTest {
     }
 
     private fun appIsAlive(): Boolean =
-        device.findObject(By.pkg(PKG).depth(0)) != null
+        device.findObject(By.pkg(PKG)) != null
 
     // ---------------------------------------------------------------- 01
 
@@ -238,7 +244,7 @@ class CriticalJourneyTest {
         )
         assertTrue(
             "App did not return to the foreground after resume",
-            device.wait(Until.hasObject(By.pkg(PKG).depth(0)), LAUNCH_TIMEOUT)
+            device.wait(Until.hasObject(By.pkg(PKG)), LAUNCH_TIMEOUT)
         )
         waitForWebContent()
 

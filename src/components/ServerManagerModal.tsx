@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useState } from 'react';
 import OllamaPanel from './OllamaPanel';
 import SdLocalPanel from './SdLocalPanel';
 import { ensureTripoSRRunning, triposrStatus } from '../services/triposrLocal';
+import { hunyuan3dStatus } from '../services/hunyuan3dLocal';
 
 
 type ComfyUiStatus = { running: boolean; started?: boolean; version?: string; message: string; method?: string };
 type ThreeDStatus = { running: boolean; engine?: string; message: string };
+type HunyuanStatus = { running: boolean; message: string };
 type NativeComfyUi = {
   status(opts?: { base?: string; timeoutMs?: number }): Promise<ComfyUiStatus>;
   startServer(opts?: { base?: string; timeoutMs?: number }): Promise<ComfyUiStatus>;
@@ -19,8 +21,9 @@ export interface ServerManagerModalProps { isOpen: boolean; onClose: () => void;
 
 export default function ServerManagerModal({ isOpen, onClose, onNotice }: ServerManagerModalProps) {
   const [comfy, setComfy] = useState<ComfyUiStatus>({ running: false, message: 'Not checked yet.' });
-  const [busy, setBusy] = useState<'check' | 'start' | 'check-3d' | 'start-3d' | ''>('');
+  const [busy, setBusy] = useState<'check' | 'start' | 'check-3d' | 'start-3d' | 'check-hunyuan' | ''>('');
   const [threeD, setThreeD] = useState<ThreeDStatus>({ running: false, message: 'Not checked yet.' });
+  const [hunyuan, setHunyuan] = useState<HunyuanStatus>({ running: false, message: 'Not checked yet.' });
   const [message, setMessage] = useState('');
 
   const checkComfyUi = useCallback(async () => {
@@ -96,12 +99,26 @@ export default function ServerManagerModal({ isOpen, onClose, onNotice }: Server
     } finally { setBusy(''); }
   }, [onNotice]);
 
+  const checkHunyuan = useCallback(async () => {
+    setBusy('check-hunyuan');
+    try {
+      const status = await hunyuan3dStatus();
+      setHunyuan({ running: status.ok, message: status.message });
+    } catch (e) {
+      setHunyuan({ running: false, message: e instanceof Error ? e.message : String(e) });
+    } finally { setBusy(''); }
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
-      void checkComfyUi();
-      void checkThreeD();
+      // Run checks serially: each check owns the shared busy indicator.
+      void (async () => {
+        await checkComfyUi();
+        await checkThreeD();
+        await checkHunyuan();
+      })();
     }
-  }, [isOpen, checkComfyUi, checkThreeD]);
+  }, [isOpen, checkComfyUi, checkThreeD, checkHunyuan]);
   if (!isOpen) return null;
 
   return (
@@ -147,6 +164,20 @@ export default function ServerManagerModal({ isOpen, onClose, onNotice }: Server
             <button className="prompt-mini-btn" disabled={busy !== '' || threeD.running} onClick={() => void startThreeD()}>{busy === 'start-3d' ? 'STARTING…' : '▶ START 3D WORKER'}</button>
           </div>
           <p className="settings-note">The bundled Termux wrapper expects the official TripoSR checkout at ~/TripoSR and this repo at ~/Grok-Girls. API health is not proof of generation; the MAKE 3D action must return a valid GLB. The ComfyUI Hunyuan3D custom-node path remains unavailable until its missing dependencies are installed.</p>
+        </section>
+        <section className="settings-section selfhosted-section" aria-label="Hunyuan3D worker status">
+          <div className="settings-section-title">🧊 HUNYUAN3D WORKER · 127.0.0.1:8081</div>
+          <div className="server-manager-status-row">
+            <span className={'server-manager-dot ' + (hunyuan.running ? 'is-running' : 'is-stopped')} />
+            <strong>{hunyuan.running ? 'API RESPONDING' : 'NOT READY'}</strong>
+          </div>
+          <p className="settings-note">{hunyuan.message}</p>
+          <div className="selfhosted-actions server-manager-actions">
+            <button className="btn-test-server" disabled={busy !== ''} onClick={() => void checkHunyuan()}>
+              {busy === 'check-hunyuan' ? 'CHECKING…' : 'CHECK HUNYUAN3D'}
+            </button>
+          </div>
+          <p className="settings-note">Optional worker, separate from TripoSR on port 8082. This build exposes Hunyuan3D status and generation, but no in-app start command; start its configured API worker separately. A responding health endpoint is not proof that a GLB job completes.</p>
         </section>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import React, { lazy, Suspense, useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { Girl, rooms, seedGirls, Room } from './models/studio';
 import { advanceStory, initialStory, StoryState, storyChapters, storyPrompt } from './models/story';
 import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDeleted, addActMemory, normalizePersonaAge } from './services/memory';
@@ -168,9 +168,20 @@ import { redirectToPaymentLink } from './services/stripe';
 import { StylePreset, applyStylePreset, stylePresets } from './services/styles';
 import { StudioStats, achievements, bumpStat, loadStats } from './services/stats';
 import ColorWheel from './components/ColorWheel';
-import SettingsModal from './components/SettingsModal';
-import VideoExportPage from './pages/VideoExportPage';
 import './styles.css';
+
+const SettingsModal = lazy(() => import('./components/SettingsModal'));
+const VideoExportPage = lazy(() => import('./pages/VideoExportPage'));
+
+function LazyViewFallback() {
+  return (
+    <div className="companion-overlay-dock" role="status" aria-live="polite">
+      <div className="companion-header">
+        <span>Loading studio view…</span>
+      </div>
+    </div>
+  );
+}
 
 type ActiveView = 'builder' | 'presets' | 'import' | 'chat' | 'story' | 'video' | 'gallery';
 type InspectorSection =
@@ -3534,15 +3545,17 @@ export default function App() {
               <button onClick={() => setView('builder')}>✕</button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-              <VideoExportPage
-                girl={girl}
-                room={room}
-                latestAssetUrl={currentPreviewUrl}
-                adult={adult}
-                provider={provider}
-                videoPrompt={buildDraftPrompt(draft, adult)}
-                onRendered={() => bumpAndCelebrate('videos')}
-              />
+              <Suspense fallback={<LazyViewFallback />}>
+                <VideoExportPage
+                  girl={girl}
+                  room={room}
+                  latestAssetUrl={currentPreviewUrl}
+                  adult={adult}
+                  provider={provider}
+                  videoPrompt={buildDraftPrompt(draft, adult)}
+                  onRendered={() => bumpAndCelebrate('videos')}
+                />
+              </Suspense>
             </div>
           </div>
         )}
@@ -4640,7 +4653,11 @@ export default function App() {
       )}
 
       {/* SETTINGS MODAL */}
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      {isSettingsOpen && (
+        <Suspense fallback={null}>
+          <SettingsModal isOpen onClose={() => setIsSettingsOpen(false)} />
+        </Suspense>
+      )}
 
       {/* TOAST */}
       {toast && <div className="toast">{toast}</div>}

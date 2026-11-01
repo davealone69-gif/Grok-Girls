@@ -383,12 +383,15 @@ export default function App() {
   );
 
   const [draft, setDraft] = useState<AvatarDraft>(() => loadDraft(girl.id, defaultDraft(girl)));
+  const lastDraftGirlIdRef = useRef<string | null>(null);
 
   // Sync draft when the selected persona changes
   useEffect(() => {
+    if (lastDraftGirlIdRef.current === girl.id) return;
+    lastDraftGirlIdRef.current = girl.id;
     suppressHistoryRef.current = true;
     setDraft(loadDraft(girl.id, defaultDraft(girl)));
-  }, [girl.id]);
+  }, [girl]);
 
   // Persist draft + adult flag
   useEffect(() => {
@@ -4104,15 +4107,17 @@ export default function App() {
                       <select
                         className="inspector-select"
                         value={draft.adultSelections?.nudityLevel || 'covered'}
-                        onChange={e =>
+                        onChange={e => {
+                          const nudityLevel = adultOptions.nudityLevel.find(level => level === e.target.value);
+                          if (!nudityLevel) return;
                           setDraft(d => ({
                             ...d,
                             adultSelections: {
                               ...(d.adultSelections || defaultAdultSelections()),
-                              nudityLevel: e.target.value as any
+                              nudityLevel
                             }
                           }))
-                        }
+                        }}
                       >
                         {adultOptions.nudityLevel.map(n => (
                           <option key={n} value={n}>

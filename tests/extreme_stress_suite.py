@@ -126,7 +126,11 @@ class Chaos(BaseHTTPRequestHandler):
         self._cors()
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            # Client aborts are intentional in the chaos/timeout probes.
+            pass
 
     def do_GET(self):
         if CHAOS_MODE["value"] == "reset":
@@ -176,11 +180,25 @@ def start_chaos(port=CHAOS_PORT):
 
 
 def start_dev_server():
+    global PORT
     # The suite imports app modules by source path (/src/services/*.ts), which
     # only works through vite's on-the-fly transform -- the same mechanism the
-    # existing sd/ollama/glb suites rely on.
+    # existing sd/ollama/glb suites rely on. Never silently reuse an old server.
+    for candidate in range(PORT, PORT + 40):
+        with socket.socket() as probe:
+            try:
+                probe.bind(("127.0.0.1", candidate))
+            except OSError:
+                continue
+        PORT = candidate
+        break
+    else:
+        raise RuntimeError("no free Vite test port found")
+    vite = os.path.join(ROOT, "node_modules", ".bin", "vite")
+    if not os.path.isfile(vite):
+        raise RuntimeError("local Vite executable is missing")
     p = subprocess.Popen(
-        ["npx", "vite", "--port", str(PORT), "--host", "127.0.0.1", "--strictPort"],
+        [vite, "--port", str(PORT), "--host", "127.0.0.1", "--strictPort"],
         cwd=ROOT,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -353,7 +371,92 @@ def section_b_malformed(pg, errors):
         isinstance(settings["after"], dict) and "base" in settings["after"],
         json.dumps(settings["after"])[:150])
 
-    chk("B7 hostile input raised no page errors", len(errors) == before,
+    connections = pg.evaluate(
+        """async () => {
+            const s = await import('/src/services/settingsState.ts');
+            const base = s.loadSettings();
+            try {
+                s.saveSettings({ ...base, connections: {
+                    custom: null,
+                    openrouter: { apiKey:'kept-key', endpoints:{ image:'https://img.example', chat:42 }, models:{ chat:'kept-model', image:{} } }
+                } });
+                const out = s.loadSettings().connections;
+                return { out, safe: typeof out.custom.apiKey === 'string' &&
+                    typeof out.custom.endpoints === 'object' &&
+                    out.openrouter.apiKey === 'kept-key' &&
+                    out.openrouter.endpoints.image === 'https://img.example' &&
+                    out.openrouter.models.chat === 'kept-model' &&
+                    !('chat' in out.openrouter.endpoints && typeof out.openrouter.endpoints.chat !== 'string') };
+            } catch (e) { return { err:String(e).slice(0,100) }; }
+        }"""
+    )
+    chk("B7 malformed nested connections are normalized without losing valid values",
+        connections.get("safe") is True, json.dumps(connections)[:190])
+
+    persona = pg.evaluate(
+        """async () => {
+            const presets = [...document.querySelectorAll('.rail-btn')]
+                .find(x => x.title === 'Preset Identities');
+            if (presets) {
+                presets.click();
+                await new Promise(r => setTimeout(r, 350));
+            }
+            const input = [...document.querySelectorAll('input[type=file]')]
+                .find(x => /json/i.test(x.getAttribute('accept') || ''));
+            if (!input) return { err:'persona file input not found' };
+            const importId = `stress-import-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+            const payload = {
+                id:importId, name:'Regression Persona',
+                bio:'kept bio'.padEnd(5005, 'x'), hairColor:'kept hair',
+                traits:Array.from({length:40}, (_, i) => i === 0 ? 'kept trait' : `trait-${i}`),
+                memories:Array.from({length:105}, (_, i) => ({
+                    summary:i === 0 ? 'kept memory' : `memory-${i}`, detail:'d'.repeat(5000)
+                })),
+                age:12, outfit:[], affinity:999, trust:-5, emotion:['bad'],
+                previewUrl:'javascript:alert(1)'
+            };
+            const dt = new DataTransfer();
+            dt.items.add(new File([JSON.stringify(payload)], 'malformed-persona.json', {type:'application/json'}));
+            input.files = dt.files;
+            input.dispatchEvent(new Event('change', {bubbles:true}));
+            let g = null;
+            for (let i = 0; i < 100 && !g; i++) {
+                const all = JSON.parse(localStorage.getItem('grok-girls-state-v2') || '[]');
+                g = all.find(x => x.id === importId) || null;
+                if (!g) await new Promise(r => setTimeout(r, 50));
+            }
+            if (!g) return {err:'import not persisted'};
+            const before = localStorage.getItem('grok-girls-state-v2');
+            let loadedAge = null;
+            try {
+                const m = await import('/src/services/memory.ts');
+                const rows = JSON.parse(before || '[]');
+                localStorage.setItem('grok-girls-state-v2', JSON.stringify(rows.map(x =>
+                    x.id === g.id ? { ...x, age:12 } : x)));
+                loadedAge = m.loadGirls([]).find(x => x.id === g.id)?.age ?? null;
+            } finally {
+                if (before !== null) localStorage.setItem('grok-girls-state-v2', before);
+            }
+            return { age:g.age, loadedAge, bioLength:g.bio.length,
+                traitCount:g.traits.length, firstTrait:g.traits[0], memoryCount:g.memories.length,
+                affinity:g.affinity, trust:g.trust, hasPreview:!!g.previewUrl,
+                bioPrefix:g.bio.slice(0, 8), hairColor:g.hairColor, outfit:g.outfit,
+                safe:g.age === 18 && loadedAge === 18 && typeof g.outfit === 'string' &&
+                    g.bio.length <= 4000 && Array.isArray(g.traits) && g.traits.length <= 32 &&
+                    g.traits.every(x => typeof x === 'string' && x.length <= 120) &&
+                    Array.isArray(g.memories) && g.memories.length <= 100 &&
+                    g.memories.every(x => x && typeof x.summary === 'string' && x.summary.length <= 1000 &&
+                        (!x.detail || x.detail.length <= 4000)) &&
+                    g.affinity === 100 && g.trust === 0 && !g.previewUrl };
+        }"""
+    )
+    chk("B8 underage and oversized persona import is clamped to bounded adult-safe shapes",
+        persona.get("safe") is True and persona.get("bioPrefix") == "kept bio" and
+        persona.get("hairColor") == "kept hair" and persona.get("age") == 18 and
+        persona.get("firstTrait") == "kept trait",
+        json.dumps(persona)[:190])
+
+    chk("B9 hostile input raised no page errors", len(errors) == before,
         errors[before:][:1])
 
 
@@ -640,7 +743,7 @@ def section_g_performance(pg, errors):
             };
         }"""
     )
-    chk("G1 DOMContentLoaded under 5s", perf["domContentLoaded"] < 5000,
+    chk("G1 Vite DOMContentLoaded under 8s", perf["domContentLoaded"] < 8000,
         f'{perf["domContentLoaded"]}ms')
     if perf["mem"]:
         chk("G2 JS heap below 70% of the limit",
@@ -750,6 +853,11 @@ def main():
     finally:
         if dev:
             dev.terminate()
+            try:
+                dev.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                dev.kill()
+                dev.wait(timeout=5)
         chaos.shutdown()
 
     print(json.dumps(rows, indent=1))

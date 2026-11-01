@@ -3,6 +3,11 @@
   "private": true,
   "version": "1.1.1",
   "type": "module",
+  "overrides": {
+    "rimraf": {
+      "glob": "14.0.2"
+    }
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -10,18 +15,18 @@
     "android": "npm run build && npx cap sync android && cd android && ./gradlew assembleDebug",
     "android:release": "npm run build && npx cap sync android && cd android && ./gradlew assembleRelease",
     "pwa:preview": "vite preview",
-    "lint": "node -e \"require('fs').existsSync('tools/lint/node_modules/.bin/eslint')||process.exit(1)\" || npm --prefix tools/lint ci --no-audit --no-fund && tools/lint/node_modules/.bin/eslint src",
-    "lint:fix": "node -e \"require('fs').existsSync('tools/lint/node_modules/.bin/eslint')||process.exit(1)\" || npm --prefix tools/lint ci --no-audit --no-fund && tools/lint/node_modules/.bin/eslint src --fix"
+    "lint": "node tools/lint/run.mjs",
+    "lint:fix": "node tools/lint/run.mjs --fix"
   },
   "dependencies": {
-    "@capacitor/android": "8.5.0",
-    "@capacitor/cli": "8.5.0",
-    "@capacitor/core": "8.5.0",
+    "@capacitor/android": "8.6.0",
+    "@capacitor/cli": "8.6.0",
+    "@capacitor/core": "8.6.0",
     "@vitejs/plugin-react": "6.1.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "typescript": "7.0.2",
-    "vite": "8.2.2"
+    "vite": "8.3.5"
   },
   "devDependencies": {
     "@types/node": "26.4.0",

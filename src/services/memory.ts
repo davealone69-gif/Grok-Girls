@@ -6,6 +6,17 @@ import { matchAct, actMemory, NSFW_NEGATIVE } from './adultActs';
 const KEY = 'grok-girls-state-v2';
 const DELETED_KEY = 'grok-girls-deleted-v1';
 
+export const MIN_PERSONA_AGE = 18;
+export const MAX_PERSONA_AGE = 60;
+
+export function normalizePersonaAge(value: unknown, fallback = 24): number {
+  const safeFallback = typeof fallback === 'number' && Number.isFinite(fallback)
+    ? Math.min(MAX_PERSONA_AGE, Math.max(MIN_PERSONA_AGE, Math.round(fallback)))
+    : 24;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return safeFallback;
+  return Math.min(MAX_PERSONA_AGE, Math.max(MIN_PERSONA_AGE, Math.round(value)));
+}
+
 /* Only these URLs are "poison": procedural local SVG renders and blob: URLs
    (which are dead after a page reload). Real image data URLs
    (data:image/png|jpeg|webp — cloud/self-hosted renders, imported photos)
@@ -15,7 +26,7 @@ const isPoisonUrl = (u?: string) =>
 
 function sanitizeGirl(g: Girl): Girl {
   const seed = seedGirls.find(s => s.id === g.id);
-  const out = { ...g };
+  const out = { ...g, age: normalizePersonaAge(g.age, seed?.age ?? 24) };
   // blob:/svg data URLs are dead after reload UNLESS an IndexedDB asset key
   // can restore the real photo (hydration resolves it on boot).
   if (isPoisonUrl(out.previewUrl) && !out.previewAssetKey) {
@@ -52,7 +63,8 @@ export function loadGirls(fallback: Girl[]): Girl[] {
     if (!Array.isArray(parsed) || !parsed.length) return fallback;
     const cleaned = parsed.map(sanitizeGirl);
     const changed = cleaned.some(
-      (g, i) => g.previewUrl !== parsed[i].previewUrl || g.thumbnailUrl !== parsed[i].thumbnailUrl
+      (g, i) => g.age !== parsed[i]?.age || g.previewUrl !== parsed[i]?.previewUrl ||
+        g.thumbnailUrl !== parsed[i]?.thumbnailUrl
     );
     if (changed) saveGirls(cleaned);
     // Merge in seed presets the user hasn't seen yet — but never resurrect
@@ -71,6 +83,7 @@ export function saveGirls(girls: Girl[]): boolean {
   // only, so localStorage never fills up with renders again.
   const slim = girls.map(g => ({
     ...g,
+    age: normalizePersonaAge(g.age, seedGirls.find(s => s.id === g.id)?.age ?? 24),
     previewUrl: g.previewAssetKey ? undefined : g.previewUrl,
     thumbnailUrl: g.thumbnailAssetKey ? undefined : g.thumbnailUrl
   }));

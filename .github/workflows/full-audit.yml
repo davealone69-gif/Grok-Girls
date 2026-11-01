@@ -43,7 +43,7 @@ jobs:
         if: ${{ hashFiles('package.json') != '' }}
         run: |
           npm ci --ignore-scripts
-          npm audit --audit-level=high || true
+          npm audit --audit-level=moderate
           npm run test --if-present
           npm run lint --if-present
           npm run build --if-present

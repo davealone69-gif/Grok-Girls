@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { Girl, rooms, seedGirls, Room } from './models/studio';
 import { advanceStory, initialStory, StoryState, storyChapters, storyPrompt } from './models/story';
-import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDeleted, addActMemory } from './services/memory';
+import { addMemory, buildGenerationPrompt, loadGirls, saveGirls, markPersonaDeleted, addActMemory, normalizePersonaAge } from './services/memory';
 import { AvatarState, interactionState, loadAvatarState, saveAvatarState, statePrompt } from './services/avatarState';
 import { addGalleryItem, loadGallery, removeGalleryItem, toggleFavorite, GalleryItem } from './services/gallery';
 import { generateWithFallback, ProviderName, createLocalPlaceholderSvg } from './services/providers';
@@ -238,6 +238,101 @@ function defaultDraft(g: Girl): AvatarDraft {
     piercingsCount: 0,
     tattoosCount: 0
   };
+}
+
+function numberFieldFrom(value: unknown, fallbackValue: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallbackValue;
+}
+
+const MAX_PERSONA_IMPORT_BYTES = 16 * 1024 * 1024;
+const MAX_INLINE_PERSONA_IMAGE_CHARS = 256 * 1024;
+const MAX_PERSONA_TRAITS = 32;
+const MAX_PERSONA_MEMORIES = 100;
+
+function boundedString(value: unknown, fallbackValue: string, maxLength: number): string {
+  return typeof value === 'string' ? value.slice(0, maxLength) : fallbackValue;
+}
+
+function importedImageUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  if (value.length <= MAX_PERSONA_IMPORT_BYTES && isRasterDataUrl(value)) return value;
+  if (value.length <= 2048 && /^https:\/\/[^\s]+$/i.test(value)) return value;
+  return undefined;
+}
+
+function normalizeImportedGirl(input: unknown): Girl {
+  const source = input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Partial<Girl>
+    : {};
+  const fallback = seedGirls[0];
+  const stringField = (key: keyof Girl, fallbackValue: string, maxLength = 512): string =>
+    boundedString(source[key], fallbackValue, maxLength);
+  const numberField = (key: keyof Girl, fallbackValue: number): number =>
+    numberFieldFrom(source[key], fallbackValue);
+  const emotion = source.emotion === 'calm' || source.emotion === 'happy' || source.emotion === 'curious' ||
+    source.emotion === 'excited' || source.emotion === 'thoughtful' ? source.emotion : fallback.emotion;
+  const memories = Array.isArray(source.memories)
+    ? source.memories.slice(0, MAX_PERSONA_MEMORIES)
+      .filter(m => m && typeof m === 'object' && !Array.isArray(m)).map((m, index) => {
+      const memory = m as Partial<Girl['memories'][number]>;
+      const now = Date.now();
+      return {
+        id: boundedString(memory.id, `memory_${now}_${index}`, 128),
+        summary: boundedString(memory.summary, '', 1000),
+        ...(typeof memory.detail === 'string' ? { detail: memory.detail.slice(0, 4000) } : {}),
+        ...(typeof memory.roomId === 'string' ? { roomId: memory.roomId.slice(0, 128) } : {}),
+        importance: Math.max(0, Math.min(1, numberFieldFrom(memory.importance, 0.45))),
+        createdAt: Math.max(0, Math.min(now, numberFieldFrom(memory.createdAt, now)))
+      };
+    })
+    : [];
+  const traits = Array.isArray(source.traits)
+    ? source.traits.slice(0, 256).filter((v): v is string => typeof v === 'string')
+      .map(v => v.slice(0, 120).trim()).filter(Boolean).slice(0, MAX_PERSONA_TRAITS)
+    : [...fallback.traits];
+  const id = stringField('id', `import_${Date.now()}`, 128).trim() || `import_${Date.now()}`;
+  const name = stringField('name', 'Imported Persona', 120).trim() || 'Imported Persona';
+  return {
+    ...fallback,
+    id,
+    name,
+    age: normalizePersonaAge(source.age, fallback.age),
+    ethnicity: stringField('ethnicity', fallback.ethnicity, 120),
+    bodyType: stringField('bodyType', fallback.bodyType, 120),
+    eyeColor: stringField('eyeColor', fallback.eyeColor, 120),
+    eyeShape: stringField('eyeShape', fallback.eyeShape, 120),
+    faceShape: stringField('faceShape', fallback.faceShape, 120),
+    hairColor: stringField('hairColor', fallback.hairColor, 120),
+    hairStyle: stringField('hairStyle', fallback.hairStyle, 180),
+    skinTone: stringField('skinTone', fallback.skinTone, 120),
+    outfit: stringField('outfit', fallback.outfit, 1000),
+    pose: stringField('pose', fallback.pose, 512),
+    expression: stringField('expression', fallback.expression, 256),
+    extra: stringField('extra', fallback.extra, 2000),
+    bio: stringField('bio', fallback.bio, 4000),
+    traits,
+    room: stringField('room', fallback.room, 128),
+    affinity: Math.max(0, Math.min(100, numberField('affinity', fallback.affinity))),
+    trust: Math.max(0, Math.min(100, numberField('trust', fallback.trust))),
+    emotion,
+    memories,
+    thumbnailUrl: importedImageUrl(source.thumbnailUrl),
+    previewUrl: importedImageUrl(source.previewUrl),
+    thumbnailAssetKey: undefined,
+    previewAssetKey: undefined
+  };
+}
+
+async function storeImportedRaster(url: string | undefined): Promise<{
+  url: string | undefined;
+  assetKey: string | undefined;
+  omitted: boolean;
+}> {
+  if (!isRasterDataUrl(url)) return { url, assetKey: undefined, omitted: false };
+  const assetKey = await putImage(url);
+  if (assetKey) return { url: (await getImageUrl(assetKey)) ?? undefined, assetKey, omitted: false };
+  if (url.length <= MAX_INLINE_PERSONA_IMAGE_CHARS) return { url, assetKey: undefined, omitted: false };
+  return { url: undefined, assetKey: undefined, omitted: true };
 }
 
 const draftToGirlPatch = (d: AvatarDraft): Partial<Girl> => ({
@@ -788,27 +883,6 @@ export default function App() {
       setHdProgress(0);
     }
   };
-  const renderAvatarTo2D = async () => {
-    if (busyRef.current || !avatar3dRef.current) return;
-    enterBusy();
-    try {
-      const url = avatar3dRef.current.renderToImage({ width: 1920, height: 1080, mimeType: 'image/png' });
-      await addGalleryItem({
-        avatarId: girl.id,
-        mode: 'image',
-        prompt: `3D RENDER · ${girl.name} · 1920×1080`,
-        assetUrl: url,
-        provider: '3d-renderer'
-      });
-      void refreshGallery();
-      showToast('2D image rendered from the real 3D avatar · 1920×1080');
-    } catch (e) {
-      showToast(`2D 3D-render failed: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      exitBusy();
-    }
-  };
-
   const testVknn3D = async () => {
     if (vknnBusy || busyRef.current) return;
     setVknnBusy(true);
@@ -1114,7 +1188,11 @@ export default function App() {
 
   /* -------------------------------------------------------- persistence */
   const updateGirl = (patch: Partial<Girl>) => {
-    const next = girls.map(g => (g.id === girl.id ? { ...g, ...patch } : g));
+    const next = girls.map(g => {
+      if (g.id !== girl.id) return g;
+      const updated = { ...g, ...patch };
+      return { ...updated, age: normalizePersonaAge(updated.age, g.age) };
+    });
     setGirls(next);
     const persisted = saveGirls(next);
     if (!persisted && !storageWarnRef.current) {
@@ -1240,23 +1318,38 @@ export default function App() {
   };
 
   const importPersonaFile = (file: File) => {
+    if (file.size > MAX_PERSONA_IMPORT_BYTES) {
+      showToast('Persona JSON exceeds the 16 MB import limit');
+      return;
+    }
     const r = new FileReader();
-    r.onload = () => {
+    r.onload = async () => {
       try {
-        const g = JSON.parse(String(r.result)) as Girl;
-        if (!g || !g.id || !g.name) throw new Error('bad');
-        delete g.previewAssetKey;
-        delete g.thumbnailAssetKey;
-        if (girls.some(x => x.id === g.id)) g.id = `import_${Date.now()}`;
+        const parsed = JSON.parse(String(r.result));
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('bad');
+        const g = normalizeImportedGirl(parsed);
+        const sourcePreview = g.previewUrl;
+        const preview = await storeImportedRaster(sourcePreview);
+        const thumbnail = g.thumbnailUrl === sourcePreview
+          ? preview
+          : await storeImportedRaster(g.thumbnailUrl);
+        g.previewUrl = preview.url;
+        g.previewAssetKey = preview.assetKey;
+        g.thumbnailUrl = thumbnail.url;
+        g.thumbnailAssetKey = thumbnail.assetKey;
+        if (girls.some(x => x.id === g.id)) g.id = `import_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
         const next = [g, ...girls];
         setGirls(next);
-        saveGirls(next);
+        const persisted = saveGirls(next);
         selectGirl(g.id);
-        showToast(`${g.name} imported`);
+        if (!persisted) showToast(`${g.name} imported for this session only — browser storage is full`);
+        else if (preview.omitted || thumbnail.omitted) showToast(`${g.name} imported; large photo omitted because browser image storage is unavailable`);
+        else showToast(`${g.name} imported`);
       } catch {
         showToast('Invalid persona JSON');
       }
     };
+    r.onerror = () => showToast('Could not read persona file');
     r.readAsText(file);
   };
 

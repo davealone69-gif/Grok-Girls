@@ -73,16 +73,33 @@ async () => {
 
 def start_dev_server():
     """Launch `vite` on PORT and wait until it answers."""
+    global PORT, BASE
     import socket
     import subprocess
     import time
 
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for candidate in range(PORT, PORT + 40):
+        with socket.socket() as probe:
+            try:
+                probe.bind(("127.0.0.1", candidate))
+            except OSError:
+                continue
+        PORT = candidate
+        break
+    else:
+        raise RuntimeError("no free Vite test port found")
+    BASE = f"http://localhost:{PORT}/"
+    vite = os.path.join(root, "node_modules", ".bin", "vite")
+    if not os.path.isfile(vite):
+        raise RuntimeError("local Vite executable is missing")
     proc = subprocess.Popen(
-        ["npx", "vite", "--port", str(PORT), "--host", "127.0.0.1", "--strictPort"],
+        [vite, "--port", str(PORT), "--host", "127.0.0.1", "--strictPort"],
         cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     for _ in range(120):
+        if proc.poll() is not None:
+            raise RuntimeError("vite dev server exited during startup")
         try:
             with socket.create_connection(("127.0.0.1", PORT), 0.5):
                 time.sleep(1.0)  # let the module graph warm up
@@ -105,6 +122,7 @@ def main() -> int:
             server.wait(timeout=10)
         except Exception:
             server.kill()
+            server.wait(timeout=5)
 
 
 def run_checks() -> int:

@@ -35,8 +35,22 @@ def chk(name, ok, detail=""):
 
 
 def start_dev_server():
+    global PORT
+    for candidate in range(PORT, PORT + 40):
+        with socket.socket() as probe:
+            try:
+                probe.bind(("127.0.0.1", candidate))
+            except OSError:
+                continue
+        PORT = candidate
+        break
+    else:
+        raise RuntimeError("no free Vite test port found")
+    vite = os.path.join(ROOT, "node_modules", ".bin", "vite")
+    if not os.path.isfile(vite):
+        raise RuntimeError("local Vite executable is missing")
     p = subprocess.Popen(
-        ["npx", "vite", "--port", str(PORT), "--host", "127.0.0.1", "--strictPort"],
+        [vite, "--port", str(PORT), "--host", "127.0.0.1", "--strictPort"],
         cwd=ROOT,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -45,12 +59,14 @@ def start_dev_server():
         if p.poll() is not None:
             raise RuntimeError("vite exited during startup")
         try:
-            socket.create_connection(("127.0.0.1", PORT), 0.5).close()
+            with socket.create_connection(("127.0.0.1", PORT), 0.5):
+                pass
             time.sleep(1.0)  # warm-up before first module request
             return p
         except OSError:
             time.sleep(0.5)
     p.terminate()
+    p.wait(timeout=5)
     raise RuntimeError("vite did not start")
 
 
@@ -414,6 +430,11 @@ def main():
     finally:
         if dev:
             dev.terminate()
+            try:
+                dev.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                dev.kill()
+                dev.wait(timeout=5)
         mock.shutdown()
 
     print(json.dumps(rows, indent=1))

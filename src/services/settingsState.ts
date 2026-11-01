@@ -335,6 +335,31 @@ function clampInt(v: unknown, lo: number, hi: number, dflt: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : dflt;
 }
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function stringMap(v: unknown): Record<string, string> {
+  if (!isRecord(v)) return {};
+  return Object.fromEntries(
+    Object.entries(v).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+  );
+}
+
+function normalizeConnection(v: unknown): ProviderConnection {
+  const c = isRecord(v) ? v : {};
+  return {
+    apiKey: typeof c.apiKey === 'string' ? c.apiKey : '',
+    endpoints: stringMap(c.endpoints),
+    models: stringMap(c.models)
+  };
+}
+
+function normalizeConnections(v: unknown): Record<string, ProviderConnection> {
+  if (!isRecord(v)) return {};
+  return Object.fromEntries(Object.entries(v).map(([provider, connection]) => [provider, normalizeConnection(connection)]));
+}
+
 /** Deep-default a parsed (possibly partial / older-version) record. */
 function sanitize(raw: Record<string, unknown>): SettingsState {
   const g = (raw.generation ?? {}) as Partial<GenerationSettings>;
@@ -348,7 +373,7 @@ function sanitize(raw: Record<string, unknown>): SettingsState {
     contentGate: { ...DEFAULT_SETTINGS.contentGate, ...cg },
     generation: { ...DEFAULT_SETTINGS.generation, ...g },
     provider: { ...DEFAULT_SETTINGS.provider, ...pv },
-    connections: { ...((raw.connections ?? {}) as Record<string, ProviderConnection>) },
+    connections: normalizeConnections(raw.connections),
     selfHost: { ...DEFAULT_SETTINGS.selfHost, ...sh, loras: Array.isArray(sh.loras) ? sh.loras.slice(0, 3) : [] },
     ollama: {
       ...DEFAULT_SETTINGS.ollama,
@@ -391,22 +416,23 @@ export function loadSettings(): SettingsState {
 
 /** Persist the canonical record and mirror every value to its legacy key. */
 export function saveSettings(next: SettingsState): void {
-  cache = next;
-  const ok = lsSet(SETTINGS_KEY, JSON.stringify(next));
+  const safe = { ...next, connections: normalizeConnections(next.connections) };
+  cache = safe;
+  const ok = lsSet(SETTINGS_KEY, JSON.stringify(safe));
   if (!ok) return; // storage full/unavailable — keep in-memory, no mirror
   // write-through mirror (keeps older readers / rollbacks correct)
-  const g = next.contentGate;
+  const g = safe.contentGate;
   lsSet(LEGACY.adult, g.adult ? '1' : '0');
   lsSet(LEGACY.ageConfirmed, g.ageConfirmed ? '18+' : '');
-  lsSet(LEGACY.neg, next.generation.negative);
-  lsSet(LEGACY.seed, next.generation.seed);
-  lsSet(LEGACY.steps, String(next.generation.steps));
-  lsSet(LEGACY.cfg, String(next.generation.cfg));
-  lsSet(LEGACY.size, String(next.generation.size));
-  lsSet(LEGACY.provider, next.provider.image);
-  lsSet(LEGACY.chatProvider, next.provider.chat);
-  for (const p of Object.keys(next.connections)) {
-    const c = next.connections[p];
+  lsSet(LEGACY.neg, safe.generation.negative);
+  lsSet(LEGACY.seed, safe.generation.seed);
+  lsSet(LEGACY.steps, String(safe.generation.steps));
+  lsSet(LEGACY.cfg, String(safe.generation.cfg));
+  lsSet(LEGACY.size, String(safe.generation.size));
+  lsSet(LEGACY.provider, safe.provider.image);
+  lsSet(LEGACY.chatProvider, safe.provider.chat);
+  for (const p of Object.keys(safe.connections)) {
+    const c = safe.connections[p];
     lsSet(`${LEGACY.key}${p}`, c.apiKey);
     const ep = (m: ApiMode | 'generic') =>
       c.endpoints[m] !== undefined ? lsSet(m === 'generic' ? `${LEGACY.endpoint}${p}` : `${LEGACY.endpoint}${p}-${m}`, c.endpoints[m] as string) : null;
@@ -415,20 +441,20 @@ export function saveSettings(next: SettingsState): void {
       c.models[m] !== undefined ? lsSet(m === 'generic' ? `${LEGACY.model}${p}` : `${LEGACY.model}${p}-${m}`, c.models[m] as string) : null;
     md('generic'); md('image'); md('chat');
   }
-  lsSet(LEGACY.shBase, next.selfHost.base);
-  lsSet(LEGACY.shType, next.selfHost.type);
-  lsSet(LEGACY.shCkpt, next.selfHost.checkpoint);
-  lsSet(LEGACY.shSampler, next.selfHost.sampler);
-  lsSet(LEGACY.shUpscaler, next.selfHost.upscaler);
-  lsSet(LEGACY.shHires, next.selfHost.hiresFix ? '1' : '0');
-  lsSet(LEGACY.shLoras, JSON.stringify(next.selfHost.loras.slice(0, 3)));
-  lsSet(LEGACY.ollamaBase, next.ollama.base);
-  lsSet(LEGACY.ollamaModel, next.ollama.model);
-  lsSet(LEGACY.ollamaEnabled, next.ollama.enabled ? '1' : '0');
-  lsSet(LEGACY.ollamaAutoStart, next.ollama.autoStart ? '1' : '0');
-  lsSet(LEGACY.sdBase, next.sdLocal.base);
-  lsSet(LEGACY.sdEnabled, next.sdLocal.enabled ? '1' : '0');
-  lsSet(LEGACY.sdAutoStart, next.sdLocal.autoStart ? '1' : '0');
+  lsSet(LEGACY.shBase, safe.selfHost.base);
+  lsSet(LEGACY.shType, safe.selfHost.type);
+  lsSet(LEGACY.shCkpt, safe.selfHost.checkpoint);
+  lsSet(LEGACY.shSampler, safe.selfHost.sampler);
+  lsSet(LEGACY.shUpscaler, safe.selfHost.upscaler);
+  lsSet(LEGACY.shHires, safe.selfHost.hiresFix ? '1' : '0');
+  lsSet(LEGACY.shLoras, JSON.stringify(safe.selfHost.loras.slice(0, 3)));
+  lsSet(LEGACY.ollamaBase, safe.ollama.base);
+  lsSet(LEGACY.ollamaModel, safe.ollama.model);
+  lsSet(LEGACY.ollamaEnabled, safe.ollama.enabled ? '1' : '0');
+  lsSet(LEGACY.ollamaAutoStart, safe.ollama.autoStart ? '1' : '0');
+  lsSet(LEGACY.sdBase, safe.sdLocal.base);
+  lsSet(LEGACY.sdEnabled, safe.sdLocal.enabled ? '1' : '0');
+  lsSet(LEGACY.sdAutoStart, safe.sdLocal.autoStart ? '1' : '0');
 }
 
 /** Mutate + persist in one step (invalidate cache first). */

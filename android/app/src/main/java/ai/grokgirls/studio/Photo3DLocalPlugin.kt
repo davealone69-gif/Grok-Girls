@@ -15,44 +15,61 @@ import ai.grokgirls.studio.threed.scan.SilhouetteExtractor
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
-import java.util.concurrent.Executors
+import java.util.concurrent.Semaphore
+import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 /** Real phone-native single-image -> mesh -> self-contained GLB pipeline from 3DDD. */
 @CapacitorPlugin(name = "Photo3DLocal")
 class Photo3DLocalPlugin : Plugin() {
-    private val pool = Executors.newCachedThreadPool()
+    private val admission = Semaphore(MAX_CONCURRENT_JOBS)
+    private val pool = ThreadPoolExecutor(
+        MAX_CONCURRENT_JOBS,
+        MAX_CONCURRENT_JOBS,
+        0L,
+        TimeUnit.MILLISECONDS,
+        SynchronousQueue(),
+        ThreadPoolExecutor.AbortPolicy()
+    )
 
     @PluginMethod
     fun buildMultiView(call: PluginCall) {
         val images = call.getArray("images")
-        if (images == null || images.length() < 3) {
-            call.resolve(error("Multi-view 3D requires at least 3 real captured frames."))
+        val frameCount = images?.length() ?: 0
+        Photo3DInputLimits.frameCountError(frameCount)?.let {
+            call.resolve(error(it))
             return
         }
-        pool.execute {
+        enqueue(call) {
             try {
-                val views = ArrayList<ai.grokgirls.studio.threed.scan.VisualHull.View>()
+                val views = ArrayList<ai.grokgirls.studio.threed.scan.VisualHull.View>(frameCount)
                 var firstPng: ByteArray? = null
-                for (i in 0 until images.length()) {
-                    val dataUrl = images.optString(i, "")
-                    val comma = dataUrl.indexOf(',')
-                    val bytes = Base64.decode(if (comma >= 0) dataUrl.substring(comma + 1) else dataUrl, Base64.DEFAULT)
-                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                        ?: throw IllegalArgumentException("Frame $i could not be decoded.")
-                    val silhouette = SilhouetteExtractor.extract(bitmap)
-                    if (firstPng == null) {
-                        firstPng = ByteArrayOutputStream().use { out ->
-                            if (!bitmap.compress(CompressFormat.PNG, 100, out)) throw IllegalStateException("Could not encode first frame.")
-                            out.toByteArray()
+                var aggregatePixels = 0L
+                for (i in 0 until frameCount) {
+                    val dataUrl = images!!.optString(i, "")
+                    var bitmap: Bitmap? = null
+                    try {
+                        bitmap = decodeBounded(dataUrl, "Frame $i", aggregatePixels)
+                        aggregatePixels += bitmap.width.toLong() * bitmap.height.toLong()
+                        val silhouette = SilhouetteExtractor.extract(bitmap)
+                        if (firstPng == null) {
+                            firstPng = ByteArrayOutputStream().use { out ->
+                                if (!bitmap.compress(CompressFormat.PNG, 100, out)) {
+                                    throw IllegalStateException("Could not encode first frame.")
+                                }
+                                out.toByteArray()
+                            }
                         }
-                    }
-                    val azimuth = (2.0 * Math.PI * i / images.length()).toFloat()
-                    views.add(
-                        ai.grokgirls.studio.threed.scan.VisualHull.View(
-                            silhouette.mask, silhouette.width, silhouette.height, azimuth
+                        val azimuth = (2.0 * Math.PI * i / frameCount).toFloat()
+                        views.add(
+                            ai.grokgirls.studio.threed.scan.VisualHull.View(
+                                silhouette.mask, silhouette.width, silhouette.height, azimuth
+                            )
                         )
-                    )
-                    bitmap.recycle()
+                    } finally {
+                        bitmap?.recycle()
+                    }
                 }
                 val resolution = (call.getInt("resolution") ?: 56).coerceIn(24, 72)
                 val hull = ai.grokgirls.studio.threed.scan.VisualHull(resolution)
@@ -86,14 +103,10 @@ class Photo3DLocalPlugin : Plugin() {
             call.resolve(error("No image supplied."))
             return
         }
-        pool.execute {
+        enqueue(call) {
             var bitmap: Bitmap? = null
             try {
-                val comma = dataUrl.indexOf(',')
-                val encoded = if (comma >= 0) dataUrl.substring(comma + 1) else dataUrl
-                val bytes = Base64.decode(encoded, Base64.DEFAULT)
-                bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    ?: throw IllegalArgumentException("The supplied image could not be decoded.")
+                bitmap = decodeBounded(dataUrl, "Image")
                 val silhouette = SilhouetteExtractor.extract(bitmap)
                 if (silhouette.coverage !in 0.02f..0.985f) {
                     throw IllegalStateException(
@@ -113,7 +126,7 @@ class Photo3DLocalPlugin : Plugin() {
                     .replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "photo-avatar" }
                 val file = File(dir, name + "-" + UUID.randomUUID().toString() + ".glb")
                 val png = ByteArrayOutputStream().use { out ->
-                    if (!bitmap!!.compress(CompressFormat.PNG, 100, out)) {
+                    if (!bitmap.compress(CompressFormat.PNG, 100, out)) {
                         throw IllegalStateException("Could not encode the source image as PNG texture.")
                     }
                     out.toByteArray()
@@ -142,10 +155,56 @@ class Photo3DLocalPlugin : Plugin() {
         }
     }
 
+    private fun enqueue(call: PluginCall, task: () -> Unit) {
+        if (!admission.tryAcquire()) {
+            call.resolve(error("Another photo-to-3D conversion is already running."))
+            return
+        }
+        try {
+            pool.execute {
+                try {
+                    task()
+                } finally {
+                    admission.release()
+                }
+            }
+        } catch (t: Throwable) {
+            admission.release()
+            call.resolve(error("Photo-to-3D conversion could not be started."))
+        }
+    }
+
+    private fun decodeBounded(dataUrl: String, label: String, aggregatePixels: Long = 0L): Bitmap {
+        val comma = dataUrl.indexOf(',')
+        val encodedStart = if (comma >= 0) comma + 1 else 0
+        val encodedLength = dataUrl.length - encodedStart
+        Photo3DInputLimits.encodedPayloadError(encodedLength)?.let {
+            throw IllegalArgumentException("$label: $it")
+        }
+        val encoded = dataUrl.substring(encodedStart)
+        val bytes = try {
+            Base64.decode(encoded, Base64.DEFAULT)
+        } catch (t: IllegalArgumentException) {
+            throw IllegalArgumentException("$label is not valid Base64.")
+        }
+        if (bytes.size > Photo3DInputLimits.MAX_DECODED_BYTES) {
+            throw IllegalArgumentException("$label payload is too large.")
+        }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        Photo3DInputLimits.bitmapError(bounds.outWidth, bounds.outHeight, aggregatePixels)?.let {
+            throw IllegalArgumentException("$label: $it")
+        }
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options())
+            ?: throw IllegalArgumentException("$label could not be decoded.")
+    }
+
     private fun error(message: String): JSObject = JSObject().apply {
         put("ok", false)
         put("error", message)
     }
 
-
+    private companion object {
+        const val MAX_CONCURRENT_JOBS = 2
+    }
 }

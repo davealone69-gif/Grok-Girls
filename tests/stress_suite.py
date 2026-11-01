@@ -146,6 +146,12 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
     pg.evaluate("""
       () => {
+        const settingsKey = 'grok-girls-settings-v1';
+        const settings = JSON.parse(localStorage.getItem(settingsKey) || '{}');
+        settings.version = 1;
+        settings.provider = { ...(settings.provider || {}), image: 'selfhosted' };
+        settings.selfHost = { ...(settings.selfHost || {}), base: 'http://localhost:7861', type: 'a1111' };
+        localStorage.setItem(settingsKey, JSON.stringify(settings));
         localStorage.setItem('grok-girls-selfhosted-base', 'http://localhost:7861');
         localStorage.setItem('grok-girls-selfhosted-type', 'a1111');
         localStorage.setItem('grok-girls-provider-v1', 'selfhosted');

@@ -95,6 +95,12 @@ with sync_playwright() as p:
     pg.evaluate("""
       () => {
         localStorage.setItem('quota-filler', 'x'.repeat(1024*1024*4));
+        const settingsKey = 'grok-girls-settings-v1';
+        const settings = JSON.parse(localStorage.getItem(settingsKey) || '{}');
+        settings.version = 1;
+        settings.provider = { ...(settings.provider || {}), image: 'selfhosted' };
+        settings.selfHost = { ...(settings.selfHost || {}), base: 'http://localhost:7860', type: 'a1111' };
+        localStorage.setItem(settingsKey, JSON.stringify(settings));
         localStorage.setItem('grok-girls-selfhosted-base', 'http://localhost:7860');
         localStorage.setItem('grok-girls-selfhosted-type', 'a1111');
         localStorage.setItem('grok-girls-provider-v1', 'selfhosted');
@@ -253,7 +259,7 @@ with sync_playwright() as p:
     chk("menu XML: custom title drives the rail", pg.locator(".rail-btn[title='ARCHIVE CUSTOM']").count() == 1)
     chk("menu XML: custom dock label applied", pg.locator(".dock-tab", has_text="COSMETICS").count() == 1)
     chk("menu XML: angle strip driven by XML", pg.locator(".angle-btn").count() == 1)
-    chk("menu XML: header actions driven by XML", pg.locator(".native-action").count() == 1)
+    chk("menu XML: header actions driven by XML", pg.locator(".native-action-row .native-action").count() == 1)
     ctx.close()
     ctx = b.new_context(viewport={"width": 1280, "height": 900})
     ctx.add_init_script(menu_override(faulty_xml))
@@ -266,7 +272,7 @@ with sync_playwright() as p:
     chk("faulty menu XML: built-in labels restored", pg.locator(".rail-btn[title='Generation Archive']").count() == 1)
     chk("faulty menu XML: dock tabs intact", pg.locator(".dock-tab", has_text="HAIR STYLE").count() == 1)
     chk("faulty menu XML: angle strip restored (4 buttons)", pg.locator(".angle-btn").count() == 4)
-    chk("faulty menu XML: header actions restored (5 buttons)", pg.locator(".native-action").count() == 5)
+    chk("faulty menu XML: header actions restored (5 buttons)", pg.locator(".native-action-row .native-action").count() == 5)
     chk("faulty menu XML: BUILD rail header restored", pg.locator(".rail-build-label").inner_text() == "BUILD")
     chk("faulty menu XML: no page errors", len(errs) == 0, errs[:1])
     ctx.close()

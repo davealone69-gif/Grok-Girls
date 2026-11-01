@@ -55,4 +55,11 @@ class VknnModelIntegrityTest {
         assertTrue(VknnModelIntegrity.resolveRedirect(source, "https://us.aws.cdn.hf.co/object").host == "us.aws.cdn.hf.co")
         assertFalse(runCatching { VknnModelIntegrity.resolveRedirect(source, "https://attacker.example/object") }.isSuccess)
     }
+
+    @Test
+    fun storagePreflightRequiresTheWholeTemporaryModelFile() {
+        assertTrue(VknnModelStorage.hasEnoughSpace(2_336_982_453L, 2_336_982_453L))
+        assertFalse(VknnModelStorage.hasEnoughSpace(2_336_982_452L, 2_336_982_453L))
+        assertFalse(VknnModelStorage.hasEnoughSpace(-1L, 1L))
+    }
 }

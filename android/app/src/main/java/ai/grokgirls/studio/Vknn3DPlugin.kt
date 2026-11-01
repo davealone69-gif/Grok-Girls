@@ -9,6 +9,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.UUID
 import java.util.concurrent.Executors
 
 internal object VknnModelIntegrity {
@@ -146,10 +147,16 @@ class Vknn3DPlugin : Plugin() {
             try {
                 target.parentFile?.mkdirs()
                 part.delete()
+                val usableBytes = target.parentFile?.usableSpace ?: 0L
+                if (!VknnModelStorage.hasEnoughSpace(usableBytes, VknnModelIntegrity.MODEL_SIZE)) {
+                    throw IllegalStateException(
+                        "Insufficient internal storage for the VKNN model download: " +
+                            "${usableBytes} usable bytes, ${VknnModelIntegrity.MODEL_SIZE} required"
+                    )
+                }
                 downloadVerified(part)
                 if (!VknnModelIntegrity.verify(part)) throw IllegalStateException("Downloaded model failed integrity verification.")
-                if (target.exists() && !target.delete()) throw IllegalStateException("Could not replace existing model.")
-                if (!part.renameTo(target)) throw IllegalStateException("Could not finalize verified downloaded model.")
+                replaceVerifiedModel(part, target)
                 val result = JSObject()
                 result.put("ok", true)
                 result.put("file", target.absolutePath)
@@ -165,6 +172,26 @@ class Vknn3DPlugin : Plugin() {
             } finally {
                 part.delete()
             }
+        }
+    }
+
+    private fun replaceVerifiedModel(part: File, target: File) {
+        if (!target.exists()) {
+            if (!part.renameTo(target)) throw IllegalStateException("Could not finalize verified downloaded model.")
+            return
+        }
+
+        val backup = File(target.parentFile, ".${target.name}.${UUID.randomUUID()}.previous")
+        if (!target.renameTo(backup)) throw IllegalStateException("Could not stage existing model for replacement.")
+        try {
+            if (!part.renameTo(target)) throw IllegalStateException("Could not finalize verified downloaded model.")
+            backup.delete()
+        } catch (failure: Throwable) {
+            target.delete()
+            if (!backup.renameTo(target)) {
+                throw IllegalStateException("Could not restore the existing verified model after download failure.", failure)
+            }
+            throw failure
         }
     }
 

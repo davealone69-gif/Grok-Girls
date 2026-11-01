@@ -50,6 +50,22 @@ export interface ChatMessage {
   content: string;
 }
 
+type JsonRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as JsonRecord
+    : {};
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+type AbortSignalWithTimeout = typeof AbortSignal & {
+  timeout?: (milliseconds: number) => AbortSignal;
+};
+
 const env = () => (import.meta.env || {}) as Record<string, string | undefined>;
 
 /** Saved API key for a provider (canonical record; env var as fallback). */
@@ -519,18 +535,23 @@ export function createLocalPlaceholderSvg(
 
 async function parse(response: Response, p: ProviderName, m: Mode): Promise<GenerationResult> {
   const raw = await response.text();
-  let d: any = {};
+  let d: JsonRecord = {};
   try {
-    d = JSON.parse(raw);
+    d = asRecord(JSON.parse(raw) as unknown);
   } catch {}
+  const output = d.output;
+  const outputArray = Array.isArray(output) ? output : undefined;
+  const outputRecord = outputArray ? asRecord(outputArray[0]) : asRecord(output);
+  const data = Array.isArray(d.data) ? asRecord(d.data[0]) : {};
+  const video = asRecord(d.video);
   let asset: string | undefined =
-    d.url ??
-    d.assetUrl ??
-    d.output?.url ??
-    (typeof d.output?.[0] === 'string' ? d.output[0] : d.output?.[0]?.url) ??
-    d.data?.[0]?.url ??
-    d.video?.url;
-  const b64: string | undefined = d.data?.[0]?.b64_json;
+    asString(d.url) ??
+    asString(d.assetUrl) ??
+    asString(asRecord(output).url) ??
+    (typeof outputArray?.[0] === 'string' ? outputArray[0] : asString(outputRecord.url)) ??
+    asString(data.url) ??
+    asString(video.url);
+  const b64 = asString(data.b64_json);
 
   // A1111 / SD-WebUI: images: ["base64…"]
   if (!asset && Array.isArray(d.images) && typeof d.images[0] === 'string') {
@@ -538,42 +559,57 @@ async function parse(response: Response, p: ProviderName, m: Mode): Promise<Gene
   }
   // OpenAI-style image output: choices[0].message.images[0].image_url.url
   if (!asset) {
-    const imgs = d.choices?.[0]?.message?.images;
-    if (Array.isArray(imgs) && imgs[0]?.image_url?.url) asset = imgs[0].image_url.url;
+    const choices = Array.isArray(d.choices) ? asRecord(d.choices[0]) : {};
+    const message = asRecord(choices.message);
+    const imgs = message.images;
+    const firstImage = Array.isArray(imgs) ? asRecord(imgs[0]) : {};
+    const imageUrl = asRecord(firstImage.image_url);
+    if (asString(imageUrl.url)) asset = imageUrl.url as string;
   }
   // Gemini: candidates[0].content.parts[].inlineData
   if (!asset) {
-    const parts = d.candidates?.[0]?.content?.parts || [];
+    const candidates = Array.isArray(d.candidates) ? asRecord(d.candidates[0]) : {};
+    const content = asRecord(candidates.content);
+    const parts = Array.isArray(content.parts) ? content.parts : [];
     for (const part of parts) {
-      if (part?.inlineData?.data) {
-        asset = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+      const partRecord = asRecord(part);
+      const inlineData = asRecord(partRecord.inlineData);
+      const inlineBytes = asString(inlineData.data);
+      if (inlineBytes) {
+        asset = `data:${asString(inlineData.mimeType) || 'image/png'};base64,${inlineBytes}`;
         break;
       }
-      if (part?.fileData?.fileUri) {
-        asset = part.fileData.fileUri;
+      const fileUri = asString(asRecord(partRecord.fileData).fileUri);
+      if (fileUri) {
+        asset = fileUri;
         break;
       }
     }
   }
   // Imagen style: mediaItems[0].image.bytesBase64Encoded
-  if (!asset && d.mediaItems?.[0]?.image?.bytesBase64Encoded) {
-    asset = `data:image/png;base64,${d.mediaItems[0].image.bytesBase64Encoded}`;
+  const mediaItems = Array.isArray(d.mediaItems) ? asRecord(d.mediaItems[0]) : {};
+  const mediaBytes = asString(asRecord(mediaItems.image).bytesBase64Encoded);
+  if (!asset && mediaBytes) {
+    asset = `data:image/png;base64,${mediaBytes}`;
   }
-  if (!asset && d.images?.[0]?.bytesBase64Encoded) {
-    asset = `data:image/png;base64,${d.images[0].bytesBase64Encoded}`;
+  const imageBytes = Array.isArray(d.images) ? asString(asRecord(d.images[0]).bytesBase64Encoded) : undefined;
+  if (!asset && imageBytes) {
+    asset = `data:image/png;base64,${imageBytes}`;
   }
   // outputFormat PNG from Gemini Imagen (gcsUri)
-  if (!asset && d.generatedImages?.[0]?.image?.uri) {
-    asset = d.generatedImages[0].image.uri;
+  const generatedImages = Array.isArray(d.generatedImages) ? asRecord(d.generatedImages[0]) : {};
+  const generatedUri = asString(asRecord(generatedImages.image).uri);
+  if (!asset && generatedUri) {
+    asset = generatedUri;
   }
 
-  const job = d.id ?? d.jobId ?? d.task_id;
+  const job = asString(d.id) ?? asString(d.jobId) ?? asString(d.task_id);
   return {
     provider: p,
     status: m === 'video' && !asset && !b64 ? 'queued' : 'ready',
     assetUrl: asset ?? (b64 ? `data:image/png;base64,${b64}` : undefined),
     jobId: job,
-    text: d.text ?? d.message,
+    text: asString(d.text) ?? asString(d.message),
     warning: asset || b64 || job ? undefined : 'Provider returned no media URL'
   };
 }
@@ -582,9 +618,10 @@ async function parse(response: Response, p: ProviderName, m: Mode): Promise<Gene
 /* Cloud calls get a hard timeout too — a hung provider must never leave
    GENERATE stuck "busy" (self-hosted calls use their own 8s/300s rules). */
 function fetchWithTimeout(url: string, init: RequestInit = {}, ms: number): Promise<Response> {
+  const abortSignal = typeof AbortSignal !== 'undefined' ? AbortSignal as AbortSignalWithTimeout : undefined;
   const signal =
-    typeof AbortSignal !== 'undefined' && typeof (AbortSignal as any).timeout === 'function'
-      ? (AbortSignal as any).timeout(ms)
+    typeof abortSignal?.timeout === 'function'
+      ? abortSignal.timeout(ms)
       : undefined;
   return fetch(url, { ...init, signal });
 }
@@ -669,7 +706,7 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
       text: undefined
     };
   }
-  const headers: any = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json'
   };
   if (key) headers.Authorization = `Bearer ${key}`;
@@ -721,7 +758,7 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
 
   const url = p === 'gemini' ? `${endpoint}${endpoint.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}` : endpoint;
 
-  let body: any;
+  let body: JsonRecord;
   if (p === 'openrouter' && r.mode === 'image') {
     body = {
       model,
@@ -967,8 +1004,14 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
       body: JSON.stringify({ systemInstruction: system ? { parts: [{ text: system }] } : undefined, contents })
     }, 45000);
     if (!r.ok) throw new Error(`Gemini HTTP ${r.status}`);
-    const d = await r.json();
-    return { provider: 'gemini' as const, text: d.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? 'No response.' };
+    const d = asRecord(await r.json() as unknown);
+    const candidates = Array.isArray(d.candidates) ? asRecord(d.candidates[0]) : {};
+    const content = asRecord(candidates.content);
+    const parts = Array.isArray(content.parts) ? content.parts : [];
+    return {
+      provider: 'gemini' as const,
+      text: parts.map(part => asString(asRecord(part).text) ?? '').join('') || 'No response.'
+    };
   }
 
   if (preferred === 'ollama') {

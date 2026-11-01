@@ -37,6 +37,10 @@ export interface SelfHostResult {
   jobId?: string;
 }
 
+type AbortSignalWithTimeout = typeof AbortSignal & {
+  timeout?: (milliseconds: number) => AbortSignal;
+};
+
 /* ------------------------------- storage (canonical settings record) */
 import {
   getSelfHostBase as shGetBase,
@@ -103,9 +107,10 @@ export function saveLoraSlots(slots: LoraSlot[]) {
 /* Fetch with a hard timeout so an unreachable server can never leave the UI
    stuck "busy" (and GENERATE disabled) for minutes. */
 function fetchWithTimeout(url: string, init: RequestInit = {}, ms = 8000): Promise<Response> {
+  const abortSignal = typeof AbortSignal !== 'undefined' ? AbortSignal as AbortSignalWithTimeout : undefined;
   const signal =
-    typeof AbortSignal !== 'undefined' && typeof (AbortSignal as any).timeout === 'function'
-      ? (AbortSignal as any).timeout(ms)
+    typeof abortSignal?.timeout === 'function'
+      ? abortSignal.timeout(ms)
       : undefined;
   return fetch(url, { ...init, signal });
 }
@@ -251,7 +256,7 @@ export function buildA1111Payload(req: SelfHostRequest) {
 export function buildComfyPayload(req: SelfHostRequest, clientId: string) {
   const ckpt = getCheckpoint();
   const sampler = (getSampler() || 'DPM++ 2M Karras').toLowerCase().replace(/\s+/g, '_');
-  const apiJson: Record<string, any> = {
+  const apiJson: Record<string, unknown> = {
     '3': {
       class_type: 'KSampler',
       inputs: {

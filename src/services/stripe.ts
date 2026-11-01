@@ -1,13 +1,10 @@
 import * as keys from './keys';
 
-declare const window: any;
-declare const Linking: any;
+declare const Linking: { openURL?: (url: string) => unknown } | undefined;
 
 function collectStripeLinks(): Record<string, string> {
   const found: Record<string, string> = {};
-  const all = keys as any;
-  for (const name of Object.keys(all)) {
-    const value = all[name];
+  for (const [name, value] of Object.entries(keys)) {
     if (
       typeof value === 'string' &&
       /^https?:\/\//.test(value) &&

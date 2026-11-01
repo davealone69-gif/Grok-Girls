@@ -50,7 +50,8 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page(viewport={'width': 640, 'height': 480})
-        page.goto('http://localhost:8080/', wait_until='networkidle')
+        page.goto('http://localhost:8080/?hdDebug=1', wait_until='networkidle')
+        page.wait_for_function('() => window.__hdDebugReady === true')
         page.wait_for_timeout(500)
         result = page.evaluate('''async (b64) => {
           const data = Uint8Array.from(atob(b64), c => c.charCodeAt(0)).buffer;

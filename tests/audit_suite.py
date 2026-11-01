@@ -45,6 +45,7 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={"width": 780, "height": 360})
     pg.goto("http://localhost:8080/", wait_until="networkidle")
     pg.wait_for_timeout(600)
+    chk("normal boot: renderer test hooks are absent", pg.evaluate("() => typeof window.__hdDebug === 'undefined'"))
     tap_adult(pg, phone=True)
     if pg.locator("text=I AM 18+").count():
         pg.locator("text=I AM 18+").click()
@@ -279,7 +280,8 @@ with sync_playwright() as p:
     # --- 8) AVATAR DEFINITION ---
     ctx = b.new_context(viewport={"width": 1280, "height": 900})
     pg = ctx.new_page()
-    pg.goto("http://localhost:8080/", wait_until="networkidle")
+    pg.goto("http://localhost:8080/?hdDebug=1", wait_until="networkidle")
+    pg.wait_for_function("() => window.__hdDebugReady === true")
     pg.wait_for_timeout(700)
     pg.locator(".identity-save").click()
     pg.wait_for_timeout(500)

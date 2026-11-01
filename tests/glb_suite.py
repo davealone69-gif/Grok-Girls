@@ -39,7 +39,8 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={"width": 1280, "height": 900})
     page_errors = []
     pg.on("pageerror", lambda e: page_errors.append(str(e)))
-    pg.goto("http://localhost:8080/", wait_until="networkidle")
+    pg.goto("http://localhost:8080/?hdDebug=1", wait_until="networkidle")
+    pg.wait_for_function("() => window.__hdDebugReady === true")
     pg.wait_for_timeout(1200)
 
     # ---------- 1) STRUCTURAL: pure parse/accessor layer via __hdDebug ----------

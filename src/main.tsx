@@ -2,18 +2,34 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './renderer/ResultCanvasCompat';
-import { installRendererDiagnostics } from './renderer/RendererDiagnostics';
 import './nativeAvatarBridge';
 import './styles-phone.css';
 import './styles-phone-final.css';
 
-installRendererDiagnostics();
+const renderApp = () => {
+  createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+};
 
-createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+if (new URLSearchParams(window.location.search).get('hdDebug') === '1') {
+  const debugWindow = window as unknown as Record<string, unknown>;
+  debugWindow.__hdDebugReady = false;
+  void import('./renderer/RendererTestHooks')
+    .then(({ installRendererTestHooks }) => {
+      installRendererTestHooks();
+      renderApp();
+      debugWindow.__hdDebugReady = true;
+    })
+    .catch(error => {
+      console.error('Failed to load renderer test hooks', error);
+      renderApp();
+    });
+} else {
+  renderApp();
+}
 
 // Service worker policy:
 //  - Browser (PWA): register on a real hosted origin for offline support.

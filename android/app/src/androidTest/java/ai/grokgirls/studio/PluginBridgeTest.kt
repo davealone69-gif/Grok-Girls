@@ -1,8 +1,10 @@
 package ai.grokgirls.studio
 
 import android.content.Context
+import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -21,7 +23,7 @@ class PluginBridgeTest {
 
     private val ctx: Context get() = ApplicationProvider.getApplicationContext()
 
-    /** All three plugin classes survived dexing and are loadable at runtime. */
+    /** Required native plugin classes survived dexing and are loadable at runtime. */
     @Test
     fun pluginClassesAreLoadable() {
         val required = listOf(
@@ -57,6 +59,28 @@ class PluginBridgeTest {
                 .forEach { problems += "$cls is missing $it()" }
         }
         assertTrue("Plugin bridge methods missing: $problems", problems.isEmpty())
+    }
+
+    /** The app's custom plugins must be present in the bridge built by Capacitor. */
+    @Test
+    fun nativePluginsAreRegisteredWithTheBridge() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val intent = Intent(ctx, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        }
+        val activity = instrumentation.startActivitySync(intent) as MainActivity
+        try {
+            val bridge = activity.getBridge()
+            val requiredPluginIds = listOf(
+                "AvatarStudio", "OllamaLocal", "SdLocal", "Hunyuan3DLocal",
+                "TripoSRLocal", "Photo3DLocal", "Vknn3D"
+            )
+            for (pluginId in requiredPluginIds) {
+                assertNotNull("$pluginId plugin is not registered with Capacitor", bridge.getPlugin(pluginId))
+            }
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+        }
     }
 
     /** The Termux integration cannot work without these manifest entries. */

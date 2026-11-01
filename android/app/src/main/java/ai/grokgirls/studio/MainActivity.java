@@ -34,9 +34,6 @@ public class MainActivity extends BridgeActivity {
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-    enterImmersiveMode();
-
     registerPlugin(AvatarStudioPlugin.class);
     registerPlugin(OllamaLocalPlugin.class);
     registerPlugin(SdLocalPlugin.class);
@@ -44,6 +41,11 @@ public class MainActivity extends BridgeActivity {
     registerPlugin(TripoSRLocalPlugin.class);
     registerPlugin(Photo3DLocalPlugin.class);
     registerPlugin(Vknn3DPlugin.class);
+
+    // BridgeActivity builds its Bridge inside super.onCreate(); register all
+    // app plugins first so they are included in the initial plugin set.
+    super.onCreate(savedInstanceState);
+    enterImmersiveMode();
 
     // Keep web content clear of the system bars whenever they ARE on screen
     // (swiped in, or a device reporting non-zero insets). With the nav bar

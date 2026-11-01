@@ -727,8 +727,8 @@ def section_f_security(pg, errors):
         '<domain includeSubdomains="true">*</domain>' not in ntxt, bool(ntxt))
 
 
-def section_g_performance(pg, errors):
-    """Performance metrics under load."""
+def section_g_performance(pg, errors, initial_dom_content_loaded_ms):
+    """Performance metrics under load; G1 is captured before stress begins."""
     perf = pg.evaluate(
         """async () => {
             const t = performance.getEntriesByType('navigation')[0] || {};
@@ -737,14 +737,14 @@ def section_g_performance(pg, errors):
                 limit: Math.round(performance.memory.jsHeapSizeLimit/1048576)
             } : null;
             return {
-                domContentLoaded: Math.round(t.domContentLoadedEventEnd || 0),
                 load: Math.round(t.loadEventEnd || 0),
                 mem
             };
         }"""
     )
-    chk("G1 Vite DOMContentLoaded under 8s", perf["domContentLoaded"] < 8000,
-        f'{perf["domContentLoaded"]}ms')
+    chk("G1 Vite DOMContentLoaded under 8s",
+        0 < initial_dom_content_loaded_ms < 8000,
+        f"{initial_dom_content_loaded_ms}ms (initial navigation)")
     if perf["mem"]:
         chk("G2 JS heap below 70% of the limit",
             perf["mem"]["used"] < perf["mem"]["limit"] * 0.7,
@@ -834,6 +834,12 @@ def main():
                 " e => (window.__rej = window.__rej || []).push(String(e.reason)));"
             )
             page.goto(f"http://localhost:{PORT}/", wait_until="domcontentloaded")
+            initial_dom_content_loaded_ms = page.evaluate(
+                """() => {
+                    const t = performance.getEntriesByType('navigation')[0] || {};
+                    return Math.round(t.domContentLoadedEventEnd || 0);
+                }"""
+            )
             page.wait_for_timeout(1500)
 
             try:
@@ -843,7 +849,7 @@ def main():
                 section_d_storage(page, errors)
                 section_e_lifecycle(page, errors)
                 section_f_security(page, errors)
-                section_g_performance(page, errors)
+                section_g_performance(page, errors, initial_dom_content_loaded_ms)
                 rejections.extend(page.evaluate("() => window.__rej || []"))
                 section_h_errors(page, errors, rejections)
             finally:

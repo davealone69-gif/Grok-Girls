@@ -232,14 +232,26 @@ jobs:
           test -f android/gradlew
           test -f android/gradle/wrapper/gradle-wrapper.properties
           chmod +x android/gradlew
-      - name: Enable KVM access for emulator
+      - name: Prepare KVM access for emulator
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          test -r /dev/kvm
-          test -w /dev/kvm
-          ls -l /dev/kvm
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null || echo "::warning::Could not install the KVM udev rule"
+          if command -v udevadm >/dev/null 2>&1; then
+            sudo udevadm control --reload-rules || echo "::warning::Could not reload udev rules"
+            sudo udevadm trigger --name-match=kvm || echo "::warning::Could not trigger KVM udev rules"
+          else
+            echo "::warning::udevadm is unavailable; cannot update KVM device rules"
+          fi
+          if [ -e /dev/kvm ]; then
+            sudo chmod a+rw /dev/kvm || echo "::warning::Could not change /dev/kvm permissions"
+            ls -l /dev/kvm
+            if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+              echo "KVM device is accessible"
+            else
+              echo "::warning::/dev/kvm exists but is not accessible; emulator may use software acceleration"
+            fi
+          else
+            echo "::warning::/dev/kvm is absent; continuing without KVM acceleration"
+          fi
       - name: Run Phase 8 tests on Android 34 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:

@@ -560,24 +560,24 @@ with sync_playwright() as p:
         gen: c && [c.generation.steps, c.generation.cfg, c.generation.size].join(','),
         prov: c && [c.provider.image, c.provider.chat].join(','),
         gate: c && [c.contentGate.adult, c.contentGate.ageConfirmed].join(','),
-        gemKey: c && c.connections.gemini && c.connections.gemini.apiKey,
+        providerKeysAbsent: c && Object.values(c.connections || {}).every(conn => !conn.apiKey)
+          && Object.keys(localStorage).every(k => !k.startsWith('grok-girls-key-')),
         ep: c && c.connections.custom && c.connections.custom.endpoints.chat,
         model: c && c.connections.openrouter && c.connections.openrouter.models.image,
         sh: c && [c.selfHost.base, c.selfHost.type, c.selfHost.hiresFix, (c.selfHost.loras || []).map(l => l.name).join('|')].join(','),
         ollamaDefault: c && c.ollama.base === 'http://127.0.0.1:11434' && c.ollama.enabled === false && c.ollama.model === 'llama3.2:1b',
         legacyMirrored: localStorage.getItem('grok-girls-steps-v1') === '35'
           && localStorage.getItem('grok-girls-provider-v1') === 'gemini'
-          && localStorage.getItem('grok-girls-key-gemini') === 'gk9'
           && localStorage.getItem('grok-girls-selfhosted-hires') === '1'
       };
     }""")
     chk("settings: legacy keys fold into one canonical record",
         s1.get("present") and s1.get("gen") == "35,9,768" and s1.get("prov") == "gemini,custom"
-        and s1.get("gate") == "true,true" and s1.get("gemKey") == "gk9"
+        and s1.get("gate") == "true,true" and s1.get("providerKeysAbsent")
         and s1.get("ep") == "http://chat9" and s1.get("model") == "model9"
         and s1.get("sh") == "http://sh9,a1111,true,l9" and s1.get("ollamaDefault"),
         str(s1))
-    chk("settings: migration write-through keeps legacy keys in sync",
+    chk("settings: non-secret migration values keep legacy keys in sync",
         bool(s1) and s1.get("legacyMirrored"), str(s1))
     # canonical record wins once migrated: a later legacy-only edit must not re-fold
     spg.evaluate("() => localStorage.setItem('grok-girls-steps-v1', '99')")

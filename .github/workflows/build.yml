@@ -38,6 +38,8 @@ jobs:
         run: npm run build
       - name: Verify client API keys are not bundled
         run: python3 tests/client_env_security.py
+      - name: Verify provider keys stay session-only and out of URLs
+        run: node tests/provider_key_security.mjs
       - name: Upload web dist
         uses: actions/upload-artifact@v4
         with:

@@ -113,7 +113,7 @@ npm run build    # production build to dist/
 
 ## AI provider configuration
 
-Configure API keys only in the in-app ⚙ **Settings** modal (stored in this browser's localStorage). This client calls providers directly, so use a server-side proxy if you need a shared server-held credential. Never place API keys or other secrets in `.env.local` or any `VITE_*` variable: Vite embeds those values in public JavaScript bundles. The Settings modal includes **per-provider model pickers** (image + chat models for OpenRouter and Gemini) and **per-mode custom endpoints** (chat / image / video).
+Configure API keys only in the in-app ⚙ **Settings** modal. Keys are kept in application memory for the current page session and are not saved in browser storage; you will need to enter them again after a reload. Keys are sent directly from the browser to the configured provider and remain readable to JavaScript running in the page, including an injected same-origin script. Use a server-side proxy if credentials must be hidden from client code. Gemini and Pollinations requests send credentials in headers rather than query strings. Never place API keys or other secrets in `.env.local` or any `VITE_*` variable: Vite embeds those values in public JavaScript bundles. The Settings modal includes **per-provider model pickers** (image + chat models for OpenRouter and Gemini) and **per-mode custom endpoints** (chat / image / video).
 
 ```env
 # Public build settings only — model names and endpoint URLs are visible to app users.
@@ -140,7 +140,7 @@ src/
 ├── styles.css                 # Full cyberpunk design system
 ├── components/
 │   ├── ColorWheel.tsx         # Canvas HSV color wheel
-│   ├── SettingsModal.tsx      # API key management (localStorage)
+│   ├── SettingsModal.tsx      # Provider keys (session memory); other settings (localStorage)
 │   └── AvatarCreator.tsx      # Legacy creator component
 ├── models/
 │   ├── studio.ts              # Girls, rooms, prompt builder, seed personas
@@ -159,7 +159,7 @@ src/
 ```
 
 ## Notes
-- Everything persists in browser localStorage — personas, drafts, chats, gallery, settings.
+- Personas, drafts, chats, gallery and non-secret settings persist in browser localStorage; provider API keys are session-only.
 - The Noir render engine (`createLocalPlaceholderSvg`) parses the compiled prompt and stylizes the scene accordingly — check `public/assets/noir-render-demo.svg` for a sample.
 - Sandbox preview note: filesystem previews have no network access; the live dev server preview is the best way to use the app.
 

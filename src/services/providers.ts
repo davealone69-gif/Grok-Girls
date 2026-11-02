@@ -701,7 +701,10 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
   const headers: any = {
     'Content-Type': 'application/json'
   };
-  if (key) headers.Authorization = `Bearer ${key}`;
+  if (key) {
+    if (p === 'gemini') headers['x-goog-api-key'] = key;
+    else headers.Authorization = `Bearer ${key}`;
+  }
   if (p === 'openrouter') {
     headers['HTTP-Referer'] = typeof location !== 'undefined' ? location.origin : 'http://localhost';
     headers['X-Title'] = 'Grok Girls';
@@ -729,9 +732,12 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
     if (r.width) params.set('width', String(Math.round(r.width)));
     if (r.height) params.set('height', String(Math.round(r.height)));
     if (r.seed != null) params.set('seed', String(r.seed));
-    if (key) params.set('key', key);
     const imageUrl = `${endpoint.replace(/\/+$/, '')}/${encodeURIComponent(r.prompt)}?${params.toString()}`;
-    const response = await fetchWithTimeout(imageUrl, { method: 'GET' }, 120000);
+    const pollinationsHeaders = key ? { Authorization: `Bearer ${key}` } : undefined;
+    const response = await fetchWithTimeout(imageUrl, {
+      method: 'GET',
+      ...(pollinationsHeaders ? { headers: pollinationsHeaders } : {})
+    }, 120000);
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
       throw new Error(`custom Pollinations HTTP ${response.status}${errText ? ` — ${errText.slice(0, 160)}` : ''}`);
@@ -748,7 +754,7 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
     };
   }
 
-  const url = p === 'gemini' ? `${endpoint}${endpoint.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}` : endpoint;
+  const url = endpoint;
 
   let body: any;
   if (p === 'openrouter' && r.mode === 'image') {
@@ -779,7 +785,7 @@ async function post(p: ProviderName, r: GenerationRequest): Promise<GenerationRe
   }
   const response = await fetchWithTimeout(url, {
     method: 'POST',
-    headers: p === 'gemini' ? { 'Content-Type': 'application/json' } : headers,
+    headers,
     body: JSON.stringify(body)
   }, 120000);
   if (!response.ok) {
@@ -990,9 +996,9 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
       .filter(m => m.role !== 'system')
       .map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
     const system = messages.find(m => m.role === 'system')?.content;
-    const r = await fetchWithTimeout(`${endpoint}?key=${encodeURIComponent(key)}`, {
+    const r = await fetchWithTimeout(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({ systemInstruction: system ? { parts: [{ text: system }] } : undefined, contents })
     }, 45000);
     if (!r.ok) throw new Error(`Gemini HTTP ${r.status}`);

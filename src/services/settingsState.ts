@@ -50,6 +50,7 @@ export type ApiMode = 'image' | 'video' | 'chat';
 
 /** per-provider connection profile (openrouter / gemini / custom / …) */
 export interface ProviderConnection {
+  /** Runtime-only secret. saveSettings deliberately strips this field. */
   apiKey: string;
   endpoints: Partial<Record<ApiMode | 'generic', string>>;
   models: Partial<Record<ApiMode | 'generic', string>>;
@@ -145,6 +146,20 @@ const LEGACY = {
   sdAutoStart: 'grok-girls-sdlocal-autostart-v1'
 } as const;
 
+/** Remove keys written by older builds; API keys are not migrated from storage. */
+function clearPersistedProviderKeys(): void {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(LEGACY.key)) keys.push(key);
+    }
+    keys.forEach(lsRemove);
+  } catch {
+    // Storage may be unavailable.
+  }
+}
+
 function lsGet(k: string): string | null {
   try {
     return localStorage.getItem(k);
@@ -158,6 +173,13 @@ function lsSet(k: string, v: string): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+function lsRemove(k: string): void {
+  try {
+    localStorage.removeItem(k);
+  } catch {
+    // Storage may be unavailable (for example, in a privacy-restricted context).
   }
 }
 
@@ -233,7 +255,7 @@ function foldLegacy(): SettingsState {
 
   for (const p of ['openrouter', 'gemini', 'custom', 'ollama']) {
     const conn: ProviderConnection = { apiKey: '', endpoints: {}, models: {} };
-    conn.apiKey = lsGet(`${LEGACY.key}${p}`) ?? '';
+    // Provider keys from older localStorage records are intentionally discarded.
     for (const m of ['generic', 'image', 'video', 'chat'] as const) {
       const ep = m === 'generic' ? lsGet(`${LEGACY.endpoint}${p}`) : lsGet(`${LEGACY.endpoint}${p}-${m}`);
       if (ep) conn.endpoints[m] = ep;
@@ -316,7 +338,6 @@ function overlayLegacyGaps(s: SettingsState): SettingsState {
     const lconn = legacy.connections[p];
     if (!conn) out.connections[p] = lconn;
     else {
-      if (conn.apiKey === '' ) conn.apiKey = lconn.apiKey;
       for (const m of Object.keys(lconn.endpoints)) if (!conn.endpoints[m as ApiMode]) conn.endpoints[m as ApiMode] = lconn.endpoints[m as ApiMode];
       for (const m of Object.keys(lconn.models)) if (!conn.models[m as ApiMode]) conn.models[m as ApiMode] = lconn.models[m as ApiMode];
     }
@@ -327,6 +348,16 @@ function overlayLegacyGaps(s: SettingsState): SettingsState {
 /* ------------------------------------------------------ cache/store */
 
 let cache: SettingsState | null = null;
+const sessionApiKeys = new Map<string, string>();
+
+function withoutProviderApiKeys(settings: SettingsState): SettingsState {
+  return {
+    ...settings,
+    connections: Object.fromEntries(
+      Object.entries(settings.connections).map(([provider, connection]) => [provider, { ...connection, apiKey: '' }])
+    ) as Record<string, ProviderConnection>
+  };
+}
 
 function clampNum(v: unknown, lo: number, hi: number, dflt: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : dflt;
@@ -343,12 +374,15 @@ function sanitize(raw: Record<string, unknown>): SettingsState {
   const sh = (raw.selfHost ?? {}) as Partial<SelfHostSettings>;
   const ol = (raw.ollama ?? {}) as Partial<OllamaSettings>;
   const sd = (raw.sdLocal ?? {}) as Partial<SdLocalSettings>;
+  const rawConnections = (raw.connections ?? {}) as Record<string, Partial<ProviderConnection>>;
   const s: SettingsState = {
     version: 1,
     contentGate: { ...DEFAULT_SETTINGS.contentGate, ...cg },
     generation: { ...DEFAULT_SETTINGS.generation, ...g },
     provider: { ...DEFAULT_SETTINGS.provider, ...pv },
-    connections: { ...((raw.connections ?? {}) as Record<string, ProviderConnection>) },
+    connections: Object.fromEntries(
+      Object.entries(rawConnections).map(([provider, connection]) => [provider, { ...connection, apiKey: '' }])
+    ) as Record<string, ProviderConnection>,
     selfHost: { ...DEFAULT_SETTINGS.selfHost, ...sh, loras: Array.isArray(sh.loras) ? sh.loras.slice(0, 3) : [] },
     ollama: {
       ...DEFAULT_SETTINGS.ollama,
@@ -389,11 +423,17 @@ export function loadSettings(): SettingsState {
   return s;
 }
 
-/** Persist the canonical record and mirror every value to its legacy key. */
+/** Persist non-secret settings; provider API keys are session-memory-only. */
 export function saveSettings(next: SettingsState): void {
+  next = withoutProviderApiKeys(next);
   cache = next;
+  clearPersistedProviderKeys();
   const ok = lsSet(SETTINGS_KEY, JSON.stringify(next));
-  if (!ok) return; // storage full/unavailable — keep in-memory, no mirror
+  if (!ok) {
+    // Do not leave an older canonical record containing a provider key behind.
+    lsRemove(SETTINGS_KEY);
+    return;
+  }
   // write-through mirror (keeps older readers / rollbacks correct)
   const g = next.contentGate;
   lsSet(LEGACY.adult, g.adult ? '1' : '0');
@@ -407,7 +447,6 @@ export function saveSettings(next: SettingsState): void {
   lsSet(LEGACY.chatProvider, next.provider.chat);
   for (const p of Object.keys(next.connections)) {
     const c = next.connections[p];
-    lsSet(`${LEGACY.key}${p}`, c.apiKey);
     const ep = (m: ApiMode | 'generic') =>
       c.endpoints[m] !== undefined ? lsSet(m === 'generic' ? `${LEGACY.endpoint}${p}` : `${LEGACY.endpoint}${p}-${m}`, c.endpoints[m] as string) : null;
     ep('generic'); ep('image'); ep('video'); ep('chat');
@@ -482,10 +521,14 @@ function connOf(s: SettingsState, p: string): ProviderConnection {
 }
 
 export function getConnectionApiKey(p: string): string {
-  return loadSettings().connections[p]?.apiKey ?? '';
+  loadSettings(); // also scrub provider keys left by older app versions
+  return sessionApiKeys.get(p) ?? '';
 }
 export function saveConnectionApiKey(p: string, key: string): void {
-  update(s => { connOf(s, p).apiKey = key.trim(); return s; });
+  loadSettings(); // migrate non-secret settings and remove any stored key copies
+  const trimmed = key.trim();
+  if (trimmed) sessionApiKeys.set(p, trimmed);
+  else sessionApiKeys.delete(p);
 }
 /** Slot-exact read: mode-specific slot, else generic slot (no other fallback). */
 export function getConnectionEndpoint(p: string, m?: ApiMode): string {

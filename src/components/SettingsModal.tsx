@@ -142,7 +142,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     saveEndpoint('custom', customVideoEndpoint, 'video');
     saveModel('custom', customModel);
     persistSelfHosted();
-    setSavedStatus('Configuration saved in browser storage!');
+    setSavedStatus('Settings saved. Provider API keys are only kept for this session.');
     setTimeout(() => {
       setSavedStatus('');
       onClose();
@@ -196,8 +196,10 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         </div>
 
         <p style={{ color: '#aaa', fontSize: 13, marginTop: 0 }}>
-          Configure cloud credentials or your own self-hosted render server. Keys are stored only in
-          your browser's local storage. The local engine works without any of this.
+          Configure cloud credentials or your own self-hosted render server. API keys stay in memory
+          for this session and are not saved in browser storage. They are sent directly to providers,
+          so scripts running in this page can access them; use a server-side proxy if a key must be
+          hidden from client code. Models and endpoints are saved in browser storage.
         </p>
 
         {savedStatus && (

@@ -7,6 +7,21 @@ out = {}
 def rec(section, name, value, detail=""):
     out.setdefault(section, []).append({"name": name, "value": value, "detail": str(detail)[:160]})
 
+def configure_image_provider(pg, provider, base=""):
+    pg.evaluate("""({provider, base}) => {
+      const key = 'grok-girls-settings-v1';
+      let settings = {};
+      try { settings = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
+      settings.version = 1;
+      settings.provider = { ...(settings.provider || {}), image: provider };
+      if (provider === 'selfhosted') {
+        settings.selfHost = { ...(settings.selfHost || {}), base, type: 'a1111' };
+      }
+      localStorage.setItem(key, JSON.stringify(settings));
+    }""", {"provider": provider, "base": base})
+    pg.reload(wait_until="networkidle")
+    pg.wait_for_timeout(400)
+
 with sync_playwright() as p:
     b = p.chromium.launch()
 
@@ -27,7 +42,7 @@ with sync_playwright() as p:
     # ---------- A2: 30 sequential local renders (heap + storage growth) ----------
     pg = b.new_page(viewport={"width": 393, "height": 851})
     pg.goto("http://localhost:8080/", wait_until="networkidle")
-    pg.wait_for_timeout(500)
+    configure_image_provider(pg, "local")
     heap0 = pg.evaluate("performance.memory ? performance.memory.usedJSHeapSize : 0")
     t0 = time.time()
     for i in range(30):
@@ -131,7 +146,7 @@ with sync_playwright() as p:
     # ---------- B1: double-click GENERATE guard ----------
     pg = b.new_page(viewport={"width": 393, "height": 851})
     pg.goto("http://localhost:8080/", wait_until="networkidle")
-    pg.wait_for_timeout(400)
+    configure_image_provider(pg, "local")
     # synchronous double-dispatch: both handlers run in the same task — the
     # exact race the busyRef guard must close (button also disables on busy)
     pg.locator(".btn-generate-media").first.evaluate("el => { el.click(); el.click(); }")
@@ -143,16 +158,7 @@ with sync_playwright() as p:
     # ---------- B2: provider switch mid-flight (slow mock on 7861) ----------
     pg = b.new_page(viewport={"width": 393, "height": 851})
     pg.goto("http://localhost:8080/", wait_until="networkidle")
-    pg.wait_for_timeout(400)
-    pg.evaluate("""
-      () => {
-        localStorage.setItem('grok-girls-selfhosted-base', 'http://localhost:7861');
-        localStorage.setItem('grok-girls-selfhosted-type', 'a1111');
-        localStorage.setItem('grok-girls-provider-v1', 'selfhosted');
-      }
-    """)
-    pg.reload(wait_until="networkidle")
-    pg.wait_for_timeout(400)
+    configure_image_provider(pg, "selfhosted", "http://localhost:7861")
     pg.locator(".btn-generate-media").first.click()
     pg.wait_for_timeout(700)  # render in flight (5s mock)
     pg.locator(".footer-provider-select").select_option("local")
@@ -220,7 +226,20 @@ with sync_playwright() as p:
       localStorage.setItem('grok-girls-state-v2', JSON.stringify([g, ...girls.filter(x => x.id !== 'ruby_noir')]));
     }""", png1)
     pg.reload(wait_until="networkidle")
-    pg.wait_for_timeout(1500)  # async hydration + migration
+    # Migration uses async IndexedDB writes; wait on the persisted result, not a
+    # short fixed delay that flakes under CPU contention in CI.
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        ready = pg.evaluate("""() => {
+          const gallery = JSON.parse(localStorage.getItem('grok-girls-gallery-v1') || '[]');
+          const girls = JSON.parse(localStorage.getItem('grok-girls-state-v2') || '[]');
+          const ruby = girls.find(x => x.id === 'ruby_noir') || {};
+          const item = gallery.find(x => x.id === 'mig_1') || {};
+          return !!(ruby.previewAssetKey && ruby.thumbnailAssetKey && item.assetKey);
+        }""")
+        if ready:
+            break
+        pg.wait_for_timeout(200)
     gitem = pg.evaluate("JSON.parse(localStorage.getItem('grok-girls-gallery-v1')||'[]').find(x => x.id === 'mig_1') || {}")
     girl = pg.evaluate("JSON.parse(localStorage.getItem('grok-girls-state-v2')||'[]').find(x => x.id === 'ruby_noir') || {}")
     idb = pg.evaluate("""() => new Promise(res => {

@@ -19,7 +19,6 @@ import java.net.Socket
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Phone-local Ollama bridge.
@@ -47,8 +46,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class OllamaLocalPlugin : Plugin() {
 
     private val pool = Executors.newCachedThreadPool()
-    private val cancelled = ConcurrentHashMap<String, AtomicBoolean>()
-    private val liveConnections = ConcurrentHashMap<String, HttpURLConnection>()
+    private val requests = ConcurrentHashMap<String, OllamaRequestState>()
 
     companion object {
         private const val DEFAULT_BASE = "http://127.0.0.1:11434"
@@ -214,8 +212,8 @@ class OllamaLocalPlugin : Plugin() {
         val temperature = call.getDouble("temperature")
         val messages = call.getArray("messages") ?: JSArray()
 
-        val flag = AtomicBoolean(false)
-        cancelled[requestId] = flag
+        val request = OllamaRequestState()
+        requests[requestId] = request
 
         pool.execute {
             var conn: HttpURLConnection? = null
@@ -232,8 +230,12 @@ class OllamaLocalPlugin : Plugin() {
 
                 // Native /api/chat: same model, simpler NDJSON framing than SSE.
                 conn = openConnection("$base/api/chat", "POST", timeout)
+                request.attach(conn)
+                if (request.isCancelled) {
+                    fail(call, "Ollama request cancelled.")
+                    return@execute
+                }
                 writeJson(conn, payload)
-                liveConnections[requestId] = conn
 
                 val code = conn.responseCode
                 if (code !in 200..299) {
@@ -245,7 +247,7 @@ class OllamaLocalPlugin : Plugin() {
                 val sb = StringBuilder()
                 BufferedReader(InputStreamReader(conn.inputStream)).use { reader ->
                     while (true) {
-                        if (flag.get()) break
+                        if (request.isCancelled) break
                         val line = reader.readLine() ?: break
                         val t = line.trim()
                         if (t.isEmpty()) continue
@@ -272,7 +274,7 @@ class OllamaLocalPlugin : Plugin() {
                     }
                 }
 
-                if (flag.get()) {
+                if (request.isCancelled) {
                     fail(call, "Ollama request cancelled.")
                     return@execute
                 }
@@ -282,10 +284,9 @@ class OllamaLocalPlugin : Plugin() {
                 if (sb.isEmpty()) r.put("message", "Ollama returned an empty response.")
                 call.resolve(r)
             } catch (e: Exception) {
-                fail(call, e.message ?: "Ollama chat failed.")
+                fail(call, if (request.isCancelled) "Ollama request cancelled." else e.message ?: "Ollama chat failed.")
             } finally {
-                liveConnections.remove(requestId)
-                cancelled.remove(requestId)
+                requests.remove(requestId, request)
                 conn?.disconnect()
             }
         }
@@ -294,8 +295,7 @@ class OllamaLocalPlugin : Plugin() {
     @PluginMethod
     fun cancel(call: PluginCall) {
         val requestId = call.getString("requestId") ?: ""
-        cancelled[requestId]?.set(true)
-        pool.execute { runCatching { liveConnections[requestId]?.disconnect() } }
+        requests[requestId]?.cancel()
         val r = JSObject()
         r.put("ok", true)
         call.resolve(r)

@@ -36,6 +36,8 @@ jobs:
           "
       - name: TypeScript/Vite build
         run: npm run build
+      - name: Verify client API keys are not bundled
+        run: python3 tests/client_env_security.py
       - name: Upload web dist
         uses: actions/upload-artifact@v4
         with:
@@ -132,6 +134,9 @@ jobs:
           test -f android/gradlew
           test -f android/gradle/wrapper/gradle-wrapper.jar
           chmod +x android/gradlew
+      - name: Run Android unit tests
+        working-directory: android
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon --stacktrace

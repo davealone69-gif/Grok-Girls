@@ -788,27 +788,6 @@ export default function App() {
       setHdProgress(0);
     }
   };
-  const renderAvatarTo2D = async () => {
-    if (busyRef.current || !avatar3dRef.current) return;
-    enterBusy();
-    try {
-      const url = avatar3dRef.current.renderToImage({ width: 1920, height: 1080, mimeType: 'image/png' });
-      await addGalleryItem({
-        avatarId: girl.id,
-        mode: 'image',
-        prompt: `3D RENDER · ${girl.name} · 1920×1080`,
-        assetUrl: url,
-        provider: '3d-renderer'
-      });
-      void refreshGallery();
-      showToast('2D image rendered from the real 3D avatar · 1920×1080');
-    } catch (e) {
-      showToast(`2D 3D-render failed: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      exitBusy();
-    }
-  };
-
   const testVknn3D = async () => {
     if (vknnBusy || busyRef.current) return;
     setVknnBusy(true);

@@ -50,13 +50,42 @@ export interface ChatMessage {
   content: string;
 }
 
-const env = () => (import.meta.env || {}) as Record<string, string | undefined>;
+// Keep the browser-visible build configuration explicitly allowlisted. Vite
+// exposes VITE_* values to client bundles, so API keys must never be read here.
+const PUBLIC_ENV: Record<string, string | undefined> = {
+  VITE_OPENROUTER_IMAGE_ENDPOINT: import.meta.env.VITE_OPENROUTER_IMAGE_ENDPOINT,
+  VITE_OPENROUTER_VIDEO_ENDPOINT: import.meta.env.VITE_OPENROUTER_VIDEO_ENDPOINT,
+  VITE_OPENROUTER_CHAT_ENDPOINT: import.meta.env.VITE_OPENROUTER_CHAT_ENDPOINT,
+  VITE_OPENROUTER_ENDPOINT: import.meta.env.VITE_OPENROUTER_ENDPOINT,
+  VITE_GEMINI_IMAGE_ENDPOINT: import.meta.env.VITE_GEMINI_IMAGE_ENDPOINT,
+  VITE_GEMINI_VIDEO_ENDPOINT: import.meta.env.VITE_GEMINI_VIDEO_ENDPOINT,
+  VITE_GEMINI_CHAT_ENDPOINT: import.meta.env.VITE_GEMINI_CHAT_ENDPOINT,
+  VITE_GEMINI_ENDPOINT: import.meta.env.VITE_GEMINI_ENDPOINT,
+  VITE_CUSTOM_IMAGE_ENDPOINT: import.meta.env.VITE_CUSTOM_IMAGE_ENDPOINT,
+  VITE_CUSTOM_VIDEO_ENDPOINT: import.meta.env.VITE_CUSTOM_VIDEO_ENDPOINT,
+  VITE_CUSTOM_CHAT_ENDPOINT: import.meta.env.VITE_CUSTOM_CHAT_ENDPOINT,
+  VITE_CUSTOM_ENDPOINT: import.meta.env.VITE_CUSTOM_ENDPOINT,
+  VITE_OPENROUTER_IMAGE_MODEL: import.meta.env.VITE_OPENROUTER_IMAGE_MODEL,
+  VITE_OPENROUTER_VIDEO_MODEL: import.meta.env.VITE_OPENROUTER_VIDEO_MODEL,
+  VITE_OPENROUTER_CHAT_MODEL: import.meta.env.VITE_OPENROUTER_CHAT_MODEL,
+  VITE_OPENROUTER_MODEL: import.meta.env.VITE_OPENROUTER_MODEL,
+  VITE_GEMINI_IMAGE_MODEL: import.meta.env.VITE_GEMINI_IMAGE_MODEL,
+  VITE_GEMINI_VIDEO_MODEL: import.meta.env.VITE_GEMINI_VIDEO_MODEL,
+  VITE_GEMINI_CHAT_MODEL: import.meta.env.VITE_GEMINI_CHAT_MODEL,
+  VITE_GEMINI_MODEL: import.meta.env.VITE_GEMINI_MODEL,
+  VITE_CUSTOM_IMAGE_MODEL: import.meta.env.VITE_CUSTOM_IMAGE_MODEL,
+  VITE_CUSTOM_VIDEO_MODEL: import.meta.env.VITE_CUSTOM_VIDEO_MODEL,
+  VITE_CUSTOM_CHAT_MODEL: import.meta.env.VITE_CUSTOM_CHAT_MODEL,
+  VITE_CUSTOM_MODEL: import.meta.env.VITE_CUSTOM_MODEL
+} as const;
 
-/** Saved API key for a provider (canonical record; env var as fallback). */
+const env = () => PUBLIC_ENV;
+
+/** Saved API key for a provider. Client-build environment variables are not secrets. */
 export function getSavedApiKey(p: string): string {
   const saved = getConnectionApiKey(p);
   if (saved && saved.trim()) return saved.trim();
-  return env()[`VITE_${p.toUpperCase()}_API_KEY`] ?? '';
+  return '';
 }
 
 export function saveApiKey(p: string, key: string) {
@@ -926,7 +955,7 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
 
   if (preferred === 'openrouter') {
     const key = getSavedApiKey('openrouter');
-    if (!key) return { provider: 'openrouter' as const, text: 'OpenRouter API key is not configured.', warning: 'Set VITE_OPENROUTER_API_KEY or configure in Settings.' };
+    if (!key) return { provider: 'openrouter' as const, text: 'OpenRouter API key is not configured.', warning: 'Configure the API key in Settings. Client-side build variables are public and must not contain secrets.' };
     const endpoint =
       getSavedEndpoint('openrouter', 'chat') || e.VITE_OPENROUTER_CHAT_ENDPOINT || 'https://openrouter.ai/api/v1/chat/completions';
     const r = await fetchWithTimeout(endpoint, {
@@ -949,7 +978,7 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
 
   if (preferred === 'gemini') {
     const key = getSavedApiKey('gemini');
-    if (!key) return { provider: 'gemini' as const, text: 'Gemini API key is not configured.', warning: 'Set VITE_GEMINI_API_KEY or configure in Settings.' };
+    if (!key) return { provider: 'gemini' as const, text: 'Gemini API key is not configured.', warning: 'Configure the API key in Settings. Client-side build variables are public and must not contain secrets.' };
     const model =
       e.VITE_GEMINI_CHAT_MODEL ?? getSavedModel('gemini', 'chat') ?? getSavedModel('gemini') ?? 'gemini-2.5-flash';
     const endpoint =

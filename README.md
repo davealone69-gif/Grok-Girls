@@ -113,27 +113,22 @@ npm run build    # production build to dist/
 
 ## AI provider configuration
 
-Configure in the in-app ⚙ **Settings** modal (stored in your browser's localStorage), or via `.env.local`. The Settings modal now includes **per-provider model pickers** (image + chat models for OpenRouter and Gemini) and **per-mode custom endpoints** (chat / image / video):
+Configure API keys only in the in-app ⚙ **Settings** modal (stored in this browser's localStorage). This client calls providers directly, so use a server-side proxy if you need a shared server-held credential. Never place API keys or other secrets in `.env.local` or any `VITE_*` variable: Vite embeds those values in public JavaScript bundles. The Settings modal includes **per-provider model pickers** (image + chat models for OpenRouter and Gemini) and **per-mode custom endpoints** (chat / image / video).
 
 ```env
-# OpenRouter (chat + image via compatible endpoints)
-VITE_OPENROUTER_API_KEY=your_openrouter_key
+# Public build settings only — model names and endpoint URLs are visible to app users.
 VITE_OPENROUTER_CHAT_MODEL=openai/gpt-4o-mini
 VITE_OPENROUTER_IMAGE_MODEL=openrouter/auto
-
-# Google Gemini
-VITE_GEMINI_API_KEY=your_gemini_key
 VITE_GEMINI_CHAT_MODEL=gemini-2.5-flash
 
-# Custom provider
-VITE_CUSTOM_API_KEY=your_token
+# Custom endpoints must not contain embedded credentials or secret query parameters.
 VITE_CUSTOM_CHAT_ENDPOINT=https://your-custom-llm.example.com/v1/chat/completions
 VITE_CUSTOM_IMAGE_ENDPOINT=https://your-custom-image.example.com/v1/generate
 ```
 
 Image/video generation endpoints can also be set per-mode in the Settings modal pattern (`getSavedEndpoint(p, mode)`), or via `VITE_<PROVIDER>_IMAGE_ENDPOINT` / `VITE_<PROVIDER>_VIDEO_ENDPOINT`.
 
-**Cloud response formats supported** — the parser extracts media from: A1111/SD-WebUI (`images[]` base64), OpenAI-style image output (`choices[].message.images[]`), Gemini inline parts (`candidates[].content.parts[].inlineData` / `fileData`), Imagen (`mediaItems[]` base64 / `generatedImages[]` URIs), and generic `url`/`output[]`/`data[].b64_json` shapes. OpenRouter image mode sends `modalities: ["image","text"]` with the default model `google/gemini-2.5-flash-image-preview`; Gemini image mode defaults to `gemini-2.5-flash-image` with `responseModalities: ["IMAGE"]`. Override models via env keys above.
+**Cloud response formats supported** — the parser extracts media from: A1111/SD-WebUI (`images[]` base64), OpenAI-style image output (`choices[].message.images[]`), Gemini inline parts (`candidates[].content.parts[].inlineData` / `fileData`), Imagen (`mediaItems[]` base64 / `generatedImages[]` URIs), and generic `url`/`output[]`/`data[].b64_json` shapes. OpenRouter image mode sends `modalities: ["image","text"]` with the default model `google/gemini-2.5-flash-image-preview`; Gemini image mode defaults to `gemini-2.5-flash-image` with `responseModalities: ["IMAGE"]`. Override models via public env settings above.
 
 The **Local engine needs no keys** — it always works offline and produces the stylized Noir render.
 

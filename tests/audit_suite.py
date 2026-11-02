@@ -94,10 +94,14 @@ with sync_playwright() as p:
     pg.wait_for_timeout(500)
     pg.evaluate("""
       () => {
+        const key = 'grok-girls-settings-v1';
+        let settings = {};
+        try { settings = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
+        settings.version = 1;
+        settings.provider = { ...(settings.provider || {}), image: 'selfhosted' };
+        settings.selfHost = { ...(settings.selfHost || {}), base: 'http://localhost:7860', type: 'a1111' };
+        localStorage.setItem(key, JSON.stringify(settings));
         localStorage.setItem('quota-filler', 'x'.repeat(1024*1024*4));
-        localStorage.setItem('grok-girls-selfhosted-base', 'http://localhost:7860');
-        localStorage.setItem('grok-girls-selfhosted-type', 'a1111');
-        localStorage.setItem('grok-girls-provider-v1', 'selfhosted');
       }
     """)
     pg.reload(wait_until="networkidle")
@@ -202,12 +206,23 @@ with sync_playwright() as p:
     pg.wait_for_timeout(300)
     pg.locator(".mini-provider-select").first.select_option("openrouter")
     pg.locator(".companion-input").fill("hello again")
+    pg.evaluate("""() => {
+      window.__auditToasts = [];
+      const capture = () => {
+        for (const toast of document.querySelectorAll('.toast')) {
+          const text = (toast.textContent || '').trim();
+          if (text) window.__auditToasts.push(text);
+        }
+      };
+      new MutationObserver(capture).observe(document.body,
+        { childList: true, subtree: true, characterData: true });
+      capture();
+    }""")
     pg.locator(".btn-send-chat").click()
     seen = []
     for _ in range(6):
         pg.wait_for_timeout(300)
-        if pg.locator(".toast").count():
-            seen.append(pg.locator(".toast").inner_text())
+        seen = pg.evaluate("() => window.__auditToasts || []")
     toasts = " | ".join(seen)
     chk("M5 adult chat pinned to LOCAL", "pinned to LOCAL" in toasts or "cloud chat" in toasts, toasts[:100])
     chk("M5 pinned chat still replies", pg.locator(".chat-bubble.assistant").count() >= 2)
@@ -253,7 +268,7 @@ with sync_playwright() as p:
     chk("menu XML: custom title drives the rail", pg.locator(".rail-btn[title='ARCHIVE CUSTOM']").count() == 1)
     chk("menu XML: custom dock label applied", pg.locator(".dock-tab", has_text="COSMETICS").count() == 1)
     chk("menu XML: angle strip driven by XML", pg.locator(".angle-btn").count() == 1)
-    chk("menu XML: header actions driven by XML", pg.locator(".native-action").count() == 1)
+    chk("menu XML: header actions driven by XML", pg.locator(".native-action-row .native-action").count() == 1)
     ctx.close()
     ctx = b.new_context(viewport={"width": 1280, "height": 900})
     ctx.add_init_script(menu_override(faulty_xml))
@@ -266,7 +281,7 @@ with sync_playwright() as p:
     chk("faulty menu XML: built-in labels restored", pg.locator(".rail-btn[title='Generation Archive']").count() == 1)
     chk("faulty menu XML: dock tabs intact", pg.locator(".dock-tab", has_text="HAIR STYLE").count() == 1)
     chk("faulty menu XML: angle strip restored (4 buttons)", pg.locator(".angle-btn").count() == 4)
-    chk("faulty menu XML: header actions restored (5 buttons)", pg.locator(".native-action").count() == 5)
+    chk("faulty menu XML: header actions restored (5 buttons)", pg.locator(".native-action-row .native-action").count() == 5)
     chk("faulty menu XML: BUILD rail header restored", pg.locator(".rail-build-label").inner_text() == "BUILD")
     chk("faulty menu XML: no page errors", len(errs) == 0, errs[:1])
     ctx.close()

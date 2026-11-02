@@ -670,10 +670,9 @@ export class HdAvatarRenderer {
    * Render the current 3D avatar into the real off-screen HD target and
    * return the result as a normal 2D image. This is not a screenshot of
    * the UI: it is a raster export of the WebGL-rendered 3D scene.
-   */
+  */
   renderToImage(options: { width?: number; height?: number; mimeType?: 'image/png' | 'image/jpeg'; quality?: number } = {}): string {
     const gl = this.gl;
-    const canvas = gl.canvas as HTMLCanvasElement;
     const width = Math.max(1, Math.floor(options.width ?? 1920));
     const height = Math.max(1, Math.floor(options.height ?? 1080));
     const mimeType = options.mimeType ?? 'image/png';

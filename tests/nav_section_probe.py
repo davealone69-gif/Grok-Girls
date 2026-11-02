@@ -70,22 +70,21 @@ def main():
                 if section == "@dock:style":
                     # Move to a different dock tab first so the click has work to do.
                     pg.evaluate(
-                        """() => { const t=[...document.querySelectorAll('.dock-tab,[class*=dock-tab]')]
+                        """() => { const t=[...document.querySelectorAll('.dock-tabs .dock-tab')]
                              .find(x=>/color/i.test(x.textContent||'')); if(t) t.click(); }""")
                     pg.wait_for_timeout(400)
                     before = pg.evaluate(
-                        "() => (document.querySelector('.dock-tab.active,[class*=dock-tab][class*=active]')||{}).textContent || ''")
+                        "() => (document.querySelector('.dock-tabs .dock-tab.active')||{}).textContent || ''")
                     clicked = pg.evaluate(
                         """(l) => { const b=[...document.querySelectorAll('.rail-btn,[data-view],.nav-btn')]
                              .find(x=>(x.textContent||'').includes(l));
                              if(!b) return false; b.click(); return true; }""", label)
                     pg.wait_for_timeout(700)
                     after = pg.evaluate(
-                        "() => (document.querySelector('.dock-tab.active,[class*=dock-tab][class*=active]')||{}).textContent || ''")
-                    styled = pg.evaluate(
-                        "() => /style/i.test((document.querySelector('.dock-tab.active,[class*=dock-tab][class*=active]')||{}).textContent||'')")
+                        "() => (document.querySelector('.dock-tabs .dock-tab.active')||{}).textContent || ''")
+                    switched = "color" in before.lower() and "style" in after.lower()
                     chk(f"NAV '{label}' switches the dock to the STYLE tab",
-                        clicked and styled, f"before={before!r} after={after!r}")
+                        clicked and switched, f"before={before!r} after={after!r}")
                     continue
                 if section:
                     # Collapse every accordion so the target is definitely closed.

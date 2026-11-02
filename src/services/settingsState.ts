@@ -1,15 +1,16 @@
 /* ------------------------------------------------------------------ */
 /* settingsState — ONE typed canonical settings record.               */
 /*                                                                     */
-/* All app settings live under a single localStorage key:              */
+/* Non-secret app settings persist under one localStorage key:         */
 /*   'grok-girls-settings-v1'                                          */
 /*                                                                     */
 /* Safety properties:                                                  */
-/*  - Migration: on first read (no canonical record yet) the ~12      */
-/*    legacy keys are folded in, preserving every saved value.         */
-/*  - Write-through: every save also mirrors the legacy keys, so      */
-/*    older code paths (or a rolled-back build) never see stale       */
-/*    settings. Legacy keys are never removed by this module.         */
+/*  - Provider API keys live in page-session memory only; they are     */
+/*    excluded from persisted settings.                                */
+/*  - Startup and saves scrub API keys from canonical storage and      */
+/*    remove legacy 'grok-girls-key-*' entries.                        */
+/*  - Migration folds legacy non-secret settings into the canonical    */
+/*    record; legacy provider-key entries are not retained.            */
 /*  - Corrupt/missing canonical record falls back to legacy fold,     */
 /*    then to typed defaults. No reader ever throws.                  */
 /*                                                                     */

@@ -394,13 +394,23 @@ class OllamaLocalPlugin : Plugin() {
                     return@execute
                 }
 
+                val (host, port) = hostPort(base)
+                if (host != "127.0.0.1" && host != "localhost") {
+                    val r = JSObject()
+                    r.put("started", false)
+                    r.put("method", "none")
+                    r.put("message", "Automatic startup only supports a server on this phone (127.0.0.1 or localhost). The configured address is $host.")
+                    call.resolve(r)
+                    return@execute
+                }
+
                 val intent = Intent()
                 intent.setClassName(TERMUX_PACKAGE, TERMUX_SERVICE)
                 intent.action = TERMUX_RUN_COMMAND
                 intent.putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/bash")
                 intent.putExtra(
                     "com.termux.RUN_COMMAND_ARGUMENTS",
-                    arrayOf("-lc", "pgrep -f '[o]llama serve' >/dev/null 2>&1 || (nohup env OLLAMA_HOST=127.0.0.1:11434 ollama serve >\"\$HOME/ollama-server.log\" 2>&1 </dev/null &)")
+                    arrayOf("-lc", "nohup env OLLAMA_HOST=127.0.0.1:$port ollama serve >\"\$HOME/ollama-server.log\" 2>&1 </dev/null &")
                 )
                 intent.putExtra("com.termux.RUN_COMMAND_WORKDIR", "/data/data/com.termux/files/home")
                 intent.putExtra("com.termux.RUN_COMMAND_BACKGROUND", true)

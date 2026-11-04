@@ -401,14 +401,17 @@ class SdLocalPlugin : Plugin() {
                 }
 
                 val script =
-                    "pgrep -f '[s]d-server' >/dev/null 2>&1 && exit 0; " +
+                    "if pgrep -f \"[s]d-server.*--listen-port $port\" >/dev/null 2>&1; then exit 0; fi; " +
                         "if [ -x \"\$HOME/sd-server.sh\" ]; then " +
-                        "nohup \"\$HOME/sd-server.sh\" >\"\$HOME/sd-server.log\" 2>&1 & " +
+                        "nohup \"\$HOME/sd-server.sh\" >\"\$HOME/sd-server.log\" 2>&1 </dev/null & " +
                         "elif [ -x \"\$HOME/stable-diffusion.cpp/build-android/bin/sd-server\" ]; then " +
-                        "nohup sd-server --model \"\$HOME/models/v1-5-pruned-emaonly.safetensors\" " +
+                        "BIN=\"\$HOME/stable-diffusion.cpp/build-android/bin/sd-server\"; " +
+                        "MODEL=\"\$HOME/models/v1-5-pruned-emaonly.safetensors\"; " +
+                        "if [ ! -f \"\$MODEL\" ]; then echo \"Stable Diffusion model not found: \$MODEL\" >>\"\$HOME/sd-server.log\"; exit 2; fi; " +
+                        "nohup \"\$BIN\" --model \"\$MODEL\" " +
                         "--listen-ip 127.0.0.1 --listen-port $port --backend cpu --rng cpu --sampler-rng cpu --offload-to-cpu --mmap " +
-                        "--vae-tiling --threads 4 >\"\$HOME/sd-server.log\" 2>&1 & " +
-                        "else exit 127; fi"
+                        "--vae-tiling --threads 4 >\"\$HOME/sd-server.log\" 2>&1 </dev/null & " +
+                        "else echo \"sd-server binary not found. Build it or create ~/sd-server.sh\" >>\"\$HOME/sd-server.log\"; exit 127; fi"
 
                 val intent = android.content.Intent()
                 intent.setClassName(TERMUX_PACKAGE, TERMUX_SERVICE)

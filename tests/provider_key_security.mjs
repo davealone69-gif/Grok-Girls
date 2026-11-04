@@ -89,7 +89,8 @@ try {
   providers.saveApiKey('gemini', GEMINI_KEY);
   providers.saveApiKey('openrouter', OPENROUTER_KEY);
   providers.saveApiKey('custom', CUSTOM_KEY);
-  providers.saveEndpoint('custom', 'https://custom.invalid/v1/chat/completions', 'chat');
+  providers.saveEndpoint('custom', 'http://127.0.0.1:3001/v1/', 'chat');
+  providers.saveModel('custom', 'auto');
   providers.saveEndpoint('custom', 'https://gen.pollinations.ai/image', 'image');
 
   const persistedAfterSave = storage.entries().map(([, value]) => value).join('\n');
@@ -103,7 +104,13 @@ try {
 
   globalThis.fetch = async (input, init = {}) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    requests.push({ url, headers: new Headers(init.headers ?? {}) });
+    requests.push({ url, method: init.method ?? 'GET', headers: new Headers(init.headers ?? {}), body: init.body });
+    if (url === 'http://127.0.0.1:3001/v1/models') {
+      return new Response(JSON.stringify({ data: [{ id: 'catalog-model-a' }, { id: 'catalog-model-b' }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
     if (url.startsWith('https://gen.pollinations.ai/')) {
       return new Response('test-only response', { status: 401 });
     }
@@ -114,8 +121,13 @@ try {
   };
 
   const messages = [{ role: 'user', content: 'offline regression fixture' }];
+  const customModels = await providers.fetchCustomModels('http://127.0.0.1:3001/v1', CUSTOM_KEY);
+  check('custom model catalog discovers OpenAI-compatible IDs',
+    customModels.join(',') === 'catalog-model-a,catalog-model-b');
   await providers.chatWithProvider(messages, 'gemini');
   await providers.chatWithProvider(messages, 'openrouter');
+  await providers.chatWithProvider(messages, 'custom');
+  providers.saveModel('custom', 'catalog-model-b', 'chat');
   await providers.chatWithProvider(messages, 'custom');
 
   const gemini = providers.providers().find(provider => provider.name === 'gemini');
@@ -128,7 +140,7 @@ try {
     // The mock deliberately returns 401; the request itself is what this gate checks.
   }
 
-  const noKeyInUrls = requests.length === 5 && requests.every(({ url }) =>
+  const noKeyInUrls = requests.length === 7 && requests.every(({ url }) =>
     !url.includes(GEMINI_KEY)
       && !url.includes(OPENROUTER_KEY)
       && !url.includes(CUSTOM_KEY)
@@ -137,14 +149,24 @@ try {
 
   const geminiRequests = requests.filter(({ url }) => url.includes('generativelanguage.googleapis.com'));
   const openrouterRequest = requests.find(({ url }) => url.includes('openrouter.ai'));
-  const customChatRequest = requests.find(({ url }) => url.includes('custom.invalid'));
+  const customChatRequests = requests.filter(({ url, method }) =>
+    url === 'http://127.0.0.1:3001/v1/chat/completions' && method === 'POST');
+  const customModelsRequest = requests.find(({ url }) => url === 'http://127.0.0.1:3001/v1/models');
   const pollinationsRequest = requests.find(({ url }) => url.includes('gen.pollinations.ai'));
   check('Gemini chat and generation use x-goog-api-key headers',
     geminiRequests.length === 2
       && geminiRequests.every(({ headers }) => headers.get('x-goog-api-key') === GEMINI_KEY));
   check('OpenRouter and custom chat use bearer headers',
     openrouterRequest?.headers.get('authorization') === `Bearer ${OPENROUTER_KEY}`
-      && customChatRequest?.headers.get('authorization') === `Bearer ${CUSTOM_KEY}`);
+      && customChatRequests.length === 2
+      && customChatRequests.every(({ headers }) => headers.get('authorization') === `Bearer ${CUSTOM_KEY}`));
+  check('custom chat accepts a /v1 base URL, uses the generic model fallback, and honors a chat-model override',
+    JSON.parse(customChatRequests[0]?.body ?? '{}').model === 'auto'
+      && JSON.parse(customChatRequests[1]?.body ?? '{}').model === 'catalog-model-b'
+      && providers.resolveCustomChatEndpoint('https://custom.invalid/v1/chat/completions') === 'https://custom.invalid/v1/chat/completions');
+  check('custom model catalog uses GET /v1/models with bearer auth',
+    customModelsRequest?.method === 'GET'
+      && customModelsRequest.headers.get('authorization') === `Bearer ${CUSTOM_KEY}`);
   check('Pollinations image generation uses a bearer header',
     pollinationsRequest?.headers.get('authorization') === `Bearer ${CUSTOM_KEY}`);
 

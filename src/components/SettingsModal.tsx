@@ -7,7 +7,8 @@ import {
   getSavedEndpoint,
   saveEndpoint,
   getSavedModel,
-  saveModel
+  saveModel,
+  fetchCustomModels
 } from '../services/providers';
 import {
   A1111_SAMPLERS,
@@ -72,6 +73,10 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [customImageEndpoint, setCustomImageEndpoint] = useState(() => getSavedEndpoint('custom', 'image'));
   const [customVideoEndpoint, setCustomVideoEndpoint] = useState(() => getSavedEndpoint('custom', 'video'));
   const [customModel, setCustomModel] = useState(() => getSavedModel('custom'));
+  const [customChatModel, setCustomChatModel] = useState(() => getSavedModel('custom', 'chat') || getSavedModel('custom'));
+  const [customModels, setCustomModels] = useState<string[]>([]);
+  const [customModelsLoading, setCustomModelsLoading] = useState(false);
+  const [customModelsStatus, setCustomModelsStatus] = useState('');
   const [savedStatus, setSavedStatus] = useState('');
 
   /* self-hosted server */
@@ -129,6 +134,24 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     if (models.length && !shModel) setShModel(models[0]);
   };
 
+  const handleFetchCustomModels = async () => {
+    if (!customChatEndpoint.trim()) {
+      setCustomModelsStatus('Enter an OpenAI-compatible /v1 URL first.');
+      return;
+    }
+    setCustomModelsLoading(true);
+    setCustomModelsStatus('Fetching model catalog…');
+    try {
+      const models = await fetchCustomModels(customChatEndpoint, customKey);
+      setCustomModels(models);
+      setCustomModelsStatus(models.length ? `${models.length} models loaded.` : 'No models returned.');
+    } catch (error) {
+      setCustomModelsStatus(error instanceof Error ? error.message : 'Model catalog request failed.');
+    } finally {
+      setCustomModelsLoading(false);
+    }
+  };
+
   const handleSave = () => {
     saveApiKey('openrouter', openRouterKey);
     saveModel('openrouter', openRouterImageModel, 'image');
@@ -141,6 +164,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     saveEndpoint('custom', customImageEndpoint, 'image');
     saveEndpoint('custom', customVideoEndpoint, 'video');
     saveModel('custom', customModel);
+    saveModel('custom', customChatModel, 'chat');
     persistSelfHosted();
     setSavedStatus('Settings saved. Provider API keys are only kept for this session.');
     setTimeout(() => {
@@ -161,6 +185,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     saveEndpoint('custom', '', 'image');
     saveEndpoint('custom', '', 'video');
     saveModel('custom', '');
+    saveModel('custom', '', 'chat');
     saveServerBase('');
     saveCheckpoint('');
     saveLoraSlots([{ name: '', weight: 1 }, { name: '', weight: 1 }, { name: '', weight: 1 }]);
@@ -175,6 +200,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setCustomImageEndpoint('');
     setCustomVideoEndpoint('');
     setCustomModel('');
+    setCustomChatModel('');
+    setCustomModels([]);
+    setCustomModelsStatus('');
     setShBase('');
     setShModel('');
     setShStatus(null);
@@ -406,9 +434,30 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               label="Chat Endpoint"
               value={customChatEndpoint}
               onChange={setCustomChatEndpoint}
-              placeholder="https://your-llm.example.com/v1/chat/completions"
-              hint="OpenAI-compatible chat API. Also used for chat when the SELF-HOSTED engine is selected."
+              placeholder="http://localhost:3001/v1"
+              hint="Use an OpenAI-compatible /v1 base URL or full /v1/chat/completions URL. Also used by SELF-HOSTED chat."
             />
+            <label className="settings-field">
+              <span>Chat Model</span>
+              <input
+                type="text"
+                list="custom-chat-model-options"
+                value={customChatModel}
+                onChange={e => setCustomChatModel(e.target.value)}
+                placeholder="auto or a model ID"
+              />
+              <em>For FreeLLMAPI, use auto or an ID from its /v1/models catalog.</em>
+              <datalist id="custom-chat-model-options">
+                <option value="auto" />
+                {customModels.map(model => <option key={model} value={model} />)}
+              </datalist>
+            </label>
+            <div className="selfhosted-actions">
+              <button type="button" className="prompt-mini-btn" disabled={customModelsLoading} onClick={handleFetchCustomModels}>
+                {customModelsLoading ? 'FETCHING…' : 'FETCH CHAT MODELS'}
+              </button>
+              {customModelsStatus && <span className="settings-note" role="status">{customModelsStatus}</span>}
+            </div>
             <Field
               label="Image Endpoint"
               value={customImageEndpoint}

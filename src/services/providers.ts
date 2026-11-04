@@ -618,6 +618,44 @@ function fetchWithTimeout(url: string, init: RequestInit = {}, ms: number): Prom
   return fetch(url, { ...init, signal });
 }
 
+/** Accept either an OpenAI-compatible /v1 base URL or a full chat endpoint. */
+export function resolveCustomChatEndpoint(endpoint: string): string {
+  const trimmed = endpoint.trim().replace(/\/+$/, '');
+  return /\/v1$/i.test(trimmed) ? `${trimmed}/chat/completions` : trimmed;
+}
+
+function customModelsEndpoint(endpoint: string): string {
+  const trimmed = endpoint.trim().replace(/\/+$/, '');
+  if (/\/v1$/i.test(trimmed)) return `${trimmed}/models`;
+  if (/\/v1\/chat\/completions$/i.test(trimmed)) {
+    return `${trimmed.replace(/\/chat\/completions$/i, '')}/models`;
+  }
+  return '';
+}
+
+/** Fetch an OpenAI-compatible model catalog; callers may intercept fetch in tests. */
+export async function fetchCustomModels(endpoint: string, key: string): Promise<string[]> {
+  const url = customModelsEndpoint(endpoint);
+  if (!url) throw new Error('Use an OpenAI-compatible /v1 base URL or /v1/chat/completions URL to fetch models.');
+  const response = await fetchWithTimeout(url, {
+    method: 'GET',
+    ...(key.trim() ? { headers: { Authorization: `Bearer ${key.trim()}` } } : {})
+  }, 15000);
+  if (!response.ok) throw new Error(`Custom models HTTP ${response.status}`);
+  const data = await response.json();
+  const rows = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : [];
+  const ids: string[] = rows.reduce((result: string[], model: unknown) => {
+    const id = typeof model === 'string'
+      ? model
+      : model && typeof model === 'object' && 'id' in model && typeof model.id === 'string'
+      ? model.id
+      : '';
+    if (id.trim()) result.push(id.trim());
+    return result;
+  }, []);
+  return [...new Set<string>(ids)];
+}
+
 function defaultModel(p: ProviderName, m: Mode): string {
   const saved = getSavedModel(p, m) || getSavedModel(p);
   if (saved) return saved;
@@ -943,11 +981,11 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
     }
     // Route self-hosted chat through an OpenAI-compatible endpoint if one is configured.
     const key = getSavedApiKey('custom');
-    const r = await fetchWithTimeout(chatEndpoint, {
+    const r = await fetchWithTimeout(resolveCustomChatEndpoint(chatEndpoint), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },
       body: JSON.stringify({
-        model: e.VITE_CUSTOM_CHAT_MODEL ?? getSavedModel('custom', 'chat') ?? getSavedModel('custom'),
+        model: e.VITE_CUSTOM_CHAT_MODEL || getSavedModel('custom', 'chat') || getSavedModel('custom'),
         messages
       })
     }, 45000);
@@ -1027,11 +1065,11 @@ export async function chatWithProvider(messages: ChatMessage[], preferred: Provi
   const key = getSavedApiKey('custom');
   const endpoint = getSavedEndpoint('custom', 'chat') || e.VITE_CUSTOM_CHAT_ENDPOINT || '';
   if (!key || !endpoint) return { provider: 'custom' as const, text: 'Custom provider API key or endpoint is not configured.' };
-  const r = await fetchWithTimeout(endpoint, {
+  const r = await fetchWithTimeout(resolveCustomChatEndpoint(endpoint), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
     body: JSON.stringify({
-      model: e.VITE_CUSTOM_CHAT_MODEL ?? getSavedModel('custom', 'chat') ?? getSavedModel('custom'),
+      model: e.VITE_CUSTOM_CHAT_MODEL || getSavedModel('custom', 'chat') || getSavedModel('custom'),
       messages
     })
   }, 45000);

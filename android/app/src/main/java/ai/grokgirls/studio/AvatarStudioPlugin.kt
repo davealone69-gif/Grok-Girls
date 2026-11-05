@@ -168,5 +168,6 @@ class AvatarStudioPlugin : Plugin() {
             "mature" -> floatArrayOf(0f, 0.86f, 0f)
             else -> floatArrayOf(0f, 0.85f, 0f)
         }
+        renderer.setExpression(definition.expression)
     }
 }

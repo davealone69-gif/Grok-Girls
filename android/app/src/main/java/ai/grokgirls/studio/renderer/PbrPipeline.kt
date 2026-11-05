@@ -333,10 +333,17 @@ object PbrPipeline {
             }
             target.tangentDeltas?.let { delta ->
                 if (tangents != null) {
-                    require(delta.size == tangents.size || delta.size == mesh.positions.size) {
+                    require(delta.size == mesh.positions.size) {
                         "Morph TANGENT accessor size mismatch at target $i"
                     }
-                    for (v in minOf(tangents.size, delta.size).indices) tangents[v] += delta[v] * weight
+                    val vertexCount = tangents.size / 4
+                    for (vertex in 0 until vertexCount) {
+                        val src = vertex * 3
+                        val dst = vertex * 4
+                        tangents[dst] += delta[src] * weight
+                        tangents[dst + 1] += delta[src + 1] * weight
+                        tangents[dst + 2] += delta[src + 2] * weight
+                    }
                     hasTangentDelta = true
                 }
             }

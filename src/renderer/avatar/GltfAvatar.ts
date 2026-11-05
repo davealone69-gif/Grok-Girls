@@ -114,6 +114,7 @@ export async function loadAvatarGlb(
 export function disposeAvatarAsset(gl: WebGL2RenderingContext, asset: AvatarAsset): void {
   for (const prim of asset.primitives) {
     gl.deleteVertexArray(prim.vao);
+    for (const buffer of prim.vertexBuffers) gl.deleteBuffer(buffer);
     if (prim.indexBuffer) gl.deleteBuffer(prim.indexBuffer);
   }
   const deleted = new Set<WebGLTexture>();

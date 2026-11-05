@@ -34,16 +34,31 @@ export interface MorphBuffers {
 export const MAX_MORPHS = 64;
 
 /** Decode true per-vertex morph deltas. Accessor caching prevents N× expansion. */
-export function buildMorphBuffers(asset: GltfAsset, primitive: GltfPrimitive): MorphBuffers | null {
+export function buildMorphBuffers(
+  asset: GltfAsset,
+  primitive: GltfPrimitive,
+  sourceVertices?: number[]
+): MorphBuffers | null {
   if (!primitive.targets?.length) return null;
   if (primitive.targets.length > MAX_MORPHS) {
     throw new Error(`GLB has ${primitive.targets.length} morph targets; maximum supported is ${MAX_MORPHS}`);
   }
   const positionDeltas: Array<Float32Array | null> = [];
   const normalDeltas: Array<Float32Array | null> = [];
+  const compact = (data: Float32Array | null): Float32Array | null => {
+    if (!data || !sourceVertices) return data;
+    if (data.length % 3 !== 0) throw new Error('Morph accessor is not VEC3');
+    const out = new Float32Array(sourceVertices.length * 3);
+    for (let i = 0; i < sourceVertices.length; i++) {
+      const from = sourceVertices[i] * 3;
+      if (from + 3 > data.length) throw new Error('Morph accessor vertex index is out of range');
+      out.set(data.subarray(from, from + 3), i * 3);
+    }
+    return out;
+  };
   for (const target of primitive.targets) {
-    positionDeltas.push(target.POSITION === undefined ? null : toFloat32(readAccessor(asset, target.POSITION)));
-    normalDeltas.push(target.NORMAL === undefined ? null : toFloat32(readAccessor(asset, target.NORMAL)));
+    positionDeltas.push(compact(target.POSITION === undefined ? null : toFloat32(readAccessor(asset, target.POSITION))));
+    normalDeltas.push(compact(target.NORMAL === undefined ? null : toFloat32(readAccessor(asset, target.NORMAL))));
   }
   return {
     positionDeltas,

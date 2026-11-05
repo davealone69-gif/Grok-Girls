@@ -55,7 +55,7 @@ import { createShadowMap, destroyShadowMap, ShadowMap } from './ShadowMap';
 import { ShadowShader } from './ShadowShader';
 import { createIblPipeline, destroyIblPipeline, DEFAULT_IBL_SETTINGS, IblPipeline } from './IblPipeline';
 import { CinematicRenderer } from './CinematicPipeline';
-import { loadAvatarGlb, AvatarAsset, disposeAvatarAsset } from './avatar/GltfAvatar';
+import { loadAvatarGlb, AvatarAsset, disposeAvatarAsset, updateSkeleton } from './avatar/GltfAvatar';
 import { WebPbrMaterial } from './avatar/GltfMaterial';
 
 /* 300 es — vertex shader for the non-skinned path. Native attribute
@@ -1139,6 +1139,8 @@ export class HdAvatarRenderer {
   private drawGlb(gl: WebGL2RenderingContext): void {
     const asset = this.glbAsset;
     if (!asset) return;
+    // Re-evaluate node hierarchy before uploading the current joint palette.
+    updateSkeleton(asset);
     const u = this.uniforms.get(this.skinProgram) ?? {};
     gl.useProgram(this.skinProgram);
     this.applyCommonUniforms(gl, this.skinProgram);

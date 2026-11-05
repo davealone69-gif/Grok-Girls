@@ -170,3 +170,8 @@ export function readAccessor(asset: GltfAsset, accessorIndex: number): ArrayBuff
   cache.set(accessorIndex, decoded);
   return decoded;
 }
+
+/** Release expanded dense/sparse accessor arrays once mesh data is compacted. */
+export function clearAccessorCache(asset: GltfAsset): void {
+  decodedAccessorCache.delete(asset);
+}

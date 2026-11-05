@@ -63,16 +63,18 @@ class GltfAvatarLoader(
             "Only GLB 2.0 is supported"
         }
 
-        require(length <= bytes.size) {
-            "Invalid GLB length"
+        require(length == bytes.size) {
+            "GLB declared length does not match the file size"
         }
 
         var json: String? = null
         var binary: ByteArray? = null
 
         var offset = 12
+        var chunkIndex = 0
 
-        while (offset + 8 <= bytes.size) {
+        while (offset < length) {
+            require(offset + 8 <= length) { "Truncated GLB chunk header" }
 
             val chunkHeader =
                 ByteBuffer
@@ -85,19 +87,19 @@ class GltfAvatarLoader(
             val chunkType =
                 chunkHeader.int
 
-            val dataStart =
-                offset + 8
-
-            val dataEnd =
-                dataStart + chunkLength
-
-            require(dataEnd <= bytes.size) {
-                "Invalid GLB chunk"
+            require(chunkLength >= 0 && chunkLength % 4 == 0) {
+                "Invalid GLB chunk length"
             }
+            val dataStart = offset + 8
+            val dataEndLong = dataStart.toLong() + chunkLength.toLong()
+            require(dataEndLong <= length.toLong()) { "GLB chunk exceeds declared container length" }
+            val dataEnd = dataEndLong.toInt()
 
+            if (chunkIndex == 0) require(chunkType == JSON_CHUNK) { "GLB JSON chunk must be first" }
             when (chunkType) {
 
                 JSON_CHUNK -> {
+                    require(json == null && chunkIndex == 0) { "GLB must contain exactly one leading JSON chunk" }
                     json = String(
                         bytes,
                         dataStart,
@@ -107,6 +109,7 @@ class GltfAvatarLoader(
                 }
 
                 BIN_CHUNK -> {
+                    require(binary == null && json != null) { "GLB must contain at most one BIN chunk after JSON" }
                     binary =
                         bytes.copyOfRange(
                             dataStart,
@@ -116,7 +119,9 @@ class GltfAvatarLoader(
             }
 
             offset = dataEnd
+            chunkIndex++
         }
+        require(offset == length) { "GLB chunks do not consume the declared container length" }
 
         require(json != null) {
             "GLB JSON chunk missing"

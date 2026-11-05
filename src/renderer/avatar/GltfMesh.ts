@@ -52,10 +52,55 @@ export function uploadPrimitive(
   primitive: GltfPrimitive,
   meshIndex = 0
 ): GpuPrimitive {
-  const vao = gl.createVertexArray();
-  if (!vao) {
-    throw new Error('Unable to create VAO');
+  const positionAccessorIndex = primitive.attributes.POSITION;
+  if (positionAccessorIndex === undefined) throw new Error('GLB primitive has no POSITION');
+  const sourceVertexCount = asset.json.accessors?.[positionAccessorIndex]?.count ?? 0;
+  if (sourceVertexCount <= 0) throw new Error('GLB POSITION accessor is empty');
+
+  // All material primitives in this export index into a shared full-body
+  // vertex stream. Compact each submesh to its referenced vertices.
+  const sourceIndices = primitive.indices === undefined
+    ? null
+    : readAccessor(asset, primitive.indices) as Uint8Array | Uint16Array | Uint32Array;
+  const sourceVertices: number[] = [];
+  const sourceToCompact = new Map<number, number>();
+  const indexCountSource = sourceIndices?.length ?? sourceVertexCount;
+  const IndexCtor = sourceIndices?.constructor as (new (length: number) => Uint8Array | Uint16Array | Uint32Array) | undefined;
+  const compactIndices = sourceIndices && IndexCtor ? new IndexCtor(sourceIndices.length) : null;
+
+  for (let i = 0; i < indexCountSource; i++) {
+    const sourceIndex = sourceIndices ? sourceIndices[i] : i;
+    if (!Number.isInteger(sourceIndex) || sourceIndex < 0 || sourceIndex >= sourceVertexCount) {
+      throw new Error(`GLB index ${sourceIndex} exceeds POSITION count ${sourceVertexCount}`);
+    }
+    let compactIndex = sourceToCompact.get(sourceIndex);
+    if (compactIndex === undefined) {
+      compactIndex = sourceVertices.length;
+      sourceToCompact.set(sourceIndex, compactIndex);
+      sourceVertices.push(sourceIndex);
+    }
+    if (compactIndices) compactIndices[i] = compactIndex;
   }
+  if (sourceIndices && sourceIndices.length % 3 !== 0) {
+    throw new Error('TRIANGLES index count is not divisible by three');
+  }
+
+  const compactArray = (data: ArrayBufferView, components: number): ArrayBufferView => {
+    const source = data as unknown as { length: number; subarray(start: number, end?: number): ArrayLike<number> };
+    if (source.length !== sourceVertexCount * components) {
+      throw new Error(`GLB attribute size mismatch: expected ${sourceVertexCount * components}, got ${source.length}`);
+    }
+    const Ctor = data.constructor as new (length: number) => { set(values: ArrayLike<number>, offset?: number): void };
+    const output = new Ctor(sourceVertices.length * components);
+    for (let i = 0; i < sourceVertices.length; i++) {
+      const from = sourceVertices[i] * components;
+      output.set(source.subarray(from, from + components), i * components);
+    }
+    return output as unknown as ArrayBufferView;
+  };
+
+  const vao = gl.createVertexArray();
+  if (!vao) throw new Error('Unable to create VAO');
   gl.bindVertexArray(vao);
   const vertexBuffers: WebGLBuffer[] = [];
   let positionBuffer: WebGLBuffer | null = null;
@@ -65,96 +110,32 @@ export function uploadPrimitive(
 
   for (const attribute of ATTRIBUTES) {
     const accessorIndex = primitive.attributes[attribute.name];
-    if (accessorIndex === undefined) {
-      continue;
-    }
-
-    const data = readAccessor(asset, accessorIndex);
+    if (accessorIndex === undefined) continue;
+    const accessor = asset.json.accessors?.[accessorIndex];
+    if (!accessor) throw new Error(`Missing accessor ${accessorIndex}`);
+    const data = compactArray(readAccessor(asset, accessorIndex), attribute.size);
     const buffer = gl.createBuffer();
-    if (!buffer) {
-      throw new Error('Unable to create vertex buffer');
-    }
-
+    if (!buffer) throw new Error('Unable to create vertex buffer');
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
     vertexBuffers.push(buffer);
     if (attribute.name === 'POSITION') { positionBuffer = buffer; basePositions = toFloat32(data); }
     if (attribute.name === 'NORMAL') { normalBuffer = buffer; baseNormals = toFloat32(data); }
-
-    const accessor = asset.json.accessors![accessorIndex];
     gl.enableVertexAttribArray(attribute.location);
-
     if (attribute.integer) {
       gl.vertexAttribIPointer(attribute.location, attribute.size, accessor.componentType, 0, 0);
     } else {
-      gl.vertexAttribPointer(
-        attribute.location,
-        attribute.size,
-        accessor.componentType,
-        accessor.normalized ?? false,
-        0,
-        0
-      );
+      gl.vertexAttribPointer(attribute.location, attribute.size, accessor.componentType, accessor.normalized ?? false, 0, 0);
     }
   }
 
-  // Unskinned primitives still bind dummy joint/weight arrays (index 0,
-  // weight (1,0,0,0)) so the renderer can always run the skin program's
-  // skinned branch with identity bones — some GL implementations (the
-  // WebKit software GL used by headless CI) misrender the uSkinned=false
-  // branch of a shader that contains dynamic uBones[] indexing.
-  const posAccForCount =
-    primitive.attributes.POSITION !== undefined
-      ? asset.json.accessors?.[primitive.attributes.POSITION]
-      : undefined;
-  const vertexCountDummy = posAccForCount?.count ?? 0;
-
-  if (primitive.attributes.JOINTS_0 === undefined) {
-    const joints = new Uint8Array(vertexCountDummy * 4);
-    const buffer = gl.createBuffer();
-    if (!buffer) throw new Error('Unable to create dummy joint buffer');
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, joints, gl.STATIC_DRAW);
-    vertexBuffers.push(buffer);
-    gl.enableVertexAttribArray(4);
-    gl.vertexAttribIPointer(4, 4, gl.UNSIGNED_BYTE, 0, 0);
-  }
-  if (primitive.attributes.WEIGHTS_0 === undefined) {
-    const weights = new Float32Array(vertexCountDummy * 4);
-    for (let i = 0; i < vertexCountDummy; i++) weights[i * 4] = 1;
-    const buffer = gl.createBuffer();
-    if (!buffer) throw new Error('Unable to create dummy weight buffer');
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, weights, gl.STATIC_DRAW);
-    vertexBuffers.push(buffer);
-    gl.enableVertexAttribArray(5);
-    gl.vertexAttribPointer(5, 4, gl.FLOAT, false, 0, 0);
-  }
-
-  let indexBuffer: WebGLBuffer | null = null;
-  let indexCount = 0;
-  let indexType: number = gl.UNSIGNED_SHORT;
-
-  if (primitive.indices !== undefined) {
-    const accessor = asset.json.accessors![primitive.indices];
-    const indices = readAccessor(asset, primitive.indices);
-
-    indexBuffer = gl.createBuffer();
-    if (!indexBuffer) {
-      throw new Error('Unable to create index buffer');
-    }
-
+  if (!positionBuffer) throw new Error('Unable to upload POSITION buffer');
+  const indexBuffer = compactIndices ? gl.createBuffer() : null;
+  if (compactIndices && !indexBuffer) throw new Error('Unable to create index buffer');
+  if (indexBuffer && compactIndices) {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
-
-    indexCount = accessor.count;
-    indexType = accessor.componentType;
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, compactIndices, gl.STATIC_DRAW);
   }
-
-  const posAccessor = primitive.attributes.POSITION !== undefined
-    ? asset.json.accessors![primitive.attributes.POSITION]
-    : undefined;
-
   gl.bindVertexArray(null);
 
   return {
@@ -165,12 +146,14 @@ export function uploadPrimitive(
     basePositions,
     baseNormals,
     indexBuffer,
-    indexCount,
-    indexType,
+    indexCount: compactIndices?.length ?? sourceVertices.length,
+    indexType: sourceIndices
+      ? (asset.json.accessors?.[primitive.indices!]?.componentType ?? gl.UNSIGNED_SHORT)
+      : gl.UNSIGNED_SHORT,
     materialIndex: primitive.material ?? 0,
     meshIndex,
-    vertexCount: posAccessor?.count ?? 0,
+    vertexCount: sourceVertices.length,
     skinned: primitive.attributes.JOINTS_0 !== undefined,
-    morphs: buildMorphBuffers(asset, primitive)
+    morphs: buildMorphBuffers(asset, primitive, sourceVertices)
   };
 }

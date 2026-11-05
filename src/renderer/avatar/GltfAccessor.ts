@@ -74,46 +74,87 @@ export function toFloat32(view: ArrayBufferView): Float32Array {
   return out;
 }
 
+function viewRange(asset: GltfAsset, viewIndex: number): { view: NonNullable<GltfAsset['json']['bufferViews']>[number]; start: number; end: number } {
+  const view = asset.json.bufferViews?.[viewIndex];
+  if (!view) throw new Error(`Missing bufferView ${viewIndex}`);
+  if ((view.buffer ?? 0) !== 0) throw new Error(`Unsupported external buffer ${view.buffer}`);
+  const start = view.byteOffset ?? 0;
+  const end = start + view.byteLength;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end > asset.binary.byteLength) {
+    throw new Error(`bufferView ${viewIndex} exceeds GLB BIN chunk`);
+  }
+  return { view, start, end };
+}
+
+function readSparseIndex(view: DataView, offset: number, componentType: number): number {
+  switch (componentType) {
+    case 5121: return view.getUint8(offset);
+    case 5123: return view.getUint16(offset, true);
+    case 5125: return view.getUint32(offset, true);
+    default: throw new Error(`Invalid sparse index component type: ${componentType}`);
+  }
+}
+
 export function readAccessor(asset: GltfAsset, accessorIndex: number): ArrayBufferView {
   const json = asset.json;
-
   const accessor = json.accessors?.[accessorIndex];
-  if (!accessor) {
-    throw new Error(`Missing accessor ${accessorIndex}`);
-  }
+  if (!accessor) throw new Error(`Missing accessor ${accessorIndex}`);
 
-  if (accessor.bufferView === undefined) {
-    throw new Error('Sparse/implicit accessor not supported yet');
-  }
-
-  const view = json.bufferViews?.[accessor.bufferView];
-  if (!view) {
-    throw new Error('Missing bufferView');
-  }
-
-  const buffer = asset.binary;
-
-  const componentBytes = componentSize(accessor.componentType);
   const components = componentCount(accessor.type);
+  const componentBytes = componentSize(accessor.componentType);
+  const elementBytes = components * componentBytes;
+  if (!Number.isSafeInteger(accessor.count) || accessor.count < 0) {
+    throw new Error(`Accessor ${accessorIndex} has invalid count`);
+  }
+  const outputBuffer = new ArrayBuffer(accessor.count * elementBytes);
+  const output = new Uint8Array(outputBuffer);
 
-  const stride = view.byteStride ?? componentBytes * components;
-  const offset = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
-  const byteLength = accessor.count * stride;
-
-  const raw = buffer.slice(offset, offset + byteLength);
-
-  // Interleaved data needs de-interleaving.
-  if (stride !== componentBytes * components) {
-    const source = new Uint8Array(buffer, offset, byteLength);
-    const output = new Uint8Array(accessor.count * components * componentBytes);
-    const elementSize = components * componentBytes;
-
-    for (let i = 0; i < accessor.count; i++) {
-      output.set(source.subarray(i * stride, i * stride + elementSize), i * elementSize);
+  // Dense base data. A sparse-only accessor starts as all zeros.
+  if (accessor.bufferView !== undefined) {
+    const { view, start, end } = viewRange(asset, accessor.bufferView);
+    const stride = view.byteStride ?? elementBytes;
+    const base = start + (accessor.byteOffset ?? 0);
+    const required = accessor.count === 0 ? 0 : (accessor.count - 1) * stride + elementBytes;
+    if (!Number.isSafeInteger(base) || stride < elementBytes || base < start || base + required > end) {
+      throw new Error(`Accessor ${accessorIndex} exceeds bufferView ${accessor.bufferView}`);
     }
-
-    return componentArray(accessor.componentType, output.buffer);
+    const source = new Uint8Array(asset.binary);
+    for (let i = 0; i < accessor.count; i++) {
+      const from = base + i * stride;
+      output.set(source.subarray(from, from + elementBytes), i * elementBytes);
+    }
+  } else if (!accessor.sparse) {
+    throw new Error(`Accessor ${accessorIndex} has neither bufferView nor sparse data`);
   }
 
-  return componentArray(accessor.componentType, raw);
+  if (accessor.sparse) {
+    const sparse = accessor.sparse;
+    if (!Number.isSafeInteger(sparse.count) || sparse.count < 0 || sparse.count > accessor.count) {
+      throw new Error(`Accessor ${accessorIndex} has invalid sparse count`);
+    }
+    const iv = viewRange(asset, sparse.indices.bufferView);
+    const indexBytes = componentSize(sparse.indices.componentType);
+    const indexOffset = iv.start + (sparse.indices.byteOffset ?? 0);
+    if (indexOffset < iv.start || indexOffset + sparse.count * indexBytes > iv.end) {
+      throw new Error(`Sparse indices for accessor ${accessorIndex} exceed bufferView`);
+    }
+    const vv = viewRange(asset, sparse.values.bufferView);
+    const valueOffset = vv.start + (sparse.values.byteOffset ?? 0);
+    if (valueOffset < vv.start || valueOffset + sparse.count * elementBytes > vv.end) {
+      throw new Error(`Sparse values for accessor ${accessorIndex} exceed bufferView`);
+    }
+    const dataView = new DataView(asset.binary);
+    let previous = -1;
+    for (let i = 0; i < sparse.count; i++) {
+      const target = readSparseIndex(dataView, indexOffset + i * indexBytes, sparse.indices.componentType);
+      if (target <= previous || target >= accessor.count) {
+        throw new Error(`Sparse indices for accessor ${accessorIndex} must be strictly increasing and in range`);
+      }
+      previous = target;
+      const from = valueOffset + i * elementBytes;
+      output.set(new Uint8Array(asset.binary, from, elementBytes), target * elementBytes);
+    }
+  }
+
+  return componentArray(accessor.componentType, outputBuffer);
 }

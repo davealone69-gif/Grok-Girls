@@ -11,19 +11,24 @@ export function parseGlb(data: ArrayBuffer): GltfAsset {
   if (view.getUint32(0, true) !== GLB_MAGIC) throw new Error('Invalid GLB magic');
   if (view.getUint32(4, true) !== GLB_VERSION) throw new Error('Unsupported GLB version');
   const length = view.getUint32(8, true);
-  if (length < 12 || length > data.byteLength) throw new Error('Invalid GLB length');
+  if (length !== data.byteLength) throw new Error('GLB declared length does not match file size');
 
   let offset = 12;
+  let chunkIndex = 0;
   let json: GltfJson | undefined;
   let binary = new ArrayBuffer(0);
-  while (offset + 8 <= length) {
+  let hasBinary = false;
+  while (offset < length) {
+    if (offset + 8 > length) throw new Error('Truncated GLB chunk header');
     const chunkLength = view.getUint32(offset, true);
     const chunkType = view.getUint32(offset + 4, true);
     offset += 8;
-    if (chunkLength > length - offset) throw new Error('GLB chunk exceeds container');
+    if (chunkLength % 4 !== 0 || chunkLength > length - offset) throw new Error('Invalid GLB chunk length');
+    if (chunkIndex === 0 && chunkType !== JSON_CHUNK) throw new Error('GLB JSON chunk must be first');
     const chunk = data.slice(offset, offset + chunkLength);
     offset += chunkLength;
     if (chunkType === JSON_CHUNK) {
+      if (json !== undefined || chunkIndex !== 0) throw new Error('GLB must contain exactly one leading JSON chunk');
       // GLB pads the JSON chunk with trailing NUL bytes to a 4-byte
       // boundary (spec 4.4.2) — stripping them is required, so the
       // control character in this pattern is deliberate.
@@ -31,10 +36,16 @@ export function parseGlb(data: ArrayBuffer): GltfAsset {
       const text = new TextDecoder().decode(chunk).replace(/\u0000+$/g, '').trim();
       json = JSON.parse(text) as GltfJson;
     } else if (chunkType === BIN_CHUNK) {
+      if (hasBinary || json === undefined) throw new Error('GLB must contain at most one BIN chunk after JSON');
       binary = chunk;
+      hasBinary = true;
     }
+    offset += 0;
+    chunkIndex++;
   }
+  if (offset !== length) throw new Error('GLB chunks do not consume declared container length');
   if (!json) throw new Error('GLB JSON chunk missing');
+  if (!hasBinary) throw new Error('GLB BIN chunk missing');
   const declared = json.buffers?.[0]?.byteLength;
   if (declared !== undefined && declared > binary.byteLength) throw new Error('GLB BIN chunk is shorter than declared buffer');
   return { json, binary };

@@ -6,11 +6,16 @@
 /* ------------------------------------------------------------------ */
 
 import { GltfAsset, GltfPrimitive } from './GltfTypes';
-import { readAccessor } from './GltfAccessor';
+import { readAccessor, toFloat32 } from './GltfAccessor';
 import { buildMorphBuffers, MorphBuffers } from './GltfMorphs';
 
 export interface GpuPrimitive {
   vao: WebGLVertexArrayObject;
+  vertexBuffers: WebGLBuffer[];
+  positionBuffer: WebGLBuffer | null;
+  normalBuffer: WebGLBuffer | null;
+  basePositions: Float32Array;
+  baseNormals: Float32Array;
 
   indexBuffer: WebGLBuffer | null;
 
@@ -52,6 +57,11 @@ export function uploadPrimitive(
     throw new Error('Unable to create VAO');
   }
   gl.bindVertexArray(vao);
+  const vertexBuffers: WebGLBuffer[] = [];
+  let positionBuffer: WebGLBuffer | null = null;
+  let normalBuffer: WebGLBuffer | null = null;
+  let basePositions = new Float32Array(0);
+  let baseNormals = new Float32Array(0);
 
   for (const attribute of ATTRIBUTES) {
     const accessorIndex = primitive.attributes[attribute.name];
@@ -67,6 +77,9 @@ export function uploadPrimitive(
 
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    vertexBuffers.push(buffer);
+    if (attribute.name === 'POSITION') { positionBuffer = buffer; basePositions = toFloat32(data); }
+    if (attribute.name === 'NORMAL') { normalBuffer = buffer; baseNormals = toFloat32(data); }
 
     const accessor = asset.json.accessors![accessorIndex];
     gl.enableVertexAttribArray(attribute.location);
@@ -102,6 +115,7 @@ export function uploadPrimitive(
     if (!buffer) throw new Error('Unable to create dummy joint buffer');
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, joints, gl.STATIC_DRAW);
+    vertexBuffers.push(buffer);
     gl.enableVertexAttribArray(4);
     gl.vertexAttribIPointer(4, 4, gl.UNSIGNED_BYTE, 0, 0);
   }
@@ -112,6 +126,7 @@ export function uploadPrimitive(
     if (!buffer) throw new Error('Unable to create dummy weight buffer');
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, weights, gl.STATIC_DRAW);
+    vertexBuffers.push(buffer);
     gl.enableVertexAttribArray(5);
     gl.vertexAttribPointer(5, 4, gl.FLOAT, false, 0, 0);
   }
@@ -144,6 +159,11 @@ export function uploadPrimitive(
 
   return {
     vao,
+    vertexBuffers,
+    positionBuffer,
+    normalBuffer,
+    basePositions,
+    baseNormals,
     indexBuffer,
     indexCount,
     indexType,

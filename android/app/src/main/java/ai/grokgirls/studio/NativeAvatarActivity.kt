@@ -108,11 +108,7 @@ class NativeAvatarActivity : Activity() {
             else -> 1.15f
         }
         renderer.iblIntensity = if (definition.augmentations != "None") 1.0f else 0.9f
-        renderer.cameraTarget = when (definition.age.lowercase()) {
-            "young adult" -> floatArrayOf(0f, 0.81f, 0f)
-            "mature" -> floatArrayOf(0f, 0.86f, 0f)
-            else -> floatArrayOf(0f, 0.85f, 0f)
-        }
+        renderer.focusFace()
         renderer.setExpression(definition.expression)
     }
 

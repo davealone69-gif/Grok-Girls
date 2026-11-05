@@ -6,6 +6,7 @@ import android.opengl.GLSurfaceView
 import android.util.Log
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
+import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -63,6 +64,7 @@ class HdAvatarRenderer(
     private var modelMatrix = Mat4.identity()
     private var fitScale = 1f
     private var fitOffset = floatArrayOf(0f, 0f, 0f)
+    private var faceTargetY = 1.5f
 
     // ---- demo chrome ------------------------------------------------------
     private var gridVao = 0
@@ -136,6 +138,14 @@ class HdAvatarRenderer(
 
     fun pointLightEnabled(enabled: Boolean) {
         lightCount = if (enabled) 4 else 3
+    }
+
+    /** Start on the model's front (+/- glTF Z is asset-defined) and frame its face. */
+    fun focusFace() {
+        cameraTarget = floatArrayOf(0f, faceTargetY, 0f)
+        cameraDistance = 0.62f
+        cameraYaw = PI.toFloat()
+        cameraPitch = 0.04f
     }
 
     /** Map the editor's named expression to the model's ARKit 52 blendshapes. */
@@ -330,8 +340,8 @@ class HdAvatarRenderer(
         val cx = (minX + maxX) * 0.5f
         val cz = (minZ + maxZ) * 0.5f
         fitOffset = floatArrayOf(-cx, -minY, -cz)
-        cameraTarget = floatArrayOf(0f, 0.825f, 0f)
-        cameraDistance = 2.6f
+        faceTargetY = fitOffset[1] + fitScale * (maxY - minOf(0.16f, height * 0.45f))
+        focusFace()
     }
 
     private fun updateModelMatrix() {

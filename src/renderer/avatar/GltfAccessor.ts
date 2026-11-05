@@ -7,6 +7,11 @@
 
 import { GltfAsset } from './GltfTypes';
 
+// Sparse morph accessors are shared by every material primitive in this asset.
+// Cache decoded views once per parsed GLB instead of expanding the same 52
+// targets twelve times.
+const decodedAccessorCache = new WeakMap<GltfAsset, Map<number, ArrayBufferView>>();
+
 function componentCount(type: string): number {
   switch (type) {
     case 'SCALAR':
@@ -96,6 +101,11 @@ function readSparseIndex(view: DataView, offset: number, componentType: number):
 }
 
 export function readAccessor(asset: GltfAsset, accessorIndex: number): ArrayBufferView {
+  const cache = decodedAccessorCache.get(asset) ?? new Map<number, ArrayBufferView>();
+  decodedAccessorCache.set(asset, cache);
+  const cached = cache.get(accessorIndex);
+  if (cached) return cached;
+
   const json = asset.json;
   const accessor = json.accessors?.[accessorIndex];
   if (!accessor) throw new Error(`Missing accessor ${accessorIndex}`);
@@ -156,5 +166,7 @@ export function readAccessor(asset: GltfAsset, accessorIndex: number): ArrayBuff
     }
   }
 
-  return componentArray(accessor.componentType, outputBuffer);
+  const decoded = componentArray(accessor.componentType, outputBuffer);
+  cache.set(accessorIndex, decoded);
+  return decoded;
 }

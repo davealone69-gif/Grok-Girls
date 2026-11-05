@@ -129,6 +129,13 @@ data class GltfDocument(
                                             List(array.length()) { i ->
                                                 array.getDouble(i).toFloat()
                                             }
+                                        },
+
+                                targetNames =
+                                    it.optJSONObject("extras")
+                                        ?.optJSONArray("targetNames")
+                                        ?.let { names ->
+                                            List(names.length()) { i -> names.getString(i) }
                                         }
                             )
                         },
@@ -320,7 +327,8 @@ data class GltfNode(
 
 data class GltfMesh(
     val primitives: List<GltfPrimitive>,
-    val weights: List<Float>? = null
+    val weights: List<Float>? = null,
+    val targetNames: List<String> = emptyList()
 )
 
 data class GltfPrimitive(

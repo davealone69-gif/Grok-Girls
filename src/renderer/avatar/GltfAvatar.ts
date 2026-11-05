@@ -98,6 +98,10 @@ export async function loadAvatarGlb(
 
   const morphWeights: Float32Array[] = primitives.map((p) => p.morphs?.weights ?? new Float32Array(64));
 
+  // Every primitive now owns compact vertex/morph arrays. Drop the full
+  // decoded accessor cache so the 52 dense morph expansions can be reclaimed.
+  clearAccessorCache(asset);
+
   return {
     gltf: asset,
     primitives,

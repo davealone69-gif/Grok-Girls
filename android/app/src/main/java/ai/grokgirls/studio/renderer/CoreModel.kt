@@ -45,6 +45,8 @@ data class GpuMesh(
     val morphTargets: List<MorphTarget>,
     /** Default morph weights from the glTF mesh (0.0 when unset). Animatable. */
     var morphWeights: FloatArray = FloatArray(0),
+    /** Names from mesh.extras.targetNames (e.g. ARKit 52 blendshape names). */
+    var morphTargetNames: List<String> = emptyList(),
     /** Per-mesh joint skinning matrices, recomputed per frame by the renderer. */
     var skinningMatrices: FloatArray? = null,
     /** Source glTF node. Used to preserve node and parent transforms at draw time. */

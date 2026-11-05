@@ -40,7 +40,6 @@ export function parseGlb(data: ArrayBuffer): GltfAsset {
       binary = chunk;
       hasBinary = true;
     }
-    offset += 0;
     chunkIndex++;
   }
   if (offset !== length) throw new Error('GLB chunks do not consume declared container length');

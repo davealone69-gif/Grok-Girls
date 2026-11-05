@@ -187,7 +187,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: web
     timeout-minutes: 45
-    continue-on-error: true
     permissions:
       contents: read
     steps:

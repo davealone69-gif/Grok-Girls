@@ -138,6 +138,45 @@ class HdAvatarRenderer(
         lightCount = if (enabled) 4 else 3
     }
 
+    /** Map the editor's named expression to the model's ARKit 52 blendshapes. */
+    fun setExpression(expression: String) {
+        val av = avatar ?: return
+        val key = expression.lowercase()
+        for (mesh in av.meshes) {
+            if (mesh.morphTargetNames.isEmpty() || mesh.morphTargets.isEmpty()) continue
+            val weights = FloatArray(mesh.morphTargets.size)
+            val index = mesh.morphTargetNames.withIndex().associate { it.value.lowercase() to it.index }
+            fun set(name: String, value: Float) {
+                index[name.lowercase()]?.let { i -> if (i in weights.indices) weights[i] = value }
+            }
+            when {
+                key.contains("happy") || key.contains("smil") || key.contains("joy") -> {
+                    set("mouthSmileLeft", 0.78f); set("mouthSmileRight", 0.78f)
+                    set("cheekSquintLeft", 0.28f); set("cheekSquintRight", 0.28f)
+                    set("eyeSquintLeft", 0.12f); set("eyeSquintRight", 0.12f)
+                }
+                key.contains("sad") || key.contains("frown") -> {
+                    set("mouthFrownLeft", 0.68f); set("mouthFrownRight", 0.68f)
+                    set("browInnerUp", 0.42f); set("browDownLeft", 0.18f); set("browDownRight", 0.18f)
+                }
+                key.contains("angry") || key.contains("stern") -> {
+                    set("browDownLeft", 0.62f); set("browDownRight", 0.62f)
+                    set("eyeSquintLeft", 0.34f); set("eyeSquintRight", 0.34f)
+                    set("mouthPressLeft", 0.22f); set("mouthPressRight", 0.22f)
+                }
+                key.contains("surpris") || key.contains("shock") -> {
+                    set("jawOpen", 0.42f); set("eyeWideLeft", 0.62f); set("eyeWideRight", 0.62f)
+                    set("browInnerUp", 0.48f); set("browOuterUpLeft", 0.26f); set("browOuterUpRight", 0.26f)
+                }
+                key.contains("wink") -> {
+                    set("eyeBlinkLeft", 0.9f); set("mouthSmileRight", 0.32f)
+                }
+                else -> Unit // neutral or unknown: all targets remain zero
+            }
+            mesh.morphWeights = weights
+        }
+    }
+
     // ====================================================================
     // GLSurfaceView.Renderer
     // ====================================================================

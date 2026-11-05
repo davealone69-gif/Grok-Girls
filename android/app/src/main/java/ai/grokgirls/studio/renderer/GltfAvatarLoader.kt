@@ -218,6 +218,7 @@ class GltfAvatarLoader(
                         binary
                     )
                 gpuMesh.nodeIndex = nodeIndex
+                gpuMesh.morphTargetNames = mesh?.targetNames ?: emptyList()
 
                 // glTF "mesh.weights": default morph weights for this mesh.
                 if (

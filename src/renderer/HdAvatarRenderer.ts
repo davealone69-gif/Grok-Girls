@@ -314,12 +314,8 @@ layout(location = 2) in vec2 aTexCoord;
 layout(location = 4) in uvec4 aBoneIndices;
 layout(location = 5) in vec4 aBoneWeights;
 const int MAX_BONES = 128;
-const int MAX_MORPHS = 64;
 uniform mat4 uBones[MAX_BONES];
 uniform bool uSkinned;
-uniform vec3 uMorphPosition[MAX_MORPHS];
-uniform vec3 uMorphNormal[MAX_MORPHS];
-uniform float uMorphWeight[MAX_MORPHS];
 uniform mat4 uModel;
 uniform mat4 uView;
 uniform mat4 uProjection;
@@ -329,17 +325,6 @@ out vec2 vTexCoord;
 void main() {
   vec3 position = aPosition;
   vec3 normal = aNormal;
-  float morphTotal = 0.0;
-  for (int i = 0; i < MAX_MORPHS; i++) {
-    morphTotal += uMorphWeight[i];
-  }
-  if (morphTotal > 0.0001) {
-    for (int i = 0; i < MAX_MORPHS; i++) {
-      position += uMorphPosition[i] * uMorphWeight[i];
-      normal += uMorphNormal[i] * uMorphWeight[i];
-    }
-    normal = normalize(normal);
-  }
   vec4 skinnedPosition = vec4(position, 1.0);
   vec3 skinnedNormal = normal;
   if (uSkinned) {
@@ -374,7 +359,7 @@ const UNIFORM_NAMES = [
   'uShadowMap', 'uLightViewProjection', 'uShadowBias', 'uShadowStrength',
   'uIrradianceMap', 'uPrefilteredMap', 'uBrdfLut',
   'uIblIntensity', 'uEnvironmentRotation', 'uExposure', 'uEmissiveFactor',
-  'uSkinned', 'uMorphPosition', 'uMorphNormal', 'uMorphWeight'
+  'uSkinned'
 ];
 
 function cacheUniforms(
@@ -477,8 +462,6 @@ function bindGlbMaterial(
 }
 
 /** Zero-filled morph slots for primitives without morph targets. */
-const ZERO_MORPH_POSITION = new Float32Array(64 * 3);
-const ZERO_MORPH_WEIGHT = new Float32Array(64);
 
 export class HdAvatarRenderer {
   private gl: WebGL2RenderingContext;
@@ -1039,17 +1022,59 @@ export class HdAvatarRenderer {
     this.glbAsset = asset;
   }
 
-  /** Overwrite morph weights on every morph-enabled GLB primitive. */
+  /**
+   * Apply glTF morph deltas to the actual per-vertex buffers. The previous
+   * implementation uploaded one averaged vector per target as a uniform,
+   * which moved every vertex by the same amount and was not a real morph.
+   */
   setGlbMorphWeights(weights: number[]): void {
     const asset = this.glbAsset;
     if (!asset) return;
+    const gl = this.gl;
     for (const prim of asset.primitives) {
-      if (!prim.morphs) continue;
-      const w = prim.morphs.weights;
-      const n = Math.min(weights.length, w.length);
-      for (let i = 0; i < n; i++) w[i] = weights[i];
-      for (let i = n; i < w.length; i++) w[i] = 0;
+      const morphs = prim.morphs;
+      if (!morphs) continue;
+      const count = Math.min(weights.length, morphs.weights.length, morphs.positionDeltas.length);
+      morphs.weights.fill(0);
+      for (let i = 0; i < count; i++) {
+        const value = Number(weights[i]);
+        morphs.weights[i] = Number.isFinite(value) ? value : 0;
+      }
+
+      const positions = prim.basePositions.slice();
+      const normals = prim.baseNormals.slice();
+      for (let target = 0; target < count; target++) {
+        const weight = morphs.weights[target];
+        if (Math.abs(weight) < 1e-7) continue;
+        const pd = morphs.positionDeltas[target];
+        if (pd) {
+          if (pd.length !== positions.length) throw new Error(`Morph target ${target} POSITION count mismatch`);
+          for (let i = 0; i < positions.length; i++) positions[i] += pd[i] * weight;
+        }
+        const nd = morphs.normalDeltas[target];
+        if (nd) {
+          if (nd.length !== normals.length) throw new Error(`Morph target ${target} NORMAL count mismatch`);
+          for (let i = 0; i < normals.length; i++) normals[i] += nd[i] * weight;
+        }
+      }
+      if (normals.length) {
+        for (let i = 0; i + 2 < normals.length; i += 3) {
+          const length = Math.hypot(normals[i], normals[i + 1], normals[i + 2]);
+          if (length > 1e-12) {
+            normals[i] /= length; normals[i + 1] /= length; normals[i + 2] /= length;
+          }
+        }
+      }
+      if (prim.positionBuffer) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, prim.positionBuffer);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, positions);
+      }
+      if (prim.normalBuffer && normals.length) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, prim.normalBuffer);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, normals);
+      }
     }
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
   }
 
   /** Uniform scale applied to the GLB model matrices (debug/tests). */
@@ -1080,11 +1105,12 @@ export class HdAvatarRenderer {
     // proves the morph DELTA DATA reached the GPU upload source.
     let morphMaxDelta = 0;
     for (const prim of asset.primitives) {
-      const d = prim.morphs?.positionDeltas;
-      if (!d) continue;
-      for (let i = 0; i < d.length; i++) {
-        const a = Math.abs(d[i]);
-        if (a > morphMaxDelta) morphMaxDelta = a;
+      for (const d of prim.morphs?.positionDeltas ?? []) {
+        if (!d) continue;
+        for (let i = 0; i < d.length; i++) {
+          const a = Math.abs(d[i]);
+          if (a > morphMaxDelta) morphMaxDelta = a;
+        }
       }
     }
     return {
@@ -1118,21 +1144,6 @@ export class HdAvatarRenderer {
       // in headless CI misrenders the uSkinned=false branch when the
       // shader contains dynamic uBones[] indexing.
       gl.uniform1i(u.uSkinned, 1);
-
-      // GPU morph deltas (milestone 8 -> milestone 6 face system).
-      // The shader declares MAX_MORPHS (64) per-slot arrays — upload only
-      // the first 64 deltas (positionDeltas holds verts*MAX_MORPHS*3).
-      if (prim.morphs) {
-        const pMax = prim.morphs.positionDeltas.length > 192 ? prim.morphs.positionDeltas.subarray(0, 192) : prim.morphs.positionDeltas;
-        const nMax = prim.morphs.normalDeltas.length > 192 ? prim.morphs.normalDeltas.subarray(0, 192) : prim.morphs.normalDeltas;
-        if (u.uMorphPosition) gl.uniform3fv(u.uMorphPosition, pMax);
-        if (u.uMorphNormal) gl.uniform3fv(u.uMorphNormal, nMax);
-        if (u.uMorphWeight) gl.uniform1fv(u.uMorphWeight, prim.morphs.weights);
-      } else {
-        if (u.uMorphPosition) gl.uniform3fv(u.uMorphPosition, ZERO_MORPH_POSITION);
-        if (u.uMorphNormal) gl.uniform3fv(u.uMorphNormal, ZERO_MORPH_POSITION);
-        if (u.uMorphWeight) gl.uniform1fv(u.uMorphWeight, ZERO_MORPH_WEIGHT);
-      }
 
       const material = asset.materials[prim.materialIndex] ?? asset.materials[0];
       if (material) bindGlbMaterial(gl, u, material);

@@ -1020,6 +1020,17 @@ export class HdAvatarRenderer {
       disposeAvatarAsset(this.gl, this.glbAsset);
     }
     this.glbAsset = asset;
+    // A GLB is a complete avatar. Do not draw the procedural sphere,
+    // placeholder eyes or hair over it; that creates doubled facial parts.
+    this.avatarVisible = false;
+  }
+
+  clearGlb(): void {
+    if (this.glbAsset) {
+      disposeAvatarAsset(this.gl, this.glbAsset);
+      this.glbAsset = null;
+    }
+    this.avatarVisible = true;
   }
 
   /**

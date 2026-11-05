@@ -9,6 +9,7 @@ import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
+import android.util.Log
 import ai.grokgirls.studio.renderer.GltfAvatarLoader
 import ai.grokgirls.studio.renderer.HdAvatarRenderer
 
@@ -70,7 +71,7 @@ class NativeAvatarActivity : Activity() {
         root.addView(glView, FrameLayout.LayoutParams(-1, -1))
 
         val label = TextView(this).apply {
-            text = if (filePath != null) "HUNYUAN3D GLB · GENERATED" else "HUNYUAN3D GLB · TEST ASSET"
+            text = if (filePath != null) "GROK FACE · IMPORTED GLB" else "GROK FACE · DEFAULT ASSET"
             textSize = 11f
             setTextColor(0xffd9c7ff.toInt())
             setBackgroundColor(0xaa08080f.toInt())
@@ -80,13 +81,23 @@ class NativeAvatarActivity : Activity() {
         setContentView(root)
 
         glView.queueEvent {
-            val loaded = if (!filePath.isNullOrBlank()) {
-                GltfAvatarLoader(this@NativeAvatarActivity).loadFromFile(filePath)
-            } else {
-                GltfAvatarLoader(this@NativeAvatarActivity).loadFromAssets(asset)
+            try {
+                val loader = GltfAvatarLoader(this@NativeAvatarActivity)
+                val loaded = if (!filePath.isNullOrBlank()) {
+                    loader.loadFromFile(filePath)
+                } else {
+                    loader.loadFromAssets(asset)
+                }
+                renderer.setAvatar(loaded)
+                applyDefinition(definition)
+                runOnUiThread { label.text = "GROK FACE · MODEL LOADED" }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Avatar GLB load failed", t)
+                runOnUiThread {
+                    label.text = "MODEL LOAD FAILED · ${t.message ?: t.javaClass.simpleName}"
+                    label.setTextColor(0xffff7777.toInt())
+                }
             }
-            renderer.setAvatar(loaded)
-            applyDefinition(definition)
         }
     }
 
@@ -141,6 +152,7 @@ class NativeAvatarActivity : Activity() {
     }
 
     companion object {
+        private const val TAG = "GrokFaceViewport"
         const val EXTRA_AVATAR = "avatar"
         const val EXTRA_FILE = "file"
         const val EXTRA_DEFINITION = "definition"

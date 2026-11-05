@@ -4,7 +4,7 @@
 /* ------------------------------------------------------------------ */
 
 import { GltfAsset, GltfPrimitive } from './GltfTypes';
-import { readAccessor, toFloat32 } from './GltfAccessor';
+import { readFloatVec3AccessorCompact } from './GltfAccessor';
 
 export interface GltfMorph {
   position?: number;
@@ -45,20 +45,27 @@ export function buildMorphBuffers(
   }
   const positionDeltas: Array<Float32Array | null> = [];
   const normalDeltas: Array<Float32Array | null> = [];
-  const compact = (data: Float32Array | null): Float32Array | null => {
-    if (!data || !sourceVertices) return data;
-    if (data.length % 3 !== 0) throw new Error('Morph accessor is not VEC3');
-    const out = new Float32Array(sourceVertices.length * 3);
+  const sourceCount = asset.json.accessors?.[primitive.attributes.POSITION]?.count ?? 0;
+  const sourceToCompact = new Int32Array(sourceCount);
+  sourceToCompact.fill(-1);
+  if (sourceVertices) {
     for (let i = 0; i < sourceVertices.length; i++) {
-      const from = sourceVertices[i] * 3;
-      if (from + 3 > data.length) throw new Error('Morph accessor vertex index is out of range');
-      out.set(data.subarray(from, from + 3), i * 3);
+      const source = sourceVertices[i];
+      if (!Number.isInteger(source) || source < 0 || source >= sourceCount) {
+        throw new Error('Morph source vertex index is out of range');
+      }
+      sourceToCompact[source] = i;
     }
-    return out;
-  };
+  } else {
+    for (let i = 0; i < sourceCount; i++) sourceToCompact[i] = i;
+  }
   for (const target of primitive.targets) {
-    positionDeltas.push(compact(target.POSITION === undefined ? null : toFloat32(readAccessor(asset, target.POSITION))));
-    normalDeltas.push(compact(target.NORMAL === undefined ? null : toFloat32(readAccessor(asset, target.NORMAL))));
+    positionDeltas.push(target.POSITION === undefined
+      ? null
+      : readFloatVec3AccessorCompact(asset, target.POSITION, sourceToCompact, sourceVertices?.length ?? sourceCount));
+    normalDeltas.push(target.NORMAL === undefined
+      ? null
+      : readFloatVec3AccessorCompact(asset, target.NORMAL, sourceToCompact, sourceVertices?.length ?? sourceCount));
   }
   return {
     positionDeltas,

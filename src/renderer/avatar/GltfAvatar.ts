@@ -7,6 +7,7 @@
 /* ------------------------------------------------------------------ */
 
 import { parseGlb } from './GlbLoader';
+import { clearAccessorCache } from './GltfAccessor';
 import { GltfAsset, GltfNode, GltfSkin } from './GltfTypes';
 import { uploadPrimitive, GpuPrimitive } from './GltfMesh';
 import { uploadGltfTexture } from './GltfImages';

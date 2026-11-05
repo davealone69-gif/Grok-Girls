@@ -57,6 +57,11 @@ export interface GltfAccessor {
   type: 'SCALAR' | 'VEC2' | 'VEC3' | 'VEC4' | 'MAT2' | 'MAT3' | 'MAT4';
   min?: number[];
   max?: number[];
+  sparse?: {
+    count: number;
+    indices: { bufferView: number; byteOffset?: number; componentType: 5121 | 5123 | 5125 };
+    values: { bufferView: number; byteOffset?: number };
+  };
 }
 
 export interface GltfBufferView {

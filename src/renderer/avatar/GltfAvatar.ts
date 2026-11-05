@@ -7,6 +7,7 @@
 /* ------------------------------------------------------------------ */
 
 import { parseGlb } from './GlbLoader';
+import { clearAccessorCache } from './GltfAccessor';
 import { GltfAsset, GltfNode, GltfSkin } from './GltfTypes';
 import { uploadPrimitive, GpuPrimitive } from './GltfMesh';
 import { uploadGltfTexture } from './GltfImages';
@@ -98,6 +99,10 @@ export async function loadAvatarGlb(
 
   const morphWeights: Float32Array[] = primitives.map((p) => p.morphs?.weights ?? new Float32Array(64));
 
+  // Every primitive now owns compact vertex/morph arrays. Drop the full
+  // decoded accessor cache so the 52 dense morph expansions can be reclaimed.
+  clearAccessorCache(asset);
+
   return {
     gltf: asset,
     primitives,
@@ -114,6 +119,7 @@ export async function loadAvatarGlb(
 export function disposeAvatarAsset(gl: WebGL2RenderingContext, asset: AvatarAsset): void {
   for (const prim of asset.primitives) {
     gl.deleteVertexArray(prim.vao);
+    for (const buffer of prim.vertexBuffers) gl.deleteBuffer(buffer);
     if (prim.indexBuffer) gl.deleteBuffer(prim.indexBuffer);
   }
   const deleted = new Set<WebGLTexture>();

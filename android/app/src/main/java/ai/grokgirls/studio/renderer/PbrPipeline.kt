@@ -74,6 +74,10 @@ object PbrPipeline {
         val indexCount: Int,
         val hasIndices: Boolean,
         val morphCount: Int,
+        val positionBuffer: Int,
+        val normalBuffer: Int,
+        val tangentBuffer: Int,
+        var lastMorphWeights: FloatArray = FloatArray(0),
         val skinned: Boolean,
         val alphaMode: String,
         val doubleSided: Boolean,
@@ -91,8 +95,9 @@ object PbrPipeline {
     private const val ATTR_TANGENT = 3
     private const val ATTR_JOINTS = 4
     private const val ATTR_WEIGHTS = 5
-    private const val ATTR_MORPH_BASE = 6
-    private const val MAX_MORPH = 3
+    // Morphs are applied to dynamic vertex buffers on CPU. This supports
+    // all glTF targets without exhausting GLES vertex attribute slots.
+    private const val MAX_MORPH = 0
 
     /** Discards GL-context-owned state without issuing deletes against a lost context. */
     fun resetForContext() {
@@ -190,6 +195,7 @@ object PbrPipeline {
         jointCount: Int,
         blendPass: Boolean
     ) {
+        updateMorphBuffers(gpu, mesh)
         val program = gpu.program
         GLES30.glUseProgram(program)
         val l = gpu.locs
@@ -205,13 +211,6 @@ object PbrPipeline {
             if (m != null && m.size >= jointCount * 16) {
                 GLES30.glUniformMatrix4fv(l.uJointMatrices, jointCount, false, m, 0)
             }
-        }
-
-        if (gpu.morphCount > 0 && l.uMorphWeights >= 0) {
-            val w = FloatArray(8)
-            val mw = mesh.morphWeights
-            for (i in 0 until minOf(8, mw.size)) w[i] = mw[i]
-            GLES30.glUniform1fv(l.uMorphWeights, 8, w, 0)
         }
 
         val mat = mesh.material
@@ -300,6 +299,88 @@ object PbrPipeline {
         }
     }
 
+    private fun updateMorphBuffers(gpu: MeshGpu, mesh: GpuMesh) {
+        if (mesh.morphTargets.isEmpty() || mesh.morphWeights.isEmpty()) return
+        val weights = mesh.morphWeights
+        var changed = gpu.lastMorphWeights.size != weights.size
+        if (!changed) {
+            for (i in weights.indices) {
+                if (gpu.lastMorphWeights[i] != weights[i]) { changed = true; break }
+            }
+        }
+        if (!changed) return
+
+        val positions = mesh.positions.copyOf()
+        var hasPositionDelta = false
+        var hasNormalDelta = false
+        var hasTangentDelta = false
+        val normals = mesh.normals.copyOf()
+        val tangents = mesh.tangents?.copyOf()
+
+        for (i in 0 until minOf(mesh.morphTargets.size, weights.size)) {
+            val weight = weights[i]
+            if (!weight.isFinite() || kotlin.math.abs(weight) < 1e-7f) continue
+            val target = mesh.morphTargets[i]
+            target.positionDeltas?.let { delta ->
+                require(delta.size == positions.size) { "Morph POSITION accessor size mismatch at target $i" }
+                for (v in positions.indices) positions[v] += delta[v] * weight
+                hasPositionDelta = true
+            }
+            target.normalDeltas?.let { delta ->
+                require(delta.size == normals.size) { "Morph NORMAL accessor size mismatch at target $i" }
+                for (v in normals.indices) normals[v] += delta[v] * weight
+                hasNormalDelta = true
+            }
+            target.tangentDeltas?.let { delta ->
+                if (tangents != null) {
+                    require(delta.size == mesh.positions.size) {
+                        "Morph TANGENT accessor size mismatch at target $i"
+                    }
+                    val vertexCount = tangents.size / 4
+                    for (vertex in 0 until vertexCount) {
+                        val src = vertex * 3
+                        val dst = vertex * 4
+                        tangents[dst] += delta[src] * weight
+                        tangents[dst + 1] += delta[src + 1] * weight
+                        tangents[dst + 2] += delta[src + 2] * weight
+                    }
+                    hasTangentDelta = true
+                }
+            }
+        }
+
+        if (hasPositionDelta && !hasNormalDelta) {
+            val generated = MeshGeometry.generateNormals(positions, mesh.indices)
+            if (generated.size == normals.size) System.arraycopy(generated, 0, normals, 0, normals.size)
+        } else if (hasNormalDelta) {
+            for (i in normals.indices step 3) {
+                val length = kotlin.math.sqrt(normals[i] * normals[i] + normals[i + 1] * normals[i + 1] + normals[i + 2] * normals[i + 2])
+                if (length > 1e-12f) {
+                    normals[i] /= length; normals[i + 1] /= length; normals[i + 2] /= length
+                }
+            }
+        }
+        if (hasPositionDelta && tangents != null && !hasTangentDelta && mesh.uvs.isNotEmpty()) {
+            val generated = MeshGeometry.generateTangents(positions, normals, mesh.uvs, mesh.indices)
+            if (generated.size == tangents.size) System.arraycopy(generated, 0, tangents, 0, tangents.size)
+        }
+
+        if (hasPositionDelta && gpu.positionBuffer != 0) {
+            GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, gpu.positionBuffer)
+            GLES30.glBufferSubData(GLES30.GL_ARRAY_BUFFER, 0, positions.size * 4, floatBuffer(positions))
+        }
+        if ((hasPositionDelta || hasNormalDelta) && gpu.normalBuffer != 0) {
+            GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, gpu.normalBuffer)
+            GLES30.glBufferSubData(GLES30.GL_ARRAY_BUFFER, 0, normals.size * 4, floatBuffer(normals))
+        }
+        if ((hasPositionDelta || hasTangentDelta) && tangents != null && gpu.tangentBuffer != 0) {
+            GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, gpu.tangentBuffer)
+            GLES30.glBufferSubData(GLES30.GL_ARRAY_BUFFER, 0, tangents.size * 4, floatBuffer(tangents))
+        }
+        GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, 0)
+        gpu.lastMorphWeights = weights.copyOf()
+    }
+
     private fun buildMeshGpu(
         mesh: GpuMesh,
         jointCount: Int
@@ -347,10 +428,10 @@ object PbrPipeline {
             data: FloatArray,
             components: Int,
             enabled: Boolean
-        ) {
+        ): Int {
             if (!enabled || data.isEmpty()) {
                 GLES30.glDisableVertexAttribArray(location)
-                return
+                return 0
             }
             val vbo = intArrayOf(0)
             GLES30.glGenBuffers(1, vbo, 0)
@@ -364,12 +445,13 @@ object PbrPipeline {
             GLES30.glEnableVertexAttribArray(location)
             GLES30.glVertexAttribPointer(location, components, GLES30.GL_FLOAT, false, 0, 0)
             buffers += vbo[0]
+            return vbo[0]
         }
 
-        uploadFloatAttribute(ATTR_POSITION, mesh.positions, 3, true)
-        uploadFloatAttribute(ATTR_NORMAL, mesh.normals, 3, true)
+        val positionBuffer = uploadFloatAttribute(ATTR_POSITION, mesh.positions, 3, true)
+        val normalBuffer = uploadFloatAttribute(ATTR_NORMAL, mesh.normals, 3, true)
         uploadFloatAttribute(ATTR_UV, mesh.uvs, 2, true)
-        uploadFloatAttribute(ATTR_TANGENT, mesh.tangents ?: FloatArray(0), 4, hasTangent)
+        val tangentBuffer = uploadFloatAttribute(ATTR_TANGENT, mesh.tangents ?: FloatArray(0), 4, hasTangent)
 
         if (skinned) {
             // joints as normalized=false unsigned bytes
@@ -393,29 +475,6 @@ object PbrPipeline {
         } else {
             GLES30.glDisableVertexAttribArray(ATTR_JOINTS)
             GLES30.glDisableVertexAttribArray(ATTR_WEIGHTS)
-        }
-
-        // morph target attributes (constant (0,0,0) when a delta is absent)
-        for (i in 0 until morphCount) {
-            val target = mesh.morphTargets[i]
-            uploadFloatAttribute(
-                ATTR_MORPH_BASE + i,
-                target.positionDeltas ?: FloatArray(0),
-                3,
-                target.positionDeltas != null
-            )
-            uploadFloatAttribute(
-                ATTR_MORPH_BASE + MAX_MORPH + i,
-                target.normalDeltas ?: FloatArray(0),
-                3,
-                target.normalDeltas != null
-            )
-            uploadFloatAttribute(
-                ATTR_MORPH_BASE + MAX_MORPH * 2 + i,
-                target.tangentDeltas ?: FloatArray(0),
-                3,
-                target.tangentDeltas != null
-            )
         }
 
         val indexBuffer: Int
@@ -448,6 +507,9 @@ object PbrPipeline {
             indexCount = indexCount,
             hasIndices = hasIndices,
             morphCount = morphCount,
+            positionBuffer = positionBuffer,
+            normalBuffer = normalBuffer,
+            tangentBuffer = tangentBuffer,
             skinned = skinned,
             alphaMode = mat.alphaMode,
             doubleSided = mat.doubleSided,

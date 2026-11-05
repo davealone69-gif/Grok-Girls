@@ -96,7 +96,7 @@ export async function loadGltfAvatar(gl: WebGL2RenderingContext, data: ArrayBuff
       for (let pi = 0; pi < mesh.primitives.length; pi++) {
         const source = mesh.primitives[pi];
         if ((source.mode ?? 4) !== 4) throw new Error('Only TRIANGLES primitives are supported by the HD avatar path');
-        const primitive = uploadGltfPrimitive(gl, asset, source);
+        const primitive = uploadGltfPrimitive(gl, asset, source, skinIndex, skinIndex === null ? 0 : skinOffsets[skinIndex]);
         primitive.skinOffset = skinIndex === null ? 0 : skinOffsets[skinIndex];
         primitives.push({ nodeIndex: ni, meshIndex: node.mesh, primitiveIndex: pi, skinIndex, primitive });
       }

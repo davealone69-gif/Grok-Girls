@@ -11,29 +11,60 @@ def make_glb():
     normal = struct.pack('<9f', 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0)
     uv = struct.pack('<6f', 0.0, 1.0, 1.0, 1.0, 0.5, 0.0)
     indices = struct.pack('<3H', 0, 1, 2)
-    chunks, offsets, cursor = [pos, normal, uv, indices], [], 0
+    sparse_indices = struct.pack('<H', 1)
+    sparse_values = struct.pack('<3f', 0.1, 0.0, 0.0)
+    chunks, offsets, cursor = [pos, normal, uv, indices, sparse_indices, sparse_values], [], 0
     for chunk in chunks:
         cursor = (cursor + 3) & ~3
         offsets.append(cursor)
         cursor += len(chunk)
     blob = bytearray(cursor)
-    for off, chunk in zip(offsets, chunks): blob[off:off + len(chunk)] = chunk
+    for off, chunk in zip(offsets, chunks):
+        blob[off:off + len(chunk)] = chunk
+
+    target_names = [
+        'browDownLeft', 'browDownRight', 'browInnerUp', 'browOuterUpLeft', 'browOuterUpRight',
+        'cheekPuff', 'cheekSquintLeft', 'cheekSquintRight', 'eyeBlinkLeft', 'eyeBlinkRight',
+        'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight',
+        'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight',
+        'eyeSquintLeft', 'eyeSquintRight', 'eyeWideLeft', 'eyeWideRight', 'jawForward',
+        'jawLeft', 'jawOpen', 'jawRight', 'mouthClose', 'mouthDimpleLeft', 'mouthDimpleRight',
+        'mouthFrownLeft', 'mouthFrownRight', 'mouthFunnel', 'mouthLeft', 'mouthLowerDownLeft',
+        'mouthLowerDownRight', 'mouthPressLeft', 'mouthPressRight', 'mouthPucker', 'mouthRight',
+        'mouthRollLower', 'mouthRollUpper', 'mouthShrugLower', 'mouthShrugUpper',
+        'mouthSmileLeft', 'mouthSmileRight', 'mouthStretchLeft', 'mouthStretchRight',
+        'mouthUpperUpLeft', 'mouthUpperUpRight', 'noseSneerLeft', 'noseSneerRight', 'tongueOut'
+    ]
     doc = {
-        'asset': {'version': '2.0', 'generator': 'Grok-Girls CI GLB gate'}, 'scene': 0,
+        'asset': {'version': '2.0', 'generator': 'Grok-Girls CI sparse GLB gate'}, 'scene': 0,
         'scenes': [{'nodes': [0]}], 'nodes': [{'mesh': 0}],
-        'meshes': [{'primitives': [{'attributes': {'POSITION': 0, 'NORMAL': 1, 'TEXCOORD_0': 2}, 'indices': 3}]}],
+        'meshes': [{
+            'weights': [0.0] * 52,
+            'extras': {'targetNames': target_names},
+            'primitives': [{
+                'attributes': {'POSITION': 0, 'NORMAL': 1, 'TEXCOORD_0': 2},
+                'indices': 3,
+                'targets': [{'POSITION': 4} for _ in range(52)]
+            }]
+        }],
         'buffers': [{'byteLength': len(blob)}],
         'bufferViews': [
             {'buffer': 0, 'byteOffset': offsets[0], 'byteLength': len(pos)},
             {'buffer': 0, 'byteOffset': offsets[1], 'byteLength': len(normal)},
             {'buffer': 0, 'byteOffset': offsets[2], 'byteLength': len(uv)},
             {'buffer': 0, 'byteOffset': offsets[3], 'byteLength': len(indices)},
+            {'buffer': 0, 'byteOffset': offsets[4], 'byteLength': len(sparse_indices)},
+            {'buffer': 0, 'byteOffset': offsets[5], 'byteLength': len(sparse_values)}
         ],
         'accessors': [
             {'bufferView': 0, 'componentType': 5126, 'count': 3, 'type': 'VEC3'},
             {'bufferView': 1, 'componentType': 5126, 'count': 3, 'type': 'VEC3'},
             {'bufferView': 2, 'componentType': 5126, 'count': 3, 'type': 'VEC2'},
             {'bufferView': 3, 'componentType': 5123, 'count': 3, 'type': 'SCALAR'},
+            {'componentType': 5126, 'count': 3, 'type': 'VEC3',
+             'sparse': {'count': 1,
+                        'indices': {'bufferView': 4, 'componentType': 5123},
+                        'values': {'bufferView': 5}}}
         ],
     }
     raw_json = json.dumps(doc, separators=(',', ':')).encode()
@@ -62,20 +93,30 @@ def main():
           if (!d?.GltfHdPbrRenderer || !d?.createRenderTarget || !d?.getRenderTargetCapabilities) return {ok:false, error:'GLB HD PBR diagnostics missing'};
           const caps1 = d.getRenderTargetCapabilities(gl), caps2 = d.getRenderTargetCapabilities(gl);
           const target = d.createRenderTarget(gl, {width:64, height:64, color:'rgba16f', depth:'depth32f'});
+          const productionAsset = await d.loadAvatarGlb(gl, data);
+          const productionMorphCount = productionAsset.primitives[0]?.morphs?.positionDeltas.length ?? 0;
+          const sparseDelta = productionAsset.primitives[0]?.morphs?.positionDeltas[0]?.[3] ?? 0;
+          const productionVertexCount = productionAsset.primitives[0]?.vertexCount ?? 0;
+          d.disposeAvatarAsset(gl, productionAsset);
           const renderer = new d.GltfHdPbrRenderer(gl, {exposure:1});
           await renderer.load(data);
           renderer.render(256, 256);
           const px = new Uint8Array(4); gl.readPixels(128, 128, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
           const primitiveCount = renderer.primitiveCount, loaded = renderer.loaded;
+          const morphTargetCount = renderer.morphTargetCount;
           gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
           const complete = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
           renderer.destroy(); target.destroy();
-          return {ok:true, loaded, primitiveCount, capsStable:JSON.stringify(caps1)===JSON.stringify(caps2), selectedColor:target.colorInternal, selectedDepth:target.depthInternal, complete, center:[...px]};
+          return {ok:true, loaded, primitiveCount, morphTargetCount, productionMorphCount, sparseDelta, productionVertexCount, capsStable:JSON.stringify(caps1)===JSON.stringify(caps2), selectedColor:target.colorInternal, selectedDepth:target.depthInternal, complete, center:[...px]};
         }''', encoded)
         browser.close()
     assert result.get('ok'), result
     assert result.get('loaded') is True, result
     assert result.get('primitiveCount') == 1, result
+    assert result.get('morphTargetCount') == 52, result
+    assert result.get('productionMorphCount') == 52, result
+    assert abs(result.get('sparseDelta', 0) - 0.1) < 1e-6, result
+    assert result.get('productionVertexCount') == 3, result
     assert result.get('capsStable'), result
     assert max(result.get('center', [0, 0, 0, 0])[:3]) > 0, result
     print(json.dumps(result))

@@ -129,6 +129,13 @@ data class GltfDocument(
                                             List(array.length()) { i ->
                                                 array.getDouble(i).toFloat()
                                             }
+                                        },
+
+                                targetNames =
+                                    it.optJSONObject("extras")
+                                        ?.optJSONArray("targetNames")
+                                        ?.let { names ->
+                                            List(names.length()) { i -> names.getString(i) }
                                         }
                             )
                         },
@@ -320,7 +327,8 @@ data class GltfNode(
 
 data class GltfMesh(
     val primitives: List<GltfPrimitive>,
-    val weights: List<Float>? = null
+    val weights: List<Float>? = null,
+    val targetNames: List<String> = emptyList()
 )
 
 data class GltfPrimitive(
@@ -398,6 +406,23 @@ data class GltfPrimitive(
     }
 }
 
+data class GltfSparseIndices(
+    val bufferView: Int,
+    val byteOffset: Int?,
+    val componentType: Int
+)
+
+data class GltfSparseValues(
+    val bufferView: Int,
+    val byteOffset: Int?
+)
+
+data class GltfSparse(
+    val count: Int,
+    val indices: GltfSparseIndices,
+    val values: GltfSparseValues
+)
+
 data class GltfAccessor(
     val bufferView: Int?,
     val byteOffset: Int?,
@@ -405,7 +430,8 @@ data class GltfAccessor(
     val count: Int,
     val type: String,
     val normalized: Boolean,
-    val sparse: Boolean = false
+    val sparse: Boolean = false,
+    val sparseData: GltfSparse? = null
 ) {
 
     fun componentCount(): Int =
@@ -482,7 +508,25 @@ data class GltfAccessor(
                     ),
 
                 sparse =
-                    json.has("sparse")
+                    json.has("sparse"),
+
+                sparseData =
+                    json.optJSONObject("sparse")?.let { sparseJson ->
+                        val indicesJson = sparseJson.getJSONObject("indices")
+                        val valuesJson = sparseJson.getJSONObject("values")
+                        GltfSparse(
+                            count = sparseJson.getInt("count"),
+                            indices = GltfSparseIndices(
+                                bufferView = indicesJson.getInt("bufferView"),
+                                byteOffset = if (indicesJson.has("byteOffset")) indicesJson.getInt("byteOffset") else null,
+                                componentType = indicesJson.getInt("componentType")
+                            ),
+                            values = GltfSparseValues(
+                                bufferView = valuesJson.getInt("bufferView"),
+                                byteOffset = if (valuesJson.has("byteOffset")) valuesJson.getInt("byteOffset") else null
+                            )
+                        )
+                    }
             )
     }
 }

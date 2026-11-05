@@ -1,17 +1,20 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
 interface AvatarStudioPlugin {
+  pickGlb(): Promise<{ file: string; bytes: number }>;
   openViewport(options?: { avatar?: string; file?: string; definition?: string }): Promise<void>;
   renderImage(options?: {
     avatar?: string;
     definition?: string;
     width?: number;
     height?: number;
+    file?: string;
   }): Promise<{ dataUrl: string; width: number; height: number }>;
 }
 
 const AvatarStudio = registerPlugin<AvatarStudioPlugin>('AvatarStudio');
 const DEFAULT_AVATAR = 'avatars/hunyuan-test.glb';
+let lastImportedGlb: string | null = null;
 
 type WindowWithGrokBridge = Window & {
   __grokGirlsVm?: { get?: () => Record<string, string> };
@@ -28,9 +31,11 @@ function currentDefinition(): Record<string, string> {
 
 export async function openNativeHdAvatar(definition: object = currentDefinition(), file?: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
+  const selectedFile = file ?? lastImportedGlb ?? (await AvatarStudio.pickGlb()).file;
+  lastImportedGlb = selectedFile;
   await AvatarStudio.openViewport({
     avatar: DEFAULT_AVATAR,
-    file,
+    file: selectedFile,
     definition: JSON.stringify(definition)
   });
 }
@@ -46,6 +51,7 @@ export async function renderNativeHdAvatar(
   const result = await AvatarStudio.renderImage({
     avatar: DEFAULT_AVATAR,
     definition: JSON.stringify(definition),
+    file: lastImportedGlb ?? undefined,
     width,
     height
   });
@@ -77,7 +83,7 @@ function installNativeActions(): void {
         try {
           const definition = currentDefinition();
           await openNativeHdAvatar(definition);
-          window.dispatchEvent(new CustomEvent('grok-native-hd-complete', { detail: { avatar: DEFAULT_AVATAR } }));
+          window.dispatchEvent(new CustomEvent('grok-native-hd-complete', { detail: { avatar: DEFAULT_AVATAR, file: lastImportedGlb } }));
         } catch (error) {
           window.dispatchEvent(
             new CustomEvent('grok-native-hd-error', {

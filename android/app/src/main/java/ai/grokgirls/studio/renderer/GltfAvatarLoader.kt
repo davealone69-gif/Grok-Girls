@@ -279,14 +279,6 @@ class GltfAvatarLoader(
             tangents = MeshGeometry.generateTangents(sourcePositions, normals, sourceUvs, sourceIndices)
         }
 
-        val morphTargets = primitive.targets.map { target ->
-            MorphTarget(
-                positionDeltas = target["POSITION"]?.let { readFloatAttribute(it, document, binary, 3) },
-                normalDeltas = target["NORMAL"]?.let { readFloatAttribute(it, document, binary, 3) },
-                tangentDeltas = target["TANGENT"]?.let { readFloatAttribute(it, document, binary, 3) }
-            )
-        }
-
         // The exporter stores one full-body vertex stream and lets every
         // material primitive index into it. Uploading that whole stream for
         // every material multiplied CPU/GPU memory by 12. Compact each
@@ -320,11 +312,20 @@ class GltfAvatarLoader(
             return compact
         }
         val compactIndices = IntArray(sourceIndices.size) { remap[sourceIndices[it]] }
-        val compactMorphs = morphTargets.map { target ->
+        // Morph accessors in AvatarForge GLBs are sparse-only. Decode them
+        // straight into this material's compact vertex stream instead of
+        // expanding 52 x 299k dense arrays and then copying them 12 times.
+        val compactMorphs = primitive.targets.map { target ->
             MorphTarget(
-                positionDeltas = compactFloat(target.positionDeltas, 3),
-                normalDeltas = compactFloat(target.normalDeltas, 3),
-                tangentDeltas = compactFloat(target.tangentDeltas, 3)
+                positionDeltas = target["POSITION"]?.let {
+                    readCompactMorphAttribute(it, document, binary, remap, sourceVertexForCompact.size)
+                },
+                normalDeltas = target["NORMAL"]?.let {
+                    readCompactMorphAttribute(it, document, binary, remap, sourceVertexForCompact.size)
+                },
+                tangentDeltas = target["TANGENT"]?.let {
+                    readCompactMorphAttribute(it, document, binary, remap, sourceVertexForCompact.size)
+                }
             )
         }
 
@@ -359,6 +360,79 @@ class GltfAvatarLoader(
             "glTF bufferView $viewIndex exceeds its buffer"
         }
         return view to source
+    }
+
+    /**
+     * Decode a VEC3 morph accessor directly into a material's compact vertex
+     * stream. Sparse source vertices not referenced by this primitive are
+     * discarded while decoding, keeping peak heap use bounded.
+     */
+    private fun readCompactMorphAttribute(
+        accessorIndex: Int,
+        document: GltfDocument,
+        binary: ByteArray,
+        sourceToCompact: IntArray,
+        compactVertexCount: Int
+    ): FloatArray {
+        val accessor = document.accessors.getOrNull(accessorIndex)
+            ?: error("Missing morph accessor $accessorIndex")
+        require(accessor.componentCount() == 3 && accessor.componentType == COMPONENT_FLOAT) {
+            "Morph accessor $accessorIndex must be FLOAT VEC3"
+        }
+        val sparse = accessor.sparseData
+        if (accessor.bufferView != null || sparse == null) {
+            val dense = readFloatAttribute(accessorIndex, document, binary, 3)
+            val compact = FloatArray(compactVertexCount * 3)
+            for (source in sourceToCompact.indices) {
+                val target = sourceToCompact[source]
+                if (target >= 0) {
+                    System.arraycopy(dense, source * 3, compact, target * 3, 3)
+                }
+            }
+            return compact
+        }
+
+        require(sparse.count in 0..accessor.count) { "Invalid sparse count for morph accessor $accessorIndex" }
+        val (indexView, indexSource) = bufferForView(sparse.indices.bufferView, document, binary)
+        val indexSize = when (sparse.indices.componentType) {
+            COMPONENT_UNSIGNED_BYTE -> 1
+            COMPONENT_UNSIGNED_SHORT -> 2
+            COMPONENT_UNSIGNED_INT -> 4
+            else -> error("Invalid sparse index component type for morph accessor $accessorIndex")
+        }
+        val indexStart = indexView.byteOffset + (sparse.indices.byteOffset ?: 0)
+        require(indexStart >= indexView.byteOffset &&
+            indexStart.toLong() + sparse.count.toLong() * indexSize <= indexView.byteOffset.toLong() + indexView.byteLength) {
+            "Sparse indices exceed bufferView for morph accessor $accessorIndex"
+        }
+        val (valueView, valueSource) = bufferForView(sparse.values.bufferView, document, binary)
+        val valueStart = valueView.byteOffset + (sparse.values.byteOffset ?: 0)
+        require(valueStart >= valueView.byteOffset &&
+            valueStart.toLong() + sparse.count.toLong() * 12L <= valueView.byteOffset.toLong() + valueView.byteLength) {
+            "Sparse values exceed bufferView for morph accessor $accessorIndex"
+        }
+        val indexBuffer = ByteBuffer.wrap(indexSource).order(ByteOrder.LITTLE_ENDIAN)
+        val valueBuffer = ByteBuffer.wrap(valueSource).order(ByteOrder.LITTLE_ENDIAN)
+        val compact = FloatArray(compactVertexCount * 3)
+        var previous = -1
+        for (i in 0 until sparse.count) {
+            val sourceIndex = readComponentAsInt(
+                indexBuffer, indexSource, indexStart + i * indexSize, sparse.indices.componentType
+            )
+            require(sourceIndex in 0 until accessor.count && sourceIndex > previous) {
+                "Sparse indices must be strictly increasing and in range for morph accessor $accessorIndex"
+            }
+            previous = sourceIndex
+            val compactIndex = sourceToCompact.getOrElse(sourceIndex) { -1 }
+            if (compactIndex >= 0) {
+                val sourceOffset = valueStart + i * 12
+                val targetOffset = compactIndex * 3
+                compact[targetOffset] = valueBuffer.getFloat(sourceOffset)
+                compact[targetOffset + 1] = valueBuffer.getFloat(sourceOffset + 4)
+                compact[targetOffset + 2] = valueBuffer.getFloat(sourceOffset + 8)
+            }
+        }
+        return compact
     }
 
     private fun readFloatAttribute(

@@ -95,6 +95,11 @@ export interface GltfAccessor {
 
   min?: number[];
   max?: number[];
+  sparse?: {
+    count: number;
+    indices: { bufferView: number; byteOffset?: number; componentType: 5121 | 5123 | 5125 };
+    values: { bufferView: number; byteOffset?: number };
+  };
 }
 
 export interface GltfBufferView {

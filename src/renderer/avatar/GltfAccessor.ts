@@ -171,6 +171,71 @@ export function readAccessor(asset: GltfAsset, accessorIndex: number): ArrayBuff
   return decoded;
 }
 
+/**
+ * Decode a sparse-only FLOAT VEC3 morph directly into a compact primitive.
+ * This avoids retaining 52 full 299k-vertex arrays while uploading each
+ * material partition. Dense accessors use the shared decoder as fallback.
+ */
+export function readFloatVec3AccessorCompact(
+  asset: GltfAsset,
+  accessorIndex: number,
+  sourceToCompact: Int32Array,
+  compactVertexCount: number
+): Float32Array {
+  const accessor = asset.json.accessors?.[accessorIndex];
+  if (!accessor) throw new Error(`Missing morph accessor ${accessorIndex}`);
+  if (accessor.type !== 'VEC3' || accessor.componentType !== 5126) {
+    throw new Error(`Morph accessor ${accessorIndex} must be FLOAT VEC3`);
+  }
+  const sparse = accessor.sparse;
+  if (!sparse || accessor.bufferView !== undefined) {
+    const dense = toFloat32(readAccessor(asset, accessorIndex));
+    const compact = new Float32Array(compactVertexCount * 3);
+    for (let source = 0; source < sourceToCompact.length; source++) {
+      const target = sourceToCompact[source];
+      if (target >= 0) {
+        const from = source * 3;
+        if (from + 3 > dense.length) throw new Error(`Morph accessor ${accessorIndex} vertex index is out of range`);
+        compact.set(dense.subarray(from, from + 3), target * 3);
+      }
+    }
+    return compact;
+  }
+  if (!Number.isSafeInteger(sparse.count) || sparse.count < 0 || sparse.count > accessor.count) {
+    throw new Error(`Morph accessor ${accessorIndex} has invalid sparse count`);
+  }
+  const iv = viewRange(asset, sparse.indices.bufferView);
+  const indexBytes = componentSize(sparse.indices.componentType);
+  const indexOffset = iv.start + (sparse.indices.byteOffset ?? 0);
+  if (indexOffset < iv.start || indexOffset + sparse.count * indexBytes > iv.end) {
+    throw new Error(`Morph accessor ${accessorIndex} sparse indices exceed bufferView`);
+  }
+  const vv = viewRange(asset, sparse.values.bufferView);
+  const valueOffset = vv.start + (sparse.values.byteOffset ?? 0);
+  if (valueOffset < vv.start || valueOffset + sparse.count * 12 > vv.end) {
+    throw new Error(`Morph accessor ${accessorIndex} sparse values exceed bufferView`);
+  }
+  const dataView = new DataView(asset.binary);
+  const compact = new Float32Array(compactVertexCount * 3);
+  let previous = -1;
+  for (let i = 0; i < sparse.count; i++) {
+    const source = readSparseIndex(dataView, indexOffset + i * indexBytes, sparse.indices.componentType);
+    if (source <= previous || source >= accessor.count) {
+      throw new Error(`Morph accessor ${accessorIndex} sparse indices are not strictly increasing/in range`);
+    }
+    previous = source;
+    const target = sourceToCompact[source] ?? -1;
+    if (target >= 0) {
+      const from = valueOffset + i * 12;
+      const to = target * 3;
+      compact[to] = dataView.getFloat32(from, true);
+      compact[to + 1] = dataView.getFloat32(from + 4, true);
+      compact[to + 2] = dataView.getFloat32(from + 8, true);
+    }
+  }
+  return compact;
+}
+
 /** Release expanded dense/sparse accessor arrays once mesh data is compacted. */
 export function clearAccessorCache(asset: GltfAsset): void {
   decodedAccessorCache.delete(asset);

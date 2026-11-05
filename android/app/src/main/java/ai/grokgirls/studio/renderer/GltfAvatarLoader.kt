@@ -24,6 +24,7 @@ class GltfAvatarLoader(
     fun loadFromFile(filePath: String): HdAvatar {
         val file = java.io.File(filePath)
         require(file.isFile) { "GLB file not found: $filePath" }
+        require(file.length() in 20L..(200L * 1024L * 1024L)) { "GLB file size must be between 20 bytes and 200 MB" }
         return loadGlb(file.readBytes())
     }
 

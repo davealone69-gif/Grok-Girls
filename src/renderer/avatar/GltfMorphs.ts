@@ -33,7 +33,7 @@ export interface MorphBuffers {
 
 export const MAX_MORPHS = 64;
 
-/** Decode true per-vertex morph deltas. Accessor caching prevents N× expansion. */
+/** Decode true per-vertex morph deltas without retaining full source-mesh arrays. */
 export function buildMorphBuffers(
   asset: GltfAsset,
   primitive: GltfPrimitive,

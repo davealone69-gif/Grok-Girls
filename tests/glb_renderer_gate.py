@@ -69,7 +69,7 @@ def make_glb():
     }
     raw_json = json.dumps(doc, separators=(',', ':')).encode()
     raw_json += b' ' * ((4 - len(raw_json) % 4) % 4)
-    raw_bin = bytes(blob) + b'\\0' * ((4 - len(blob) % 4) % 4)
+    raw_bin = bytes(blob) + b'\0' * ((4 - len(blob) % 4) % 4)
     total = 12 + 8 + len(raw_json) + 8 + len(raw_bin)
     return (struct.pack('<III', 0x46546C67, 2, total)
             + struct.pack('<II', len(raw_json), 0x4E4F534A) + raw_json
